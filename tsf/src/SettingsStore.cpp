@@ -127,6 +127,16 @@ AppSettings SettingsStore::load() {
             } catch (...) {}
         } else if (key == "key_letter_bold") {
             s.keyLetterBold = (val == "1");
+        } else if (key == "shift_toggle_english") {
+            s.shiftToggleEnglish = (val != "0");
+        } else if (key == "capslock_bypass") {
+            s.capsLockBypass = (val != "0");
+        } else if (key == "page_size") {
+            try {
+                s.pageSize = std::clamp(std::stoi(val), 5, 9);
+            } catch (...) {}
+        } else if (key == "wheel_paging") {
+            s.wheelPaging = (val != "0");
         }
     }
     s.darkMode = effectiveDarkMode(s);
@@ -159,7 +169,11 @@ void SettingsStore::save(const AppSettings& s) {
         << "key_opacity=" << std::clamp(s.keyOpacity, 0.4f, 1.0f) << "\n"
         << "typing_glow=" << (s.typingGlow ? "1" : "0") << "\n"
         << "key_letter_size=" << std::clamp(s.keyLetterSize, 14, 30) << "\n"
-        << "key_letter_bold=" << (s.keyLetterBold ? "1" : "0") << "\n";
+        << "key_letter_bold=" << (s.keyLetterBold ? "1" : "0") << "\n"
+        << "shift_toggle_english=" << (s.shiftToggleEnglish ? "1" : "0") << "\n"
+        << "capslock_bypass=" << (s.capsLockBypass ? "1" : "0") << "\n"
+        << "page_size=" << std::clamp(s.pageSize, 5, 9) << "\n"
+        << "wheel_paging=" << (s.wheelPaging ? "1" : "0") << "\n";
 }
 
 } // namespace fangcun::tsf

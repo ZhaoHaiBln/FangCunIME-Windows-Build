@@ -8,6 +8,14 @@ pub struct AppSettings {
     pub scheme: String,
     pub mixed_input: bool,
     pub chinese_punctuation: bool,
+    #[serde(default = "default_true")]
+    pub shift_toggle_english: bool,
+    #[serde(default = "default_true")]
+    pub caps_lock_bypass: bool,
+    #[serde(default = "default_page_size")]
+    pub page_size: i32,
+    #[serde(default = "default_true")]
+    pub wheel_paging: bool,
     pub skin: String,
     pub theme_mode: String,
     pub dark_mode: bool,
@@ -19,6 +27,14 @@ pub struct AppSettings {
     pub key_letter_bold: bool,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+fn default_page_size() -> i32 {
+    7
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         let sys_dark = is_windows_apps_dark();
@@ -26,6 +42,10 @@ impl Default for AppSettings {
             scheme: "flypy".to_string(),
             mixed_input: true,
             chinese_punctuation: true,
+            shift_toggle_english: true,
+            caps_lock_bypass: true,
+            page_size: 7,
+            wheel_paging: true,
             skin: "native_light".to_string(),
             theme_mode: "system".to_string(),
             dark_mode: sys_dark,
@@ -79,6 +99,7 @@ fn normalize(mut s: AppSettings) -> AppSettings {
         "light" => false,
         _ => s.system_dark,
     };
+    s.page_size = s.page_size.clamp(5, 9);
     s.first_candidate_size = s.first_candidate_size.clamp(16, 30);
     s.key_letter_size = s.key_letter_size.clamp(14, 30);
     s.key_opacity = s.key_opacity.clamp(0.40, 1.00);
@@ -105,6 +126,18 @@ pub fn load_from_disk() -> AppSettings {
                 "chinese_punctuation" => {
                     s.chinese_punctuation = val == "1" || val.eq_ignore_ascii_case("true")
                 }
+                "shift_toggle_english" => {
+                    s.shift_toggle_english = val == "1" || val.eq_ignore_ascii_case("true")
+                }
+                "capslock_bypass" => {
+                    s.caps_lock_bypass = val == "1" || val.eq_ignore_ascii_case("true")
+                }
+                "page_size" => {
+                    if let Ok(n) = val.parse::<i32>() {
+                        s.page_size = n;
+                    }
+                }
+                "wheel_paging" => s.wheel_paging = val == "1" || val.eq_ignore_ascii_case("true"),
                 "skin" => s.skin = val.to_string(),
                 "theme_mode" => s.theme_mode = val.to_string(),
                 "dark_mode" => s.dark_mode = val == "1" || val.eq_ignore_ascii_case("true"),
@@ -142,10 +175,14 @@ pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
     }
     let bool_int = |b: bool| if b { 1 } else { 0 };
     let body = format!(
-        "scheme={}\nmixed_input={}\nchinese_punctuation={}\nskin={}\ntheme_mode={}\ndark_mode={}\nfirst_candidate_size={}\nkey_opacity={:.2}\ntyping_glow={}\nkey_letter_size={}\nkey_letter_bold={}\n",
+        "scheme={}\nmixed_input={}\nchinese_punctuation={}\nshift_toggle_english={}\ncapslock_bypass={}\npage_size={}\nwheel_paging={}\nskin={}\ntheme_mode={}\ndark_mode={}\nfirst_candidate_size={}\nkey_opacity={:.2}\ntyping_glow={}\nkey_letter_size={}\nkey_letter_bold={}\n",
         s.scheme,
         bool_int(s.mixed_input),
         bool_int(s.chinese_punctuation),
+        bool_int(s.shift_toggle_english),
+        bool_int(s.caps_lock_bypass),
+        s.page_size,
+        bool_int(s.wheel_paging),
         s.skin,
         s.theme_mode,
         bool_int(s.dark_mode),

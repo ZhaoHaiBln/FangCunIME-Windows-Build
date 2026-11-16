@@ -3,183 +3,529 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>方寸输入法 设置</title>
+    <title>方寸输入法</title>
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
-    <div id="app" class="app-shell">
-      <header class="topbar">
-        <div class="brand">
-          <svg class="tianzige-logo" viewBox="0 0 100 100" aria-hidden="true">
-            <rect x="0" y="0" width="100" height="100" rx="18" fill="#FFF8ED" />
-            <rect x="16" y="16" width="68" height="68" fill="none" stroke="#A94B2B" stroke-width="6.5" />
-            <line x1="50" y1="19" x2="50" y2="81" stroke="#A94B2B" stroke-opacity="0.45" stroke-width="3" />
-            <line x1="19" y1="50" x2="81" y2="50" stroke="#A94B2B" stroke-opacity="0.45" stroke-width="3" />
-            <rect x="40" y="40" width="20" height="20" fill="#A94B2B" />
+    <div id="app" class="win-shell">
+      <!-- Left Sidebar -->
+      <aside class="sidebar">
+        <div class="brand-header">
+          <svg class="brand-logo" viewBox="0 0 100 100" aria-hidden="true">
+            <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
+            <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="7.5" stroke-linejoin="round" />
+            <line x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="6.5" />
+            <line x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="6.5" />
+            <circle cx="77" cy="77" r="9.5" fill="#E66E33" />
           </svg>
-          <div class="brand-text">
-            <div class="brand-title-row">
-              <h1>方寸输入法</h1>
-              <span class="badge-mono">~/SETTINGS</span>
-            </div>
-            <p class="brand-sub">方寸之间，自有天地 · Windows TSF 原生输入法</p>
+          <div class="brand-titles">
+            <h1>方寸输入法</h1>
+            <p>方寸之间，自有天地</p>
           </div>
         </div>
-        <div class="topbar-actions">
-          <span class="badge-version">v0.1.0 · x64</span>
-          <button id="btn-reset" class="btn btn-ghost" type="button">恢复默认</button>
-          <button id="btn-close" class="btn btn-primary" type="button">完成</button>
+
+        <div class="sidebar-search">
+          <svg class="search-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
+            <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <input id="settings-search" type="search" placeholder="搜索设置" autocomplete="off" />
         </div>
-      </header>
 
-      <nav class="filter-bar" aria-label="设置分类">
-        <div class="filter-tabs" id="filter-tabs">
-          <button class="filter-tab is-active" data-tab="all" type="button">全部 <span class="tab-count">5</span></button>
-          <button class="filter-tab" data-tab="input" type="button">输入方案</button>
-          <button class="filter-tab" data-tab="theme" type="button">皮肤外观</button>
-          <button class="filter-tab" data-tab="effects" type="button">字号与特效</button>
-          <button class="filter-tab" data-tab="clipboard" type="button">剪贴板 <span id="clip-tab-count" class="tab-count">0</span></button>
+        <nav id="sidebar-nav" class="sidebar-nav" aria-label="设置导航">
+          <button class="nav-item" data-tab="general" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.6" />
+              <path d="M10 3.2V5M10 15V16.8M3.2 10H5M15 10H16.8M5.2 5.2L6.5 6.5M13.5 13.5L14.8 14.8M14.8 5.2L13.5 6.5M6.5 13.5L5.2 14.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            <span>常规</span>
+          </button>
+
+          <button class="nav-item is-active" data-tab="input" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
+              <rect x="2.5" y="4.5" width="15" height="11" rx="2.2" stroke="currentColor" stroke-width="1.6" />
+              <path d="M5.5 8H7M9.2 8H10.8M13 8H14.5M5.5 11.8H14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            <span>输入方案</span>
+          </button>
+
+          <button class="nav-item" data-tab="theme" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
+              <path d="M10 3C6.13 3 3 5.91 3 9.5C3 13.09 6.13 16 10 16C11.1 16 12 15.1 12 14C12 13.48 11.8 13.02 11.48 12.66C11.18 12.32 11 11.88 11 11.4C11 10.3 11.9 9.4 13 9.4H14.2C15.75 9.4 17 8.15 17 6.6C17 4.5 13.87 3 10 3Z" stroke="currentColor" stroke-width="1.6" />
+              <circle cx="6.8" cy="8.2" r="1" fill="currentColor" />
+              <circle cx="9.6" cy="6.5" r="1" fill="currentColor" />
+              <circle cx="12.6" cy="7.3" r="1" fill="currentColor" />
+            </svg>
+            <span>皮肤外观</span>
+          </button>
+
+          <button class="nav-item" data-tab="effects" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
+              <path d="M4 15L8.2 5H9.8L14 15M5.6 11.5H12.4M14.5 4.5L15.2 6.3L17 7L15.2 7.7L14.5 9.5L13.8 7.7L12 7L13.8 6.3L14.5 4.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>字号与特效</span>
+          </button>
+
+          <button class="nav-item" data-tab="clipboard" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
+              <rect x="4.5" y="4.5" width="11" height="12.5" rx="2" stroke="currentColor" stroke-width="1.6" />
+              <path d="M7.5 4.5V3.8C7.5 3.08 8.08 2.5 8.8 2.5H11.2C11.92 2.5 12.5 3.08 12.5 3.8V4.5M7.5 9H12.5M7.5 12.2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+            <span>剪贴板</span>
+            <span id="clip-tab-count" class="nav-badge">0</span>
+          </button>
+
+          <button class="nav-item" data-tab="ai" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
+              <path d="M10 3L11.6 7.4L16 9L11.6 10.6L10 15L8.4 10.6L4 9L8.4 7.4L10 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+              <path d="M15.2 13.2L15.8 14.8L17.4 15.4L15.8 16L15.2 17.6L14.6 16L13 15.4L14.6 14.8L15.2 13.2Z" fill="currentColor" />
+            </svg>
+            <span>AI 助手</span>
+          </button>
+
+          <button class="nav-item" data-tab="about" type="button">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6" />
+              <path d="M10 9.2V13.5M10 6.7H10.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <span>关于</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <span class="sync-dot"></span>
+          <span id="sidebar-status-text">已启用 · 实时同步</span>
         </div>
-        <div id="status-summary" class="status-summary">小鹤双拼 · 中英混输 · 原生轻白</div>
-      </nav>
+      </aside>
 
-      <section id="preview-card" class="preview-card" title="点击预览区测试打字流光">
-        <div id="glow-layer" class="glow-layer"></div>
-        <div class="preview-top">
-          <span class="preview-code">wanshang</span>
-          <span class="preview-hint">LIVE PREVIEW · 点击测试流光</span>
-        </div>
-        <div class="preview-candidates">
-          <span id="preview-first-cand" class="cand-item cand-first">
-            <span class="cand-idx">1</span>
-            <span class="cand-word">晚上</span>
-          </span>
-          <span class="cand-item"><span class="cand-idx">2</span><span class="cand-word">网上</span></span>
-          <span class="cand-item"><span class="cand-idx">3</span><span class="cand-word">晚上好</span></span>
-          <span class="cand-item"><span class="cand-idx">4</span><span class="cand-word">婉赏</span></span>
-          <span class="cand-pager">‹ 1/3 ›</span>
-        </div>
-        <div class="preview-keys">
-          <div class="glass-key key-letter">q</div>
-          <div class="glass-key key-letter">w</div>
-          <div class="glass-key key-letter">e</div>
-          <div id="preview-mode-key" class="glass-key key-func">中英混输</div>
-          <div class="glass-key key-emph">发送</div>
-        </div>
-      </section>
-
-      <main id="bento-grid" class="bento-grid">
-        <article class="bento-card" data-category="input">
-          <div class="card-head">
-            <span class="card-dot"></span>
-            <span class="card-mono">01 · ~/INPUT</span>
-            <h2>输入方案与行为</h2>
-          </div>
-          <div class="pill-row cols-3" id="scheme-group">
-            <button class="pill" data-scheme="flypy" type="button">小鹤双拼</button>
-            <button class="pill" data-scheme="pinyin" type="button">全拼</button>
-            <button class="pill" data-scheme="ninekey" type="button">九宫格</button>
-          </div>
-          <div class="pill-row cols-2">
-            <button id="toggle-mixed" class="pill" type="button"></button>
-            <button id="toggle-punct" class="pill" type="button"></button>
-          </div>
-          <p class="card-foot">候选分页：每页 9 项 · 支持 <code>=</code> / <code>-</code> / <code>PageUp</code> / <code>PageDown</code> / 滚轮翻页</p>
-        </article>
-
-        <article class="bento-card" data-category="theme">
-          <div class="card-head">
-            <span class="card-dot"></span>
-            <span class="card-mono">02 · ~/THEME</span>
-            <h2>皮肤预设与明暗</h2>
-          </div>
-          <div class="pill-row cols-2" id="skin-group">
-            <button class="pill skin-pill" data-skin="native_light" type="button">
-              <span class="swatch" style="background:#5E72E4"></span>原生轻白
-            </button>
-            <button class="pill skin-pill" data-skin="warm_grid" type="button">
-              <span class="swatch" style="background:#A94B2B"></span>米白田字格
-            </button>
-            <button class="pill skin-pill" data-skin="mint" type="button">
-              <span class="swatch" style="background:#1F8A68"></span>薄荷绿
-            </button>
-            <button class="pill skin-pill" data-skin="deep_blue" type="button">
-              <span class="swatch" style="background:#F28B66"></span>深蓝珊瑚
-            </button>
-          </div>
-          <div class="pill-row cols-3" id="mode-group">
-            <button class="pill" data-mode="system" type="button">跟随系统</button>
-            <button class="pill" data-mode="light" type="button">浅色模式</button>
-            <button class="pill" data-mode="dark" type="button">深色模式</button>
-          </div>
-        </article>
-
-        <article class="bento-card" data-category="effects">
-          <div class="card-head">
-            <span class="card-dot"></span>
-            <span class="card-mono">03 · ~/EFFECTS</span>
-            <h2>特效与视觉</h2>
-          </div>
-          <div class="pill-stack">
-            <button id="toggle-glow" class="pill" type="button"></button>
-            <button id="toggle-bold" class="pill" type="button"></button>
-          </div>
-          <p class="card-foot">Tauri v2 高 DPI 矢量渲染 · 设置修改后实时同步至 TSF 输入法</p>
-        </article>
-
-        <article class="bento-card" data-category="effects">
-          <div class="card-head">
-            <span class="card-dot"></span>
-            <span class="card-mono">04 · ~/METRICS</span>
-            <h2>字号与透明度</h2>
-          </div>
-          <div class="stepper-list">
-            <div class="stepper-row">
-              <span class="stepper-label">第一候选字号 <small>(16–30)</small></span>
-              <div class="stepper-ctrl">
-                <button id="first-minus" class="stepper-btn" type="button">−</button>
-                <span id="first-val" class="stepper-val">20 pt</span>
-                <button id="first-plus" class="stepper-btn" type="button">+</button>
+      <!-- Right Main Workspace -->
+      <div class="workspace">
+        <div class="workspace-scroll">
+          <!-- TAB: 输入方案与行为 (Default Active, matches Mockup 1) -->
+          <section class="tab-pane is-active" data-pane="input">
+            <div class="pane-header-row">
+              <h2 class="pane-title">输入方案与行为</h2>
+              <div class="preview-mode-pills">
+                <button id="btn-preview-light" class="mini-pill is-active" type="button" title="浅色候选窗预览">浅色候选</button>
+                <button id="btn-preview-dark" class="mini-pill" type="button" title="深色珊瑚候选窗预览">深色候选</button>
+                <button id="btn-preview-shift" class="mini-pill" type="button" title="测试 Shift 光标旁中英切换小吐司">Shift 吐司</button>
+                <button id="btn-open-clip-popup" class="mini-pill" type="button" title="呼出紧凑型 Alt+V 剪贴板浮窗">Alt+V 浮窗</button>
               </div>
             </div>
-            <div class="stepper-row">
-              <span class="stepper-label">键帽字母字号 <small>(14–30)</small></span>
-              <div class="stepper-ctrl">
-                <button id="letter-minus" class="stepper-btn" type="button">−</button>
-                <span id="letter-val" class="stepper-val">18 pt</span>
-                <button id="letter-plus" class="stepper-btn" type="button">+</button>
-              </div>
-            </div>
-            <div class="stepper-row">
-              <span class="stepper-label">键帽透明度 <small>(40%–100%)</small></span>
-              <div class="stepper-ctrl">
-                <button id="opacity-minus" class="stepper-btn" type="button">−</button>
-                <span id="opacity-val" class="stepper-val">82%</span>
-                <button id="opacity-plus" class="stepper-btn" type="button">+</button>
-              </div>
-            </div>
-          </div>
-        </article>
 
-        <article class="bento-card span-2" data-category="clipboard">
-          <div class="card-head clipboard-head">
-            <div class="card-head-left">
-              <span class="card-dot"></span>
-              <span class="card-mono">05 · ~/CLIPBOARD</span>
-              <h2>剪贴板历史</h2>
-              <span id="clip-sync-badge" class="badge-mono">Alt+V 呼出 · 后台监听</span>
+            <!-- Live Candidate Bar Preview Card -->
+            <div id="preview-card" class="live-preview-stage" title="点击预览区测试打字流光">
+              <div id="glow-layer" class="glow-layer"></div>
+
+              <!-- Candidate Window Preview (Mockup 1 & Mockup 2 #1/#2) -->
+              <div id="cand-window-preview" class="cand-window">
+                <div class="cand-top-row">
+                  <svg class="cand-mini-logo" viewBox="0 0 100 100" aria-hidden="true">
+                    <rect class="logo-tile" x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
+                    <rect class="logo-grid" x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
+                    <line class="logo-grid" x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
+                    <line class="logo-grid" x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
+                    <circle class="logo-dot" cx="77" cy="77" r="10" fill="#E66E33" />
+                  </svg>
+                  <span id="preview-composing" class="cand-composing">wanshang<span class="cand-caret">|</span></span>
+                </div>
+                <div class="cand-bottom-strip">
+                  <span id="preview-first-cand" class="cand-pill is-selected">
+                    <span class="cand-num">1</span>
+                    <span id="preview-first-word" class="cand-word">晚上</span>
+                  </span>
+                  <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">网上</span></span>
+                  <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">晚上好</span></span>
+                  <span class="cand-pill"><span class="cand-num">4</span><span class="cand-word">婉赏</span></span>
+                  <span class="cand-pill"><span class="cand-num">5</span><span class="cand-word">碗</span></span>
+                  <span class="cand-arrows">‹ ›</span>
+                </div>
+              </div>
+
+              <!-- Shift Mode-Switch Caret Toast (Mockup 2 #5) -->
+              <div id="shift-caret-toast" class="shift-caret-toast" aria-live="polite">
+                <svg class="toast-mini-logo" viewBox="0 0 100 100" aria-hidden="true">
+                  <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
+                  <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
+                  <line x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
+                  <line x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
+                  <circle cx="77" cy="77" r="10" fill="#E66E33" />
+                </svg>
+                <span id="shift-toast-label">中</span>
+              </div>
+
+              <p class="preview-caption">点击预览区测试打字流光</p>
             </div>
-            <div class="clipboard-actions">
-              <input id="clip-search" class="clip-search" type="search" placeholder="搜索剪贴板..." />
-              <button id="clip-toggle-watch" class="mini-btn is-selected" type="button">✓ 监听中</button>
-              <button id="clip-clear" class="mini-btn" type="button">清空未置顶</button>
+
+            <!-- 3 Scheme Selection Cards -->
+            <div id="scheme-group" class="scheme-cards">
+              <button class="scheme-card" data-scheme="pinyin" type="button">
+                <span class="scheme-check" aria-hidden="true">✓</span>
+                <span class="scheme-badge">全拼</span>
+                <span class="scheme-name">全拼</span>
+              </button>
+
+              <button class="scheme-card is-selected" data-scheme="flypy" type="button">
+                <span class="scheme-check" aria-hidden="true">✓</span>
+                <span class="scheme-badge">小鹤</span>
+                <span class="scheme-name">小鹤双拼</span>
+              </button>
+
+              <button class="scheme-card" data-scheme="ninekey" type="button">
+                <span class="scheme-check" aria-hidden="true">✓</span>
+                <span class="scheme-grid-icon" aria-hidden="true">
+                  <i></i><i></i><i></i>
+                  <i></i><i></i><i></i>
+                  <i></i><i></i><i></i>
+                </span>
+                <span class="scheme-name">自定义</span>
+              </button>
             </div>
+
+            <!-- Bottom Two-Column Behavior & Shortcuts -->
+            <div class="input-bottom-grid">
+              <div class="settings-list-card">
+                <label class="setting-row" data-search="中英混输 mixed">
+                  <span class="setting-label">中英混输</span>
+                  <input id="sw-mixed" class="ui-switch" type="checkbox" checked />
+                </label>
+
+                <label class="setting-row" data-search="中文标点 punctuation">
+                  <span class="setting-label">中文标点</span>
+                  <input id="sw-punct" class="ui-switch" type="checkbox" checked />
+                </label>
+
+                <label class="setting-row" data-search="Shift 切换中英">
+                  <span class="setting-label">Shift 切换中英</span>
+                  <input id="sw-shift-toggle" class="ui-switch" type="checkbox" checked />
+                </label>
+
+                <label class="setting-row" data-search="CapsLock 直通 大写">
+                  <span class="setting-label">CapsLock 直通</span>
+                  <input id="sw-capslock" class="ui-switch" type="checkbox" checked />
+                </label>
+
+                <div class="setting-row" data-search="候选分页 每页个数 page size">
+                  <span class="setting-label">候选分页 每页</span>
+                  <div class="select-wrap">
+                    <select id="sel-page-size" class="ui-select">
+                      <option value="5">5</option>
+                      <option value="6">6</option>
+                      <option value="7" selected>7</option>
+                      <option value="8">8</option>
+                      <option value="9">9</option>
+                    </select>
+                  </div>
+                </div>
+
+                <label class="setting-row" data-search="滚轮翻页 wheel">
+                  <span class="setting-label">滚轮翻页</span>
+                  <input id="sw-wheel" class="ui-switch" type="checkbox" checked />
+                </label>
+              </div>
+
+              <div class="shortcut-card">
+                <h3 class="shortcut-card-title">快捷键</h3>
+                <div class="shortcut-list">
+                  <button id="sc-alt-v" class="shortcut-row" type="button" title="点击预览 Alt+V 剪贴板历史浮窗">
+                    <kbd class="kbd-tag">Alt+V</kbd>
+                    <span class="shortcut-desc">呼出剪贴板</span>
+                  </button>
+                  <button id="sc-shift" class="shortcut-row" type="button" title="点击演示 Shift 中/英切换浮动吐司">
+                    <kbd class="kbd-tag">Shift</kbd>
+                    <span class="shortcut-desc">中/英切换</span>
+                  </button>
+                  <button id="sc-ctrl-dot" class="shortcut-row" type="button" title="点击切换中英标点">
+                    <kbd class="kbd-tag">Ctrl+.</kbd>
+                    <span class="shortcut-desc">中英标点</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- TAB: 常规 (Includes Floating Status Bar #3 & General Controls) -->
+          <section class="tab-pane" data-pane="general">
+            <h2 class="pane-title">常规与状态栏</h2>
+            <div class="section-card">
+              <div class="section-card-head">
+                <div>
+                  <h3>任务栏紧凑浮动状态栏</h3>
+                  <p>点击下方按钮可直接切换输入模式、中英标点、全半角与皮肤外观</p>
+                </div>
+              </div>
+              <div class="floating-bar-stage">
+                <div class="floating-status-bar" id="floating-status-bar">
+                  <button id="fb-lang" class="fb-lang-badge" type="button" title="点击切换中/英模式 (Shift)">中</button>
+                  <button id="fb-punct" class="fb-tool-btn" type="button" title="点击切换中英标点 (Ctrl+.)">“。</button>
+                  <button id="fb-width" class="fb-tool-btn" type="button" title="点击切换半角/全角">半</button>
+                  <button id="fb-skin" class="fb-tool-btn" type="button" title="切换皮肤外观">🖌️</button>
+                  <button id="fb-settings" class="fb-tool-btn" type="button" title="输入方案设置">⚙️</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-list-card" style="margin-top: 14px">
+              <div class="setting-row">
+                <span class="setting-label">当前输入方案</span>
+                <span id="gen-scheme-summary" class="setting-value-tag">小鹤双拼</span>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">剪贴板后台监听 (<kbd class="kbd-inline">Alt+V</kbd>)</span>
+                <input id="sw-gen-clip" class="ui-switch" type="checkbox" checked />
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">打字流光动效</span>
+                <input id="sw-gen-glow" class="ui-switch" type="checkbox" checked />
+              </div>
+            </div>
+          </section>
+
+          <!-- TAB: 皮肤外观 (Includes Light #1 & Dark #2 Candidate Window Showcase) -->
+          <section class="tab-pane" data-pane="theme">
+            <h2 class="pane-title">皮肤外观与明暗变体</h2>
+
+            <div class="dual-cand-showcase">
+              <div class="showcase-box">
+                <span class="showcase-label">浅色温润米白 · 候选窗</span>
+                <div class="cand-window is-light-demo">
+                  <div class="cand-top-row">
+                    <svg class="cand-mini-logo" viewBox="0 0 100 100">
+                      <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
+                      <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
+                      <line x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
+                      <line x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
+                      <circle cx="77" cy="77" r="10" fill="#E66E33" />
+                    </svg>
+                    <span class="cand-composing">wanshang'hao<span class="cand-caret">|</span></span>
+                  </div>
+                  <div class="cand-bottom-strip">
+                    <span class="cand-pill is-selected"><span class="cand-num">1</span><span class="cand-word">晚上好</span></span>
+                    <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">晚上</span></span>
+                    <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">网上</span></span>
+                    <span class="cand-arrows">‹ ›</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="showcase-box">
+                <span class="showcase-label">深色暗夜珊瑚 · 候选窗</span>
+                <div class="cand-window is-dark">
+                  <div class="cand-top-row">
+                    <svg class="cand-mini-logo" viewBox="0 0 100 100">
+                      <rect x="2" y="2" width="96" height="96" rx="22" fill="#E07A5F" />
+                      <rect x="21" y="21" width="58" height="58" fill="none" stroke="#1F2633" stroke-width="8" />
+                      <line x1="50" y1="22" x2="50" y2="78" stroke="#1F2633" stroke-width="7" />
+                      <line x1="22" y1="50" x2="78" y2="50" stroke="#1F2633" stroke-width="7" />
+                      <circle cx="77" cy="77" r="10" fill="#FFF4E6" />
+                    </svg>
+                    <span class="cand-composing">fangcun<span class="cand-caret">|</span></span>
+                  </div>
+                  <div class="cand-bottom-strip">
+                    <span class="cand-pill is-selected"><span class="cand-num">1</span><span class="cand-word">方寸</span></span>
+                    <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">分寸</span></span>
+                    <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">芳村</span></span>
+                    <span class="cand-arrows">‹ ›</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-card" style="margin-top: 14px">
+              <h3 class="sub-heading">主题色预设</h3>
+              <div id="skin-group" class="skin-grid">
+                <button class="skin-option" data-skin="warm_grid" type="button">
+                  <span class="skin-swatch" style="background: #2B5B3C"></span>
+                  <span>温润松绿 · 米白田字格</span>
+                </button>
+                <button class="skin-option" data-skin="native_light" type="button">
+                  <span class="skin-swatch" style="background: #3A6B4C"></span>
+                  <span>原生轻白</span>
+                </button>
+                <button class="skin-option" data-skin="mint" type="button">
+                  <span class="skin-swatch" style="background: #1F8A68"></span>
+                  <span>薄荷清风</span>
+                </button>
+                <button class="skin-option" data-skin="deep_blue" type="button">
+                  <span class="skin-swatch" style="background: #E07A5F"></span>
+                  <span>深夜珊瑚</span>
+                </button>
+              </div>
+
+              <h3 class="sub-heading" style="margin-top: 16px">明暗模式</h3>
+              <div id="mode-group" class="mode-pills">
+                <button class="mode-pill" data-mode="system" type="button">跟随系统</button>
+                <button class="mode-pill" data-mode="light" type="button">浅色模式</button>
+                <button class="mode-pill" data-mode="dark" type="button">深色模式</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- TAB: 字号与特效 -->
+          <section class="tab-pane" data-pane="effects">
+            <h2 class="pane-title">字号与特效</h2>
+            <div class="settings-list-card">
+              <label class="setting-row">
+                <span class="setting-label">打字流光特效</span>
+                <input id="sw-glow" class="ui-switch" type="checkbox" checked />
+              </label>
+
+              <label class="setting-row">
+                <span class="setting-label">键帽字母加粗</span>
+                <input id="sw-bold" class="ui-switch" type="checkbox" />
+              </label>
+
+              <div class="setting-row">
+                <span class="setting-label">第一候选字号 <small class="muted">(16–30 pt)</small></span>
+                <div class="stepper-ctrl">
+                  <button id="first-minus" class="stepper-btn" type="button">−</button>
+                  <span id="first-val" class="stepper-val">20 pt</span>
+                  <button id="first-plus" class="stepper-btn" type="button">+</button>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <span class="setting-label">键帽字母字号 <small class="muted">(14–30 pt)</small></span>
+                <div class="stepper-ctrl">
+                  <button id="letter-minus" class="stepper-btn" type="button">−</button>
+                  <span id="letter-val" class="stepper-val">18 pt</span>
+                  <button id="letter-plus" class="stepper-btn" type="button">+</button>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <span class="setting-label">候选窗/键帽不透明度 <small class="muted">(40%–100%)</small></span>
+                <div class="stepper-ctrl">
+                  <button id="opacity-minus" class="stepper-btn" type="button">−</button>
+                  <span id="opacity-val" class="stepper-val">82%</span>
+                  <button id="opacity-plus" class="stepper-btn" type="button">+</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- TAB: 剪贴板 (Matches Mockup 2 #4 Alt+V Clipboard Panel) -->
+          <section class="tab-pane" data-pane="clipboard">
+            <div class="pane-header-row">
+              <h2 class="pane-title">剪贴板历史</h2>
+              <span class="kbd-tag">Alt+V 快速呼出</span>
+            </div>
+
+            <div class="clip-panel-card">
+              <div class="clip-panel-search">
+                <svg class="search-icon" viewBox="0 0 20 20" fill="none">
+                  <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
+                  <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                </svg>
+                <input id="clip-search" type="search" placeholder="搜索剪贴板" autocomplete="off" />
+              </div>
+
+              <div id="clip-list" class="clip-cards-list"></div>
+
+              <div class="clip-panel-footer">
+                <div class="clip-footer-left">
+                  <button id="clip-toggle-watch" class="clip-watch-status" type="button">
+                    <span id="clip-watch-text">监听中</span>
+                    <span id="clip-watch-dot" class="watch-dot is-on"></span>
+                  </button>
+                  <span class="footer-sep">·</span>
+                  <button id="clip-clear" class="clip-link-btn" type="button">清空未置顶</button>
+                </div>
+                <span class="clip-footer-hint">点击卡片即可复制</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- TAB: AI 助手 -->
+          <section class="tab-pane" data-pane="ai">
+            <h2 class="pane-title">AI 助手与跨端协同</h2>
+            <div class="settings-list-card">
+              <div class="setting-row">
+                <div>
+                  <div class="setting-label">Android 局域网剪贴板同步</div>
+                  <div class="muted-sub">与方寸输入法 Android 端共享置顶剪贴板与常用语</div>
+                </div>
+                <span class="setting-value-tag">即将推出</span>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-label">候选词智能润色与快捷翻译</div>
+                  <div class="muted-sub">在候选栏按 Tab 触发中英互译与公文润色</div>
+                </div>
+                <span class="setting-value-tag">即将推出</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- TAB: 关于 -->
+          <section class="tab-pane" data-pane="about">
+            <h2 class="pane-title">关于方寸输入法</h2>
+            <div class="settings-list-card">
+              <div class="setting-row">
+                <span class="setting-label">当前版本</span>
+                <span class="setting-value-tag">v0.1.0 (Windows x64 · TSF + Tauri v2)</span>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">核心特性</span>
+                <span class="muted">小鹤双拼 / 全拼 / 九宫格 · Shift 中英切换 · Alt+V 剪贴板</span>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">配置文件路径</span>
+                <code class="code-inline">%LOCALAPPDATA%\FangCunIME\settings.ini</code>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Bottom Action Bar (Matches Mockup 1) -->
+        <footer class="workspace-footer">
+          <button id="btn-reset" class="btn-restore" type="button">恢复默认</button>
+          <button id="btn-close" class="btn-finish" type="button">完成</button>
+        </footer>
+      </div>
+
+      <!-- Compact Alt+V Clipboard Floating Popup Drawer (Mockup 2 #4) -->
+      <div id="altv-overlay" class="altv-overlay is-hidden" role="dialog" aria-label="剪贴板快速面板">
+        <div class="altv-popup">
+          <div class="altv-header">
+            <div class="altv-brand">
+              <svg class="altv-logo" viewBox="0 0 100 100" aria-hidden="true">
+                <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
+                <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
+                <line x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
+                <line x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
+                <circle cx="77" cy="77" r="10" fill="#E66E33" />
+              </svg>
+              <span>剪贴板</span>
+            </div>
+            <button id="altv-close" class="altv-close-btn" type="button" title="关闭 (Esc)">×</button>
           </div>
-          <div id="clip-list" class="clip-list"></div>
-          <p class="card-foot">自动记录文本剪贴板 · 置顶条目永久保留 · 托盘常驻（预留 Android 同步通道）</p>
-        </article>
-      </main>
+
+          <div class="altv-search-wrap">
+            <svg class="search-icon" viewBox="0 0 20 20" fill="none">
+              <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
+              <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            <input id="altv-search" type="search" placeholder="搜索剪贴板" autocomplete="off" />
+          </div>
+
+          <div id="altv-list" class="altv-list"></div>
+
+          <div class="altv-footer">
+            <div class="clip-footer-left">
+              <button id="altv-toggle-watch" class="clip-watch-status" type="button">
+                <span id="altv-watch-text">监听中</span>
+                <span id="altv-watch-dot" class="watch-dot is-on"></span>
+              </button>
+              <span class="footer-sep">·</span>
+              <button id="altv-clear" class="clip-link-btn" type="button">清空未置顶</button>
+            </div>
+            <button id="altv-open-settings" class="altv-gear-btn" type="button" title="打开完整剪贴板设置">⚙️</button>
+          </div>
+        </div>
+      </div>
     </div>
+
     <div id="toast" class="toast"></div>
     <script type="module" src="./src/main.ts"></script>
   </body>

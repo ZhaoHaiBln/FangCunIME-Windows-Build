@@ -20,6 +20,10 @@ struct AppSettings {
     bool typingGlow = true;
     int keyLetterSize = 18;
     bool keyLetterBold = false;
+    bool shiftToggleEnglish = true;
+    bool capsLockBypass = true;
+    int pageSize = 7;
+    bool wheelPaging = true;
 };
 
 class SettingsStore {

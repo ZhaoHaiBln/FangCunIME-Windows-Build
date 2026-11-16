@@ -90,7 +90,7 @@ bool KeyHandler::isComposingKey(const KeyInput& key) const {
         return key.ascii >= '2' && key.ascii <= '9';
     }
     if ((key.ascii >= 'a' && key.ascii <= 'z') || (key.ascii >= 'A' && key.ascii <= 'Z')) {
-        if (composing_.empty() && key.capsLock) {
+        if (composing_.empty() && capsLockBypass_ && key.capsLock) {
             return false;
         }
         return true;
@@ -119,7 +119,7 @@ bool KeyHandler::shouldEatKey(const KeyInput& key) const {
         }
         if (key.ascii >= '1' && key.ascii <= '9' && !key.shift) {
             size_t localIdx = static_cast<size_t>(key.ascii - '1');
-            if (candidatesPending_ || (pageStart() + localIdx) < candidates_.size()) return true;
+            if (localIdx < pageSize_ && (candidatesPending_ || (pageStart() + localIdx) < candidates_.size())) return true;
         }
         // Page +/- with [=] and [-]
         if ((key.ascii == '-' || key.ascii == '=') && !candidates_.empty()) {
@@ -338,7 +338,7 @@ KeyAction KeyHandler::movePage(int delta) {
     int curPage = static_cast<int>(currentPage());
     int targetPage = std::clamp(curPage + delta, 0, std::max(0, total - 1));
     if (targetPage != curPage) {
-        selectedIndex_ = targetPage * static_cast<int>(kPageSize);
+        selectedIndex_ = targetPage * static_cast<int>(pageSize_);
     }
     action.handled = true;
     action.showCandidates = true;
@@ -351,16 +351,16 @@ KeyAction KeyHandler::movePage(int delta) {
 size_t KeyHandler::currentPage() const {
     if (candidates_.empty() || selectedIndex_ <= 0) return 0;
     size_t idx = std::min(static_cast<size_t>(selectedIndex_), candidates_.size() - 1);
-    return idx / kPageSize;
+    return idx / pageSize_;
 }
 
 size_t KeyHandler::pageStart() const {
-    return currentPage() * kPageSize;
+    return currentPage() * pageSize_;
 }
 
 size_t KeyHandler::totalPages() const {
     if (candidates_.empty()) return 0;
-    return (candidates_.size() + kPageSize - 1) / kPageSize;
+    return (candidates_.size() + pageSize_ - 1) / pageSize_;
 }
 
 KeyAction KeyHandler::commitCandidateAt(size_t index, bool appendEnglishSpace) {

@@ -59,6 +59,12 @@ public:
     void setChinesePunctuation(bool chinesePunct);
     bool chinesePunctuation() const { return chinesePunctuation_; }
 
+    void setCapsLockBypass(bool enabled) { capsLockBypass_ = enabled; }
+    bool capsLockBypass() const { return capsLockBypass_; }
+
+    void setPageSize(size_t size) { pageSize_ = (size >= 5 && size <= 9) ? size : kPageSize; }
+    size_t pageSize() const { return pageSize_; }
+
     void setPersonalizedLearning(bool enabled) { personalizedLearning_ = enabled; }
 
     // Called when focus changes, document switches, or composition is terminated externally
@@ -109,6 +115,8 @@ private:
     bool mixedInput_ = true;
     bool englishMode_ = false;
     bool chinesePunctuation_ = true;
+    bool capsLockBypass_ = true;
+    size_t pageSize_ = kPageSize;
     bool personalizedLearning_ = true;
 
     uint64_t sessionGeneration_ = 1;

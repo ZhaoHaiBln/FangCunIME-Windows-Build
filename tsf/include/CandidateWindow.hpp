@@ -56,10 +56,15 @@ public:
     void show();
     void hide();
     bool isVisible() const;
+    void setPageSize(size_t size) { pageSize_ = (size >= 5 && size <= 9) ? size : kPageSize; }
+    void setWheelPaging(bool enabled) { wheelPaging_ = enabled; }
+    void showModeToast(bool englishMode, SkinPreset skin, bool darkMode);
 
 private:
     static constexpr UINT_PTR kGlowTimerId = 1;
     static constexpr UINT kGlowTimerIntervalMs = 16;
+    static constexpr UINT_PTR kToastTimerId = 2;
+    static constexpr UINT kToastDurationMs = 900;
 
     static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
     void onPaint();
@@ -99,6 +104,10 @@ private:
     bool darkMode_ = false;
     int firstCandidateSize_ = 20;
     bool typingGlow_ = true;
+    size_t pageSize_ = kPageSize;
+    bool wheelPaging_ = true;
+    bool toastActive_ = false;
+    bool toastEnglish_ = false;
 
     UINT dpi_ = 96;
     int width_ = 360;

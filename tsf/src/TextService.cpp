@@ -197,6 +197,8 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD) 
         [this](size_t index) { onCandidateClicked(index); },
         [this]() { openSettingsWindow(); },
         [this](int delta) { onPageChange(delta); });
+    candidateWindow_->setPageSize(static_cast<size_t>(settings_.pageSize));
+    candidateWindow_->setWheelPaging(settings_.wheelPaging);
     candidateWindow_->create(nullptr);
 
     keyHandler_ = std::make_unique<KeyHandler>(
@@ -226,6 +228,8 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD) 
     keyHandler_->setScheme(settings_.scheme);
     keyHandler_->setMixedInput(settings_.mixedInput);
     keyHandler_->setChinesePunctuation(settings_.chinesePunctuation);
+    keyHandler_->setCapsLockBypass(settings_.capsLockBypass);
+    keyHandler_->setPageSize(static_cast<size_t>(settings_.pageSize));
 
     if (!initThreadMgrSink() || !initKeyEventSink()) {
         Deactivate();
@@ -419,18 +423,24 @@ void TextService::applySettings(const AppSettings& newSettings) {
         keyHandler_->setScheme(settings_.scheme);
         keyHandler_->setMixedInput(settings_.mixedInput);
         keyHandler_->setChinesePunctuation(settings_.chinesePunctuation);
+        keyHandler_->setCapsLockBypass(settings_.capsLockBypass);
+        keyHandler_->setPageSize(static_cast<size_t>(settings_.pageSize));
     }
-    if (candidateWindow_ && candidateWindow_->isVisible() && keyHandler_) {
-        candidateWindow_->update(
-            keyHandler_->composing(),
-            keyHandler_->candidates(),
-            keyHandler_->selectedIndex(),
-            keyHandler_->candidatesPending(),
-            keyHandler_->scheme(),
-            settings_.skin,
-            SettingsStore::effectiveDarkMode(settings_),
-            settings_.firstCandidateSize,
-            settings_.typingGlow);
+    if (candidateWindow_) {
+        candidateWindow_->setPageSize(static_cast<size_t>(settings_.pageSize));
+        candidateWindow_->setWheelPaging(settings_.wheelPaging);
+        if (candidateWindow_->isVisible() && keyHandler_) {
+            candidateWindow_->update(
+                keyHandler_->composing(),
+                keyHandler_->candidates(),
+                keyHandler_->selectedIndex(),
+                keyHandler_->candidatesPending(),
+                keyHandler_->scheme(),
+                settings_.skin,
+                SettingsStore::effectiveDarkMode(settings_),
+                settings_.firstCandidateSize,
+                settings_.typingGlow);
+        }
     }
 }
 
@@ -607,12 +617,16 @@ STDMETHODIMP TextService::OnTestKeyDown(ITfContext* pic, WPARAM wParam, LPARAM l
     }
     KeyInput ki = translateKey(wParam, lParam);
     if (wParam == VK_SHIFT || wParam == VK_LSHIFT || wParam == VK_RSHIFT) {
-        if (!ki.ctrl && !ki.alt && !ki.win && (lParam & (1LL << 30)) == 0) {
+        if (settings_.shiftToggleEnglish && !ki.ctrl && !ki.alt && !ki.win && (lParam & (1LL << 30)) == 0) {
             shiftTapPending_ = true;
         }
         return S_OK;
     }
     shiftTapPending_ = false;
+    if (ki.ctrl && !ki.alt && !ki.win && !ki.shift && (wParam == VK_OEM_PERIOD || ki.ascii == '.')) {
+        *pfEaten = TRUE;
+        return S_OK;
+    }
     *pfEaten = keyHandler_->shouldEatKey(ki) ? TRUE : FALSE;
     return S_OK;
 }
@@ -623,6 +637,13 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* pic, WPARAM wParam, LPARAM lPara
     if (!keyHandler_) return S_OK;
 
     KeyInput ki = translateKey(wParam, lParam);
+    if (ki.ctrl && !ki.alt && !ki.win && !ki.shift && (wParam == VK_OEM_PERIOD || ki.ascii == '.')) {
+        settings_.chinesePunctuation = !settings_.chinesePunctuation;
+        keyHandler_->setChinesePunctuation(settings_.chinesePunctuation);
+        SettingsStore::save(settings_);
+        *pfEaten = TRUE;
+        return S_OK;
+    }
     if (!keyHandler_->shouldEatKey(ki)) {
         return S_OK;
     }
@@ -639,10 +660,20 @@ STDMETHODIMP TextService::OnTestKeyUp(ITfContext* pic, WPARAM wParam, LPARAM, BO
     *pfEaten = FALSE;
     if ((wParam == VK_SHIFT || wParam == VK_LSHIFT || wParam == VK_RSHIFT) && shiftTapPending_) {
         shiftTapPending_ = false;
-        if (keyHandler_) {
+        if (keyHandler_ && settings_.shiftToggleEnglish) {
+            ITfContext* ctx = pic ? pic : activeContext_;
             KeyAction act = keyHandler_->toggleEnglishMode();
             if (act.handled || act.hideCandidates || act.updateComposition) {
-                applyKeyAction(pic ? pic : activeContext_, act);
+                applyKeyAction(ctx, act);
+            }
+            if (ctx) {
+                requestCaretRect(ctx);
+            }
+            if (candidateWindow_) {
+                candidateWindow_->showModeToast(
+                    keyHandler_->englishMode(),
+                    settings_.skin,
+                    SettingsStore::effectiveDarkMode(settings_));
             }
         }
     }

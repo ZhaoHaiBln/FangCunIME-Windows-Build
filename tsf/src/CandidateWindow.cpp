@@ -238,6 +238,10 @@ void CandidateWindow::update(
     bool darkMode,
     int firstCandidateSize,
     bool typingGlow) {
+    if (toastActive_) {
+        toastActive_ = false;
+        if (hwnd_) KillTimer(hwnd_, kToastTimerId);
+    }
     bool composingChanged = (composing != lastGlowComposing_);
     lastGlowComposing_ = composing;
 
@@ -273,6 +277,34 @@ void CandidateWindow::update(
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+void CandidateWindow::showModeToast(bool englishMode, SkinPreset skin, bool darkMode) {
+    if (!hwnd_) return;
+    composing_.clear();
+    candidates_.clear();
+    toastActive_ = true;
+    toastEnglish_ = englishMode;
+    skin_ = skin;
+    darkMode_ = darkMode;
+
+    dpi_ = queryDpiForWindow(hwnd_);
+    recomputeHeaderBudget();
+    recalculateSize();
+
+    if (!hasCaretRect_) {
+        POINT pt{};
+        if (GetCursorPos(&pt)) {
+            lastCaretRect_ = RECT{pt.x, pt.y - 20, pt.x + 2, pt.y};
+            hasCaretRect_ = true;
+        }
+    }
+    if (hasCaretRect_) {
+        moveNearCaret(lastCaretRect_);
+    }
+    show();
+    SetTimer(hwnd_, kToastTimerId, kToastDurationMs, nullptr);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 void CandidateWindow::recomputeHeaderBudget() {
     if (!ensureFactories()) return;
     if (lastBudgetFirstSize_ == firstCandidateSize_ && lastBudgetDpi_ == dpi_ && primaryFormat_) {
@@ -299,7 +331,7 @@ void CandidateWindow::recomputeHeaderBudget() {
         }
     };
 
-    makeFormat(static_cast<float>(HeaderMetricsSpec::kCodeSp), DWRITE_FONT_WEIGHT_NORMAL, &codeFormat_);
+    makeFormat(static_cast<float>(HeaderMetricsSpec::kCodeSp + 1), DWRITE_FONT_WEIGHT_MEDIUM, &codeFormat_);
     makeFormat(static_cast<float>(firstCandidateSize_), DWRITE_FONT_WEIGHT_MEDIUM, &primaryFormat_);
     makeFormat(static_cast<float>(HeaderMetricsSpec::kOtherCandidateSp), DWRITE_FONT_WEIGHT_NORMAL, &secondaryFormat_);
     makeFormat(static_cast<float>(HeaderMetricsSpec::kCandidateIndexSp), DWRITE_FONT_WEIGHT_NORMAL, &indexFormat_);
@@ -313,10 +345,10 @@ void CandidateWindow::recomputeHeaderBudget() {
     candidateHeightDp_ = std::max(
         HeaderMetricsSpec::kCandidateSlotMinimumDp,
         std::max({hPrimary, hSecondary, hIndex}) + 12.0f);
-    codeHeightDp_ = std::max(14.0f, hCode + 5.0f);
+    codeHeightDp_ = std::max(20.0f, hCode + 6.0f);
     headerHeightDp_ = std::max(
         HeaderMetricsSpec::kHeaderMinimumDp,
-        codeHeightDp_ + candidateHeightDp_ + 6.0f);
+        codeHeightDp_ + candidateHeightDp_ + 8.0f);
 
     lastBudgetFirstSize_ = firstCandidateSize_;
     lastBudgetDpi_ = dpi_;
@@ -335,22 +367,42 @@ void CandidateWindow::computePageBounds(
         totalPages = 0;
         return;
     }
-    totalPages = (totalCount + kPageSize - 1) / kPageSize;
+    size_t ps = (pageSize_ >= 5 && pageSize_ <= 9) ? pageSize_ : kPageSize;
+    totalPages = (totalCount + ps - 1) / ps;
     size_t safeSelected = (selectedIndex_ >= 0 && static_cast<size_t>(selectedIndex_) < totalCount)
         ? static_cast<size_t>(selectedIndex_)
         : 0;
-    currentPage = safeSelected / kPageSize;
-    pageStart = currentPage * kPageSize;
-    pageEnd = std::min(totalCount, pageStart + kPageSize);
+    currentPage = safeSelected / ps;
+    pageStart = currentPage * ps;
+    pageEnd = std::min(totalCount, pageStart + ps);
 }
 
 void CandidateWindow::recalculateSize() {
     if (!hwnd_) return;
     ensureFactories();
 
-    const float padXDp = 10.0f;
-    const float padYDp = 4.0f;
-    const float itemGapDp = 4.0f;
+    if (toastActive_ && composing_.empty()) {
+        int newW = static_cast<int>(std::ceil(dpToPx(92.0f)));
+        int newH = static_cast<int>(std::ceil(dpToPx(40.0f)));
+        if (newW != width_ || newH != height_) {
+            width_ = newW;
+            height_ = newH;
+            SetWindowPos(hwnd_, nullptr, 0, 0, width_, height_,
+                         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+            if (renderTarget_) {
+                renderTarget_->SetDpi(static_cast<FLOAT>(dpi_), static_cast<FLOAT>(dpi_));
+                renderTarget_->Resize(D2D1::SizeU(
+                    static_cast<UINT32>(std::max(1, width_)),
+                    static_cast<UINT32>(std::max(1, height_))));
+            }
+            updateWindowRegion();
+        }
+        return;
+    }
+
+    const float padXDp = 12.0f;
+    const float padYDp = 5.0f;
+    const float itemGapDp = 6.0f;
 
     size_t pageStart = 0;
     size_t pageEnd = 0;
@@ -358,10 +410,12 @@ void CandidateWindow::recalculateSize() {
     size_t totalPages = 0;
     computePageBounds(pageStart, pageEnd, currentPage, totalPages);
 
+    float codeW = measureTextWidthDip(dwriteFactory_, codeFormat_, utf8ToWide(composing_));
+    float topRowWDp = padXDp * 2.0f + 24.0f + codeW + 96.0f;
+
     float contentWDp = padXDp * 2.0f;
     if (pageEnd <= pageStart) {
-        float codeW = measureTextWidthDip(dwriteFactory_, codeFormat_, utf8ToWide(composing_));
-        contentWDp = std::max(220.0f, codeW + 96.0f);
+        contentWDp = std::max(220.0f, topRowWDp);
     } else {
         for (size_t idx = pageStart; idx < pageEnd; ++idx) {
             size_t localIdx = idx - pageStart;
@@ -372,15 +426,16 @@ void CandidateWindow::recalculateSize() {
                 dwriteFactory_,
                 (localIdx == 0) ? primaryFormat_ : secondaryFormat_,
                 candStr);
-            float itemW = HeaderMetricsSpec::kItemHorizontalPaddingDp * 2.0f + idxW + 4.0f + txtW;
+            float itemW = HeaderMetricsSpec::kItemHorizontalPaddingDp * 2.0f + idxW + 5.0f + txtW;
             contentWDp += itemW + (idx + 1 < pageEnd ? itemGapDp : 0.0f);
         }
         if (totalPages > 1) {
             std::wstring pageLabel = std::to_wstring(currentPage + 1) + L"/" + std::to_wstring(totalPages);
             float labelW = measureTextWidthDip(dwriteFactory_, indexFormat_, pageLabel);
-            float pagerW = 6.0f + 16.0f + 2.0f + labelW + 2.0f + 16.0f;
+            float pagerW = 8.0f + 16.0f + 2.0f + labelW + 2.0f + 16.0f;
             contentWDp += pagerW;
         }
+        contentWDp = std::max(contentWDp, topRowWDp);
     }
 
     float totalHDp = headerHeightDp_ + padYDp * 2.0f;
@@ -406,7 +461,7 @@ void CandidateWindow::recalculateSize() {
 
 void CandidateWindow::updateWindowRegion() {
     if (!hwnd_) return;
-    int cornerPx = std::max(2, static_cast<int>(std::lround(dpToPx(skinMetrics(skin_).cornerRadiusDp))));
+    int cornerPx = std::max(6, static_cast<int>(std::lround(dpToPx(8.0f))));
     HRGN rgn = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, cornerPx * 2, cornerPx * 2);
     if (rgn) {
         SetWindowRgn(hwnd_, rgn, TRUE);
@@ -448,6 +503,10 @@ void CandidateWindow::show() {
 }
 
 void CandidateWindow::hide() {
+    if (toastActive_) {
+        toastActive_ = false;
+        if (hwnd_) KillTimer(hwnd_, kToastTimerId);
+    }
     glowEngine_.clear();
     syncGlowTimer();
     if (hwnd_ && IsWindowVisible(hwnd_)) {
@@ -499,13 +558,21 @@ LRESULT CALLBACK CandidateWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
                     self->onGlowTimer();
                     return 0;
                 }
+                if (wp == kToastTimerId) {
+                    KillTimer(hwnd, kToastTimerId);
+                    self->toastActive_ = false;
+                    if (self->composing_.empty()) {
+                        self->hide();
+                    }
+                    return 0;
+                }
                 break;
             case WM_LBUTTONDOWN:
                 self->onLButtonDown(static_cast<short>(LOWORD(lp)), static_cast<short>(HIWORD(lp)));
                 return 0;
             case WM_MOUSEWHEEL: {
                 short delta = GET_WHEEL_DELTA_WPARAM(wp);
-                if (!self->pending_ && self->onPageChange_ && delta != 0) {
+                if (self->wheelPaging_ && !self->pending_ && self->onPageChange_ && delta != 0) {
                     self->onPageChange_(delta < 0 ? 1 : -1);
                 }
                 return 0;
@@ -555,34 +622,35 @@ void CandidateWindow::onLButtonDown(int x, int y) {
 void CandidateWindow::drawTianzigeLogoD2D(float x, float y, float size) {
     if (!renderTarget_) return;
     ID2D1SolidColorBrush* brush = nullptr;
-    if (FAILED(renderTarget_->CreateSolidColorBrush(toD2DColor(BrandMark::CreamBackground), &brush)) || !brush) {
+    ColorArgb tileColor = darkMode_ ? ColorArgb::fromHex(0xFFE07A5F) : ColorArgb::fromHex(0xFF2B5B3C);
+    ColorArgb gridColor = darkMode_ ? ColorArgb::fromHex(0xFF1F2633) : ColorArgb::fromHex(0xFFFBF8F2);
+    ColorArgb dotColor = darkMode_ ? ColorArgb::fromHex(0xFFFFF4E6) : ColorArgb::fromHex(0xFFE66E33);
+
+    if (FAILED(renderTarget_->CreateSolidColorBrush(toD2DColor(tileColor), &brush)) || !brush) {
         return;
     }
 
-    D2D1_ROUNDED_RECT tile = D2D1::RoundedRect(D2D1::RectF(x, y, x + size, y + size), 2.0f, 2.0f);
+    float rx = std::max(2.5f, size * 0.22f);
+    D2D1_ROUNDED_RECT tile = D2D1::RoundedRect(D2D1::RectF(x, y, x + size, y + size), rx, rx);
     renderTarget_->FillRoundedRectangle(tile, brush);
 
-    float pad = std::max(1.5f, size * 0.16f);
-    float stroke = std::max(0.8f, size * 0.06f);
-    brush->SetColor(toD2DColor(BrandMark::FrameColor));
+    float pad = std::max(2.0f, size * 0.20f);
+    float stroke = std::max(1.1f, size * 0.085f);
+    brush->SetColor(toD2DColor(gridColor));
     D2D1_RECT_F frameRect = D2D1::RectF(x + pad, y + pad, x + size - pad, y + size - pad);
     renderTarget_->DrawRectangle(frameRect, brush, stroke);
 
-    // Subtle center guides
-    brush->SetColor(toD2DColor(BrandMark::FrameColor.withAlpha(0.45f)));
     float midX = x + size * 0.5f;
     float midY = y + size * 0.5f;
-    renderTarget_->DrawLine(D2D1::Point2F(midX, y + pad + stroke), D2D1::Point2F(midX, y + size - pad - stroke), brush, 0.7f);
-    renderTarget_->DrawLine(D2D1::Point2F(x + pad + stroke, midY), D2D1::Point2F(x + size - pad - stroke, midY), brush, 0.7f);
+    renderTarget_->DrawLine(D2D1::Point2F(midX, y + pad), D2D1::Point2F(midX, y + size - pad), brush, stroke * 0.85f);
+    renderTarget_->DrawLine(D2D1::Point2F(x + pad, midY), D2D1::Point2F(x + size - pad, midY), brush, stroke * 0.85f);
 
-    // Terracotta center square (40..60 in 100x100)
-    brush->SetColor(toD2DColor(BrandMark::CenterTerracotta));
-    D2D1_RECT_F centerRect = D2D1::RectF(
-        x + size * 0.40f,
-        y + size * 0.40f,
-        x + size * 0.60f,
-        y + size * 0.60f);
-    renderTarget_->FillRectangle(centerRect, brush);
+    // Warm orange accent dot in bottom-right cell
+    brush->SetColor(toD2DColor(dotColor));
+    float dotR = std::max(1.4f, size * 0.105f);
+    float dotCx = x + size * 0.78f;
+    float dotCy = y + size * 0.78f;
+    renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(dotCx, dotCy), dotR, dotR), brush);
     brush->Release();
 }
 
@@ -595,49 +663,87 @@ void CandidateWindow::onPaint() {
         return;
     }
 
-    const FangCunColors colors = skinColors(skin_, darkMode_);
     const SkinMetrics metrics = skinMetrics(skin_);
-    const BackdropGradientColors backdrop = computeBackdropGradient(skin_, colors);
 
     const float wDip = static_cast<float>(width_) * 96.0f / static_cast<float>(dpi_);
     const float hDip = static_cast<float>(height_) * 96.0f / static_cast<float>(dpi_);
+    const float cornerDp = 8.0f;
 
     renderTarget_->BeginDraw();
     renderTarget_->SetTransform(D2D1::Matrix3x2F::Identity());
 
     D2D1_RECT_F fullRect = D2D1::RectF(0.0f, 0.0f, wDip, hDip);
-    D2D1_ROUNDED_RECT roundedBounds = D2D1::RoundedRect(fullRect, metrics.cornerRadiusDp, metrics.cornerRadiusDp);
+    D2D1_ROUNDED_RECT roundedBounds = D2D1::RoundedRect(fullRect, cornerDp, cornerDp);
 
-    // 1. Static keyboard backdrop (flat for WarmGrid, 3-stop vertical gradient for others)
-    if (backdrop.isFlat) {
-        ID2D1SolidColorBrush* bgBrush = nullptr;
-        if (SUCCEEDED(renderTarget_->CreateSolidColorBrush(toD2DColor(backdrop.middle), &bgBrush)) && bgBrush) {
-            renderTarget_->FillRoundedRectangle(roundedBounds, bgBrush);
-            bgBrush->Release();
-        }
-    } else {
-        D2D1_GRADIENT_STOP stops[3] = {
-            {0.0f, toD2DColor(backdrop.top)},
-            {0.5f, toD2DColor(backdrop.middle)},
-            {1.0f, toD2DColor(backdrop.bottom)},
-        };
-        ID2D1GradientStopCollection* stopCol = nullptr;
-        if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(stops, 3, &stopCol)) && stopCol) {
-            ID2D1LinearGradientBrush* gradBrush = nullptr;
-            if (SUCCEEDED(renderTarget_->CreateLinearGradientBrush(
-                    D2D1::LinearGradientBrushProperties(D2D1::Point2F(0.0f, 0.0f), D2D1::Point2F(0.0f, hDip)),
-                    stopCol,
-                    &gradBrush)) && gradBrush) {
-                renderTarget_->FillRoundedRectangle(roundedBounds, gradBrush);
-                gradBrush->Release();
-            }
-            stopCol->Release();
-        }
+    ColorArgb topBg = darkMode_ ? ColorArgb::fromHex(0xFF1F2633) : ColorArgb::fromHex(0xFFF6F1E6);
+    ColorArgb bottomBandBg = darkMode_ ? ColorArgb::fromHex(0xFF19202B) : ColorArgb::fromHex(0xFFEFE8D9);
+    ColorArgb pillAccent = darkMode_ ? ColorArgb::fromHex(0xFFE07A5F) : ColorArgb::fromHex(0xFF2B5B3C);
+    ColorArgb pillText = darkMode_ ? ColorArgb::fromHex(0xFF1B222E) : ColorArgb::fromHex(0xFFFFFFFF);
+    ColorArgb mainText = darkMode_ ? ColorArgb::fromHex(0xFFE88D73) : ColorArgb::fromHex(0xFF23201C);
+    ColorArgb subText = darkMode_ ? ColorArgb::fromHex(0xFFB48372) : ColorArgb::fromHex(0xFF6E6659);
+    ColorArgb borderCol = darkMode_ ? ColorArgb::fromHex(0xFF333D4F) : ColorArgb::fromHex(0xFFDDD4C0);
+
+    if (skin_ == SkinPreset::Mint && !darkMode_) {
+        topBg = ColorArgb::fromHex(0xFFF1F7F4);
+        bottomBandBg = ColorArgb::fromHex(0xFFE5F0EB);
+        pillAccent = ColorArgb::fromHex(0xFF1F8A68);
+    } else if (skin_ == SkinPreset::DeepBlue) {
+        topBg = ColorArgb::fromHex(0xFF18243A);
+        bottomBandBg = ColorArgb::fromHex(0xFF131D30);
+        pillAccent = ColorArgb::fromHex(0xFFF28B66);
+        pillText = ColorArgb::fromHex(0xFF131D30);
+        mainText = ColorArgb::fromHex(0xFFEEF3FC);
+        subText = ColorArgb::fromHex(0xFF94A6C8);
+        borderCol = ColorArgb::fromHex(0xFF2C3F63);
     }
 
-    // 2. TypingGlow layer behind header & candidates
+    ID2D1SolidColorBrush* brush = nullptr;
+    renderTarget_->CreateSolidColorBrush(toD2DColor(topBg), &brush);
+    if (brush) {
+        renderTarget_->FillRoundedRectangle(roundedBounds, brush);
+    }
+
+    // Mode-switch floating toast (Shift toggle)
+    if (toastActive_ && composing_.empty() && brush) {
+        float logoSize = 20.0f;
+        float logoX = 14.0f;
+        float logoY = (hDip - logoSize) * 0.5f;
+        drawTianzigeLogoD2D(logoX, logoY, logoSize);
+
+        if (primaryFormat_) {
+            std::wstring modeStr = toastEnglish_ ? L"英" : L"中";
+            D2D1_RECT_F txtRc = D2D1::RectF(logoX + logoSize + 10.0f, 0.0f, wDip - 10.0f, hDip);
+            brush->SetColor(toD2DColor(mainText));
+            renderTarget_->DrawText(modeStr.c_str(), static_cast<UINT32>(modeStr.size()), primaryFormat_, txtRc, brush);
+        }
+
+        brush->SetColor(toD2DColor(borderCol));
+        D2D1_ROUNDED_RECT borderRect = D2D1::RoundedRect(
+            D2D1::RectF(0.5f, 0.5f, wDip - 0.5f, hDip - 0.5f), cornerDp, cornerDp);
+        renderTarget_->DrawRoundedRectangle(borderRect, brush, 1.0f);
+        brush->Release();
+
+        HRESULT hr = renderTarget_->EndDraw();
+        if (hr == D2DERR_RECREATE_TARGET) releaseDeviceResources();
+        EndPaint(hwnd_, &ps);
+        return;
+    }
+
+    const float padXDip = 12.0f;
+    const float padYDip = 5.0f;
+    float candTopDip = padYDip + codeHeightDp_ + 3.0f;
+    float candBottomDip = candTopDip + candidateHeightDp_;
+
+    // Subtle two-tone bottom strip for candidates
+    if (brush) {
+        brush->SetColor(toD2DColor(bottomBandBg));
+        D2D1_RECT_F bandRect = D2D1::RectF(0.0f, candTopDip - 1.0f, wDip, hDip);
+        renderTarget_->FillRectangle(bandRect, brush);
+    }
+
+    // TypingGlow layer
     auto glowCircles = glowEngine_.buildRenderCircles(
-        wDip, hDip, 1.0f, colors.isDarkKeyboard(), metrics.glowColors);
+        wDip, hDip, 1.0f, darkMode_, metrics.glowColors);
     for (const auto& circle : glowCircles) {
         D2D1_GRADIENT_STOP gStops[3] = {};
         UINT32 count = circle.isTrailing ? 2 : 3;
@@ -669,64 +775,55 @@ void CandidateWindow::onPaint() {
         }
     }
 
-    ID2D1SolidColorBrush* textBrush = nullptr;
-    renderTarget_->CreateSolidColorBrush(toD2DColor(colors.text), &textBrush);
+    // Top row: Tianzige icon on left + composing text + cursor bar |
+    const float logoSizeDip = 16.0f;
+    float logoX = padXDip;
+    float logoY = padYDip + (codeHeightDp_ - logoSizeDip) * 0.5f;
+    drawTianzigeLogoD2D(logoX, logoY, logoSizeDip);
 
-    // 3. Top row: composing code on left, Tianzige logo + scheme badge on right
-    const float padXDip = 10.0f;
-    const float padYDip = 4.0f;
-    const float logoSizeDip = 14.0f;
+    settingsRect_ = RECT{
+        static_cast<LONG>(std::floor(dpToPx(logoX - 4.0f))),
+        static_cast<LONG>(std::floor(dpToPx(padYDip))),
+        static_cast<LONG>(std::ceil(dpToPx(logoX + logoSizeDip + 4.0f))),
+        static_cast<LONG>(std::ceil(dpToPx(padYDip + codeHeightDp_ + 2.0f)))
+    };
 
-    std::wstring schemeWide = utf8ToWide(schemeLabel(scheme_));
-    float schemeWDip = measureTextWidthDip(dwriteFactory_, codeFormat_, schemeWide);
-
-    if (textBrush && codeFormat_) {
+    if (brush && codeFormat_) {
         std::wstring compWide = utf8ToWide(composing_);
-        float rightReserved = logoSizeDip + 6.0f + schemeWDip + 8.0f;
+        float codeX = logoX + logoSizeDip + 7.0f;
+        float compW = measureTextWidthDip(dwriteFactory_, codeFormat_, compWide);
         D2D1_RECT_F compRc = D2D1::RectF(
-            padXDip,
+            codeX,
             padYDip,
-            std::max(padXDip + 20.0f, wDip - padXDip - rightReserved),
+            std::max(codeX + 20.0f, wDip - padXDip),
             padYDip + codeHeightDp_);
-        textBrush->SetColor(toD2DColor(colors.secondary));
+        brush->SetColor(toD2DColor(mainText));
         renderTarget_->DrawText(
             compWide.c_str(),
             static_cast<UINT32>(compWide.size()),
             codeFormat_,
             compRc,
-            textBrush);
+            brush);
 
-        float badgeX = wDip - padXDip - schemeWDip;
-        D2D1_RECT_F schemeRc = D2D1::RectF(badgeX, padYDip, wDip - padXDip, padYDip + codeHeightDp_);
-        renderTarget_->DrawText(
-            schemeWide.c_str(),
-            static_cast<UINT32>(schemeWide.size()),
-            codeFormat_,
-            schemeRc,
-            textBrush);
-
-        float logoX = badgeX - logoSizeDip - 5.0f;
-        float logoY = padYDip + (codeHeightDp_ - logoSizeDip) * 0.5f;
-        drawTianzigeLogoD2D(logoX, logoY, logoSizeDip);
-
-        settingsRect_ = RECT{
-            static_cast<LONG>(std::floor(dpToPx(logoX - 4.0f))),
-            static_cast<LONG>(std::floor(dpToPx(padYDip))),
-            static_cast<LONG>(std::ceil(dpToPx(wDip - padXDip + 4.0f))),
-            static_cast<LONG>(std::ceil(dpToPx(padYDip + codeHeightDp_ + 2.0f)))
-        };
+        // Vertical caret bar at end of composing text
+        float caretX = std::min(wDip - padXDip - 4.0f, codeX + compW + 2.0f);
+        float caretTop = padYDip + 3.0f;
+        float caretBot = padYDip + codeHeightDp_ - 3.0f;
+        brush->SetColor(toD2DColor(mainText.withAlpha(0.75f)));
+        renderTarget_->DrawLine(
+            D2D1::Point2F(caretX, caretTop),
+            D2D1::Point2F(caretX, caretBot),
+            brush,
+            1.4f);
     }
 
-    // 4. Candidate row (stable candidateHeightDp_ slot)
+    // Candidate row
     candidateRects_.clear();
     candidateIndices_.clear();
     prevPageRect_ = RECT{0, 0, 0, 0};
     nextPageRect_ = RECT{0, 0, 0, 0};
 
     float curXDip = padXDip;
-    float candTopDip = padYDip + codeHeightDp_ + 2.0f;
-    float candBottomDip = candTopDip + candidateHeightDp_;
-
     size_t pageStart = 0;
     size_t pageEnd = 0;
     size_t currentPage = 0;
@@ -734,13 +831,9 @@ void CandidateWindow::onPaint() {
     computePageBounds(pageStart, pageEnd, currentPage, totalPages);
 
     float pagerTotalDip = 0.0f;
-    float labelWDip = 0.0f;
-    std::wstring pageLabel;
     const float pagerBtnWDip = 16.0f;
     if (totalPages > 1) {
-        pageLabel = std::to_wstring(currentPage + 1) + L"/" + std::to_wstring(totalPages);
-        labelWDip = measureTextWidthDip(dwriteFactory_, indexFormat_, pageLabel);
-        pagerTotalDip = 6.0f + pagerBtnWDip + 2.0f + labelWDip + 2.0f + pagerBtnWDip;
+        pagerTotalDip = 8.0f + pagerBtnWDip + 4.0f + pagerBtnWDip;
     }
 
     float maxCandRightDip = wDip - padXDip - pagerTotalDip;
@@ -753,92 +846,78 @@ void CandidateWindow::onPaint() {
 
         float idxWDip = measureTextWidthDip(dwriteFactory_, indexFormat_, idxWide);
         float wordWDip = measureTextWidthDip(dwriteFactory_, wordFormat, candWide);
-        float itemWDip = HeaderMetricsSpec::kItemHorizontalPaddingDp * 2.0f + idxWDip + 4.0f + wordWDip;
+        float itemWDip = HeaderMetricsSpec::kItemHorizontalPaddingDp * 2.0f + idxWDip + 5.0f + wordWDip;
 
         if (curXDip + itemWDip > maxCandRightDip && localIdx > 0) break;
 
-        D2D1_RECT_F itemRc = D2D1::RectF(curXDip, candTopDip, curXDip + itemWDip, candBottomDip);
+        float pillTop = candTopDip + 3.0f;
+        float pillBottom = candBottomDip - 3.0f;
+        D2D1_RECT_F itemRc = D2D1::RectF(curXDip, pillTop, curXDip + itemWDip, pillBottom);
         bool isSelected = (static_cast<int>(idx) == selectedIndex_);
 
-        // Selected candidate highlight: accent @ 3.5% alpha for first slot, pressed alpha for others
-        if (isSelected && localIdx == 0 && !pending_ && textBrush) {
-            D2D1_ROUNDED_RECT firstBg = D2D1::RoundedRect(
-                itemRc,
-                HeaderMetricsSpec::kFirstCornerDp,
-                HeaderMetricsSpec::kFirstCornerDp);
-            textBrush->SetColor(toD2DColor(colors.accent.withAlpha(HeaderMetricsSpec::kFirstBackgroundAlpha)));
-            renderTarget_->FillRoundedRectangle(firstBg, textBrush);
-        } else if (isSelected && localIdx > 0 && !pending_ && textBrush) {
-            D2D1_ROUNDED_RECT selBg = D2D1::RoundedRect(
-                itemRc,
-                HeaderMetricsSpec::kFirstCornerDp,
-                HeaderMetricsSpec::kFirstCornerDp);
-            textBrush->SetColor(toD2DColor(colors.pressed.withAlpha(0.55f)));
-            renderTarget_->FillRoundedRectangle(selBg, textBrush);
+        if (isSelected && !pending_ && brush) {
+            D2D1_ROUNDED_RECT selPill = D2D1::RoundedRect(itemRc, 5.5f, 5.5f);
+            brush->SetColor(toD2DColor(pillAccent));
+            renderTarget_->FillRoundedRectangle(selPill, brush);
         }
 
-        if (textBrush && indexFormat_ && wordFormat) {
+        if (brush && indexFormat_ && wordFormat) {
             ColorArgb idxColor = pending_
-                ? colors.secondary.withAlpha(HeaderMetricsSpec::kPendingAlpha)
-                : (isSelected ? colors.accent : colors.secondary);
+                ? subText.withAlpha(HeaderMetricsSpec::kPendingAlpha)
+                : (isSelected ? pillText.withAlpha(0.92f) : subText);
             ColorArgb wordColor = pending_
-                ? colors.secondary.withAlpha(HeaderMetricsSpec::kPendingAlpha)
-                : (isSelected ? colors.accent : colors.text);
+                ? subText.withAlpha(HeaderMetricsSpec::kPendingAlpha)
+                : (isSelected ? pillText : mainText);
 
             float textX = curXDip + HeaderMetricsSpec::kItemHorizontalPaddingDp;
             D2D1_RECT_F idxRc = D2D1::RectF(textX, candTopDip, textX + idxWDip + 2.0f, candBottomDip);
-            textBrush->SetColor(toD2DColor(idxColor));
+            brush->SetColor(toD2DColor(idxColor));
             renderTarget_->DrawText(
                 idxWide.c_str(),
                 static_cast<UINT32>(idxWide.size()),
                 indexFormat_,
                 idxRc,
-                textBrush);
+                brush);
 
-            float wordX = textX + idxWDip + 4.0f;
+            float wordX = textX + idxWDip + 5.0f;
             D2D1_RECT_F wordRc = D2D1::RectF(wordX, candTopDip, wordX + wordWDip + 2.0f, candBottomDip);
-            textBrush->SetColor(toD2DColor(wordColor));
+            brush->SetColor(toD2DColor(wordColor));
             renderTarget_->DrawText(
                 candWide.c_str(),
                 static_cast<UINT32>(candWide.size()),
                 wordFormat,
                 wordRc,
-                textBrush);
+                brush);
         }
 
         RECT hitRc{
             static_cast<LONG>(std::floor(dpToPx(itemRc.left))),
-            static_cast<LONG>(std::floor(dpToPx(itemRc.top))),
+            static_cast<LONG>(std::floor(dpToPx(candTopDip))),
             static_cast<LONG>(std::ceil(dpToPx(itemRc.right))),
-            static_cast<LONG>(std::ceil(dpToPx(itemRc.bottom)))
+            static_cast<LONG>(std::ceil(dpToPx(candBottomDip)))
         };
         candidateRects_.push_back(hitRc);
         candidateIndices_.push_back(idx);
-        curXDip += itemWDip + 4.0f;
+        curXDip += itemWDip + 6.0f;
     }
 
-    if (totalPages > 1 && textBrush && indexFormat_ && codeFormat_) {
+    if (totalPages > 1 && brush && codeFormat_) {
         float pagerRightDip = wDip - padXDip;
         float nextLeftDip = pagerRightDip - pagerBtnWDip;
-        float labelLeftDip = nextLeftDip - 2.0f - labelWDip;
-        float prevLeftDip = labelLeftDip - 2.0f - pagerBtnWDip;
+        float prevLeftDip = nextLeftDip - 4.0f - pagerBtnWDip;
 
         bool canPrev = (currentPage > 0) && !pending_;
         bool canNext = (currentPage + 1 < totalPages) && !pending_;
 
         D2D1_RECT_F prevRc = D2D1::RectF(prevLeftDip, candTopDip, prevLeftDip + pagerBtnWDip, candBottomDip);
-        D2D1_RECT_F labelRc = D2D1::RectF(labelLeftDip, candTopDip, labelLeftDip + labelWDip + 2.0f, candBottomDip);
         D2D1_RECT_F nextRc = D2D1::RectF(nextLeftDip, candTopDip, nextLeftDip + pagerBtnWDip, candBottomDip);
 
         codeFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-        textBrush->SetColor(toD2DColor(canPrev ? colors.text : colors.secondary.withAlpha(0.35f)));
-        renderTarget_->DrawText(L"‹", 1, codeFormat_, prevRc, textBrush);
+        brush->SetColor(toD2DColor(canPrev ? mainText : subText.withAlpha(0.35f)));
+        renderTarget_->DrawText(L"‹", 1, codeFormat_, prevRc, brush);
 
-        textBrush->SetColor(toD2DColor(colors.secondary));
-        renderTarget_->DrawText(pageLabel.c_str(), static_cast<UINT32>(pageLabel.size()), indexFormat_, labelRc, textBrush);
-
-        textBrush->SetColor(toD2DColor(canNext ? colors.text : colors.secondary.withAlpha(0.35f)));
-        renderTarget_->DrawText(L"›", 1, codeFormat_, nextRc, textBrush);
+        brush->SetColor(toD2DColor(canNext ? mainText : subText.withAlpha(0.35f)));
+        renderTarget_->DrawText(L"›", 1, codeFormat_, nextRc, brush);
         codeFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
         if (canPrev) {
@@ -859,15 +938,15 @@ void CandidateWindow::onPaint() {
         }
     }
 
-    // 5. Outer border (0.6dp stroke)
-    if (textBrush) {
-        textBrush->SetColor(toD2DColor(colors.border.withAlpha(skin_ == SkinPreset::WarmGrid ? 0.8f : 0.65f)));
+    // Outer border
+    if (brush) {
+        brush->SetColor(toD2DColor(borderCol));
         D2D1_ROUNDED_RECT borderRect = D2D1::RoundedRect(
             D2D1::RectF(0.5f, 0.5f, wDip - 0.5f, hDip - 0.5f),
-            metrics.cornerRadiusDp,
-            metrics.cornerRadiusDp);
-        renderTarget_->DrawRoundedRectangle(borderRect, textBrush, 0.8f);
-        textBrush->Release();
+            cornerDp,
+            cornerDp);
+        renderTarget_->DrawRoundedRectangle(borderRect, brush, 1.0f);
+        brush->Release();
     }
 
     HRESULT hr = renderTarget_->EndDraw();
