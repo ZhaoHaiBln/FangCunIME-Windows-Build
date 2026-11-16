@@ -30,36 +30,31 @@ jobs:
         run: |
           ctest --test-dir build-x64 --output-on-failure
 
-      - name: Setup Go 1.27
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.x'
-          cache: false
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Build MyGo Settings App (FangCunSettings.exe)
+      - name: Build Tauri v2 Settings & Clipboard App (FangCunSettings.exe)
         shell: pwsh
         run: |
           Set-Location app
-          go mod tidy
           bun install
-          bunx mygo generate
-          bun run build
+          bun run tauri build --no-bundle
 
       - name: Stage Windows Bundle
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist/assets, dist/installer, out | Out-Null
           Copy-Item build-x64/FangCunTSF.dll dist/
-          $settingsExe = Get-ChildItem -Path app/build -Filter *.exe -Recurse | Select-Object -First 1
-          if ($settingsExe) {
-            Copy-Item $settingsExe.FullName dist/FangCunSettings.exe
+          $settingsExe = "app/src-tauri/target/release/FangCunSettings.exe"
+          if (Test-Path $settingsExe) {
+            Copy-Item $settingsExe dist/FangCunSettings.exe
           } else {
-            throw "FangCunSettings.exe not found in app/build"
+            throw "FangCunSettings.exe not found at $settingsExe"
           }
           Copy-Item assets/dict.db dist/assets/
           Copy-Item assets/pinyin-v1.dbz dist/assets/

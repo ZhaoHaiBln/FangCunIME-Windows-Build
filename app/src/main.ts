@@ -1,4 +1,28 @@
-import { SettingsService, type AppSettings } from "./mygo";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+
+export interface AppSettings {
+  scheme: string;
+  mixedInput: boolean;
+  chinesePunctuation: boolean;
+  skin: string;
+  themeMode: string;
+  darkMode: boolean;
+  systemDark: boolean;
+  firstCandidateSize: number;
+  keyOpacity: number;
+  typingGlow: boolean;
+  keyLetterSize: number;
+  keyLetterBold: boolean;
+}
+
+export interface ClipboardItem {
+  id: string;
+  text: string;
+  pinned: boolean;
+  createdAtMs: number;
+  source: string;
+}
 
 interface SkinTheme {
   bg: string;
@@ -142,7 +166,7 @@ const SKIN_LABELS: Record<string, string> = {
   deep_blue: "深蓝珊瑚",
 };
 
-let state: AppSettings = {
+const DEFAULT_SETTINGS: AppSettings = {
   scheme: "flypy",
   mixedInput: true,
   chinesePunctuation: true,
@@ -157,9 +181,31 @@ let state: AppSettings = {
   keyLetterBold: false,
 };
 
+let state: AppSettings = { ...DEFAULT_SETTINGS };
+let clipItems: ClipboardItem[] = [];
+let clipEnabled = true;
+let clipQuery = "";
+let toastTimer: number | undefined;
+
+function showToast(msg: string): void {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("is-visible");
+  if (toastTimer !== undefined) window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => el.classList.remove("is-visible"), 1600);
+}
+
+function resolveDarkMode(s: AppSettings): boolean {
+  if (s.themeMode === "dark") return true;
+  if (s.themeMode === "light") return false;
+  return s.systemDark;
+}
+
 function applyThemeTokens(s: AppSettings): void {
+  const dark = resolveDarkMode(s);
   const skinSet = SKIN_THEMES[s.skin] ?? SKIN_THEMES.native_light!;
-  const theme = s.darkMode ? skinSet.dark : skinSet.light;
+  const theme = dark ? skinSet.dark : skinSet.light;
   const root = document.documentElement.style;
   root.setProperty("--bg", theme.bg);
   root.setProperty("--surface", theme.surface);
@@ -173,10 +219,127 @@ function applyThemeTokens(s: AppSettings): void {
   root.setProperty("--glow-a", theme.glowA);
   root.setProperty("--glow-b", theme.glowB);
   const keyAlpha = Math.max(0.4, Math.min(1.0, s.keyOpacity));
-  const keyBg = s.darkMode
+  const keyBg = dark
     ? `rgba(38, 45, 60, ${keyAlpha.toFixed(2)})`
     : `rgba(255, 255, 255, ${keyAlpha.toFixed(2)})`;
   root.setProperty("--key-bg", keyBg);
+}
+
+function formatTime(ms: number): string {
+  if (!ms) return "刚刚";
+  const d = new Date(ms);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function renderClipboard(): void {
+  const countEl = document.getElementById("clip-tab-count");
+  if (countEl) countEl.textContent = String(clipItems.length);
+
+  const watchBtn = document.getElementById("clip-toggle-watch");
+  if (watchBtn) {
+    watchBtn.textContent = clipEnabled ? "✓ 监听中" : "已暂停";
+    watchBtn.classList.toggle("is-selected", clipEnabled);
+  }
+
+  const listEl = document.getElementById("clip-list");
+  if (!listEl) return;
+
+  const q = clipQuery.trim().toLowerCase();
+  const filtered = q
+    ? clipItems.filter((item) => item.text.toLowerCase().includes(q))
+    : clipItems;
+
+  listEl.innerHTML = "";
+  if (filtered.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "clip-empty";
+    empty.textContent = q
+      ? "没有匹配的剪贴板记录"
+      : "暂无剪贴板记录 — 复制任意文本后将自动出现在这里";
+    listEl.appendChild(empty);
+    return;
+  }
+
+  for (const item of filtered) {
+    const row = document.createElement("div");
+    row.className = `clip-item${item.pinned ? " is-pinned" : ""}`;
+
+    const body = document.createElement("div");
+    body.className = "clip-item-body";
+
+    const textEl = document.createElement("div");
+    textEl.className = "clip-text";
+    textEl.textContent = item.text;
+
+    const meta = document.createElement("div");
+    meta.className = "clip-meta";
+    if (item.pinned) {
+      const pinTag = document.createElement("span");
+      pinTag.className = "clip-pin-tag";
+      pinTag.textContent = "已置顶";
+      meta.appendChild(pinTag);
+    }
+    const info = document.createElement("span");
+    info.textContent = `${formatTime(item.createdAtMs)} · ${item.text.length} 字 · ${item.source}`;
+    meta.appendChild(info);
+
+    body.appendChild(textEl);
+    body.appendChild(meta);
+
+    const ops = document.createElement("div");
+    ops.className = "clip-item-ops";
+
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "clip-op-btn is-primary";
+    copyBtn.type = "button";
+    copyBtn.textContent = "复制";
+    copyBtn.addEventListener("click", async () => {
+      try {
+        clipItems = await invoke<ClipboardItem[]>("copy_clipboard_item", { id: item.id });
+        renderClipboard();
+        showToast("已复制到系统剪贴板");
+      } catch {
+        await navigator.clipboard?.writeText(item.text).catch(() => {});
+        showToast("已复制到剪贴板");
+      }
+    });
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "clip-op-btn";
+    pinBtn.type = "button";
+    pinBtn.textContent = item.pinned ? "取消置顶" : "置顶";
+    pinBtn.addEventListener("click", async () => {
+      try {
+        clipItems = await invoke<ClipboardItem[]>("toggle_pin_clipboard", { id: item.id });
+      } catch {
+        clipItems = clipItems.map((c) => (c.id === item.id ? { ...c, pinned: !c.pinned } : c));
+      }
+      renderClipboard();
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "clip-op-btn";
+    delBtn.type = "button";
+    delBtn.textContent = "删除";
+    delBtn.addEventListener("click", async () => {
+      try {
+        clipItems = await invoke<ClipboardItem[]>("delete_clipboard_item", { id: item.id });
+      } catch {
+        clipItems = clipItems.filter((c) => c.id !== item.id);
+      }
+      renderClipboard();
+    });
+
+    ops.appendChild(copyBtn);
+    ops.appendChild(pinBtn);
+    ops.appendChild(delBtn);
+
+    row.appendChild(body);
+    row.appendChild(ops);
+    listEl.appendChild(row);
+  }
 }
 
 function render(): void {
@@ -233,10 +396,10 @@ async function save(patch: Partial<AppSettings>): Promise<void> {
   state = { ...state, ...patch };
   render();
   try {
-    state = await SettingsService.save(state);
+    state = await invoke<AppSettings>("save_settings", { settings: state });
     render();
   } catch {
-    // Allow standalone web preview when not hosted inside MyGo WebView.
+    // Allow standalone web preview when not hosted inside Tauri.
   }
 }
 
@@ -317,26 +480,61 @@ document.getElementById("opacity-plus")!.addEventListener("click", () => {
   void save({ keyOpacity: clamp(Math.round((state.keyOpacity + 0.05) * 20) / 20, 0.4, 1.0) });
 });
 
+document.getElementById("clip-search")!.addEventListener("input", (e) => {
+  clipQuery = (e.target as HTMLInputElement).value;
+  renderClipboard();
+});
+
+document.getElementById("clip-toggle-watch")!.addEventListener("click", async () => {
+  try {
+    clipEnabled = await invoke<boolean>("set_clipboard_enabled", { enabled: !clipEnabled });
+  } catch {
+    clipEnabled = !clipEnabled;
+  }
+  renderClipboard();
+  showToast(clipEnabled ? "已恢复剪贴板监听" : "已暂停剪贴板监听");
+});
+
+document.getElementById("clip-clear")!.addEventListener("click", async () => {
+  try {
+    clipItems = await invoke<ClipboardItem[]>("clear_clipboard", { keepPinned: true });
+  } catch {
+    clipItems = clipItems.filter((c) => c.pinned);
+  }
+  renderClipboard();
+  showToast("已清空未置顶剪贴板记录");
+});
+
 document.getElementById("btn-reset")!.addEventListener("click", async () => {
   try {
-    state = await SettingsService.reset();
-    render();
+    state = await invoke<AppSettings>("reset_settings");
   } catch {
-    render();
+    state = { ...DEFAULT_SETTINGS };
   }
+  render();
+  showToast("已恢复默认设置");
 });
 
 document.getElementById("btn-close")!.addEventListener("click", () => {
-  void SettingsService.close();
+  void invoke("hide_window").catch(() => {
+    showToast("窗口已最小化到系统托盘");
+  });
 });
 
 async function init(): Promise<void> {
   try {
-    state = await SettingsService.load();
+    state = await invoke<AppSettings>("load_settings");
+    clipItems = await invoke<ClipboardItem[]>("list_clipboard");
+    clipEnabled = await invoke<boolean>("get_clipboard_enabled");
+    await listen<ClipboardItem[]>("clipboard://changed", (event) => {
+      clipItems = event.payload;
+      renderClipboard();
+    });
   } catch {
-    // Fallback to defaults if running outside MyGo
+    // Standalone web preview fallback
   }
   render();
+  renderClipboard();
 }
 
 void init();

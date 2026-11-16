@@ -1,10 +1,12 @@
 # 方寸输入法 Windows 版（FangCun IME for Windows）
 
+> 合仓说明：正式源码入口为 [ZhaoHaiBln/FangCunIME](https://github.com/ZhaoHaiBln/FangCunIME)，本目录是 `windows/` 工程根。根 CI 入口与历史来源见 [根 README](../README.md) 和 [迁移记录](../MIGRATION.md)。原独立 Windows 仓库与旧 CI 链接保留为历史证据；构建、安装命令从本目录执行。
+
 基于方寸输入法 Android 1.5.1（`865fade`）独立构建的 Windows 10/11 系统级输入法，采用 **C++20 + CMake + SQLite + Windows TSF (Text Services Framework)**。
 
 ## 交给 Antigravity 继续修改
 
-打开整个仓库文件夹，先看 [ANTIGRAVITY.md](ANTIGRAVITY.md)。其中包含源码地图、准确的构建安装命令、已知问题、验证范围，以及[可直接复制的交接提示词](docs/handoff/COPY_TO_ANTIGRAVITY.md)。三份词库已经包含在 `assets/`。Windows 开发和 CI 统一使用本公开仓库的 `main`；从源码安装时需按交接文档显式传入 `-AssetsDir .\assets`。
+打开整个仓库文件夹，先看 [ANTIGRAVITY.md](ANTIGRAVITY.md)。其中包含源码地图、准确的构建安装命令、已知问题、验证范围，以及[可直接复制的交接提示词](docs/handoff/COPY_TO_ANTIGRAVITY.md)。三份词库已经包含在 `assets/`。Windows 开发和 CI 统一使用方寸合仓 `FangCunIME` 的 `main`；从源码安装时需按交接文档显式传入 `-AssetsDir .\assets`。
 
 ## 工程结构
 

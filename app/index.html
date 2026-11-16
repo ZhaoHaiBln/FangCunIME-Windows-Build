@@ -34,10 +34,11 @@
 
       <nav class="filter-bar" aria-label="设置分类">
         <div class="filter-tabs" id="filter-tabs">
-          <button class="filter-tab is-active" data-tab="all" type="button">全部 <span class="tab-count">4</span></button>
+          <button class="filter-tab is-active" data-tab="all" type="button">全部 <span class="tab-count">5</span></button>
           <button class="filter-tab" data-tab="input" type="button">输入方案</button>
           <button class="filter-tab" data-tab="theme" type="button">皮肤外观</button>
           <button class="filter-tab" data-tab="effects" type="button">字号与特效</button>
+          <button class="filter-tab" data-tab="clipboard" type="button">剪贴板 <span id="clip-tab-count" class="tab-count">0</span></button>
         </div>
         <div id="status-summary" class="status-summary">小鹤双拼 · 中英混输 · 原生轻白</div>
       </nav>
@@ -123,7 +124,7 @@
             <button id="toggle-glow" class="pill" type="button"></button>
             <button id="toggle-bold" class="pill" type="button"></button>
           </div>
-          <p class="card-foot">高 DPI 矢量渲染 · 设置修改后实时同步至 TSF 输入法</p>
+          <p class="card-foot">Tauri v2 高 DPI 矢量渲染 · 设置修改后实时同步至 TSF 输入法</p>
         </article>
 
         <article class="bento-card" data-category="effects">
@@ -159,8 +160,27 @@
             </div>
           </div>
         </article>
+
+        <article class="bento-card span-2" data-category="clipboard">
+          <div class="card-head clipboard-head">
+            <div class="card-head-left">
+              <span class="card-dot"></span>
+              <span class="card-mono">05 · ~/CLIPBOARD</span>
+              <h2>剪贴板历史</h2>
+              <span id="clip-sync-badge" class="badge-mono">后台常驻监听</span>
+            </div>
+            <div class="clipboard-actions">
+              <input id="clip-search" class="clip-search" type="search" placeholder="搜索剪贴板..." />
+              <button id="clip-toggle-watch" class="mini-btn is-selected" type="button">✓ 监听中</button>
+              <button id="clip-clear" class="mini-btn" type="button">清空未置顶</button>
+            </div>
+          </div>
+          <div id="clip-list" class="clip-list"></div>
+          <p class="card-foot">自动记录文本剪贴板 · 置顶条目永久保留 · 托盘常驻（预留 Android 同步通道）</p>
+        </article>
       </main>
     </div>
+    <div id="toast" class="toast"></div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>
