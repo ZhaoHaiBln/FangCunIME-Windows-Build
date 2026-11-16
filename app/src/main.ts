@@ -414,17 +414,20 @@ function triggerGlow(x: number, y: number): void {
   pulse.addEventListener("animationend", () => pulse.remove());
 }
 
-document.getElementById("filter-tabs")!.addEventListener("click", (e) => {
-  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-tab]");
-  if (!btn) return;
-  const tab = btn.dataset.tab ?? "all";
+function switchTab(tab: string): void {
   document.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((el) => {
-    el.classList.toggle("is-active", el === btn);
+    el.classList.toggle("is-active", el.dataset.tab === tab);
   });
   document.querySelectorAll<HTMLElement>(".bento-card").forEach((card) => {
     const show = tab === "all" || card.dataset.category === tab;
     card.classList.toggle("is-hidden", !show);
   });
+}
+
+document.getElementById("filter-tabs")!.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-tab]");
+  if (!btn) return;
+  switchTab(btn.dataset.tab ?? "all");
 });
 
 document.getElementById("preview-card")!.addEventListener("click", (e) => {
@@ -529,6 +532,11 @@ async function init(): Promise<void> {
     await listen<ClipboardItem[]>("clipboard://changed", (event) => {
       clipItems = event.payload;
       renderClipboard();
+    });
+    await listen("ui://open-clipboard", () => {
+      switchTab("clipboard");
+      const search = document.getElementById("clip-search") as HTMLInputElement | null;
+      search?.focus();
     });
   } catch {
     // Standalone web preview fallback

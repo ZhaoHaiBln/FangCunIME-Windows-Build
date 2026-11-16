@@ -145,6 +145,48 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn start_hotkey_listener(app: AppHandle) {
+    std::thread::spawn(move || {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+            RegisterHotKey, UnregisterHotKey, MOD_ALT, MOD_NOREPEAT,
+        };
+        use windows_sys::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
+
+        const HOTKEY_CLIPBOARD_ID: i32 = 1;
+        unsafe {
+            if RegisterHotKey(
+                std::ptr::null_mut(),
+                HOTKEY_CLIPBOARD_ID,
+                MOD_ALT | MOD_NOREPEAT,
+                'V' as u32,
+            ) == 0
+            {
+                return;
+            }
+            let mut msg: MSG = std::mem::zeroed();
+            while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
+                if msg.message == WM_HOTKEY && msg.wParam == HOTKEY_CLIPBOARD_ID as usize {
+                    if let Some(win) = app.get_webview_window("main") {
+                        let visible = win.is_visible().unwrap_or(false);
+                        let focused = win.is_focused().unwrap_or(false);
+                        if visible && focused {
+                            let _ = win.hide();
+                        } else {
+                            show_main_window(&app);
+                            let _ = app.emit("ui://open-clipboard", ());
+                        }
+                    }
+                }
+            }
+            UnregisterHotKey(std::ptr::null_mut(), HOTKEY_CLIPBOARD_ID);
+        }
+    });
+}
+
+#[cfg(not(target_os = "windows"))]
+fn start_hotkey_listener(_app: AppHandle) {}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let clipboard_state = Arc::new(Mutex::new(ClipboardState::load()));
@@ -156,6 +198,7 @@ pub fn run() {
         })
         .setup(move |app| {
             clipboard::start_watcher(app.handle().clone(), watcher_state);
+            start_hotkey_listener(app.handle().clone());
 
             let open_item =
                 MenuItem::with_id(app, "open", "打开方寸设置 & 剪贴板", true, None::<&str>)?;
