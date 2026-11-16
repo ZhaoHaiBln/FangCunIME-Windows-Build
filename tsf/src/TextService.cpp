@@ -195,7 +195,8 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD) 
 
     candidateWindow_ = std::make_unique<CandidateWindow>(
         [this](size_t index) { onCandidateClicked(index); },
-        [this]() { openSettingsWindow(); });
+        [this]() { openSettingsWindow(); },
+        [this](int delta) { onPageChange(delta); });
     candidateWindow_->create(nullptr);
 
     keyHandler_ = std::make_unique<KeyHandler>(
@@ -399,9 +400,9 @@ void TextService::applySettings(const AppSettings& newSettings) {
     if (candidateWindow_ && candidateWindow_->isVisible() && keyHandler_) {
         candidateWindow_->update(
             keyHandler_->composing(),
-            {},
-            0,
-            false,
+            keyHandler_->candidates(),
+            keyHandler_->selectedIndex(),
+            keyHandler_->candidatesPending(),
             keyHandler_->scheme(),
             settings_.skin,
             SettingsStore::effectiveDarkMode(settings_),
@@ -504,6 +505,12 @@ void TextService::requestCaretRect(ITfContext* context) {
 void TextService::onCandidateClicked(size_t index) {
     if (!keyHandler_ || !activeContext_) return;
     KeyAction act = keyHandler_->selectCandidateIndex(index);
+    applyKeyAction(activeContext_, act);
+}
+
+void TextService::onPageChange(int delta) {
+    if (!keyHandler_ || !activeContext_) return;
+    KeyAction act = keyHandler_->movePage(delta);
     applyKeyAction(activeContext_, act);
 }
 

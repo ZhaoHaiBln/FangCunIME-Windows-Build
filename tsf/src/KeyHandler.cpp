@@ -101,8 +101,8 @@ bool KeyHandler::shouldEatKey(const KeyInput& key) const {
             return true;
         }
         if (key.ascii >= '1' && key.ascii <= '9' && !key.shift) {
-            size_t idx = static_cast<size_t>(key.ascii - '1');
-            if (candidatesPending_ || idx < candidates_.size()) return true;
+            size_t localIdx = static_cast<size_t>(key.ascii - '1');
+            if (candidatesPending_ || (pageStart() + localIdx) < candidates_.size()) return true;
         }
         // Page +/- with [=] and [-]
         if ((key.ascii == '-' || key.ascii == '=') && !candidates_.empty()) {
@@ -199,30 +199,31 @@ KeyAction KeyHandler::onKeyDown(const KeyInput& key) {
         }
 
         if (key.ascii >= '1' && key.ascii <= '9' && !key.shift) {
-            size_t idx = static_cast<size_t>(key.ascii - '1');
+            size_t localIdx = static_cast<size_t>(key.ascii - '1');
             if (candidatesPending_) {
                 action.handled = true;
                 pendingBoundary_ = PendingBoundaryType::Digit;
-                pendingDigitIndex_ = idx;
+                pendingDigitIndex_ = localIdx;
                 return action;
             }
-            if (idx < candidates_.size()) {
-                return commitCandidateAt(idx, false);
+            size_t globalIdx = pageStart() + localIdx;
+            if (globalIdx < candidates_.size()) {
+                return commitCandidateAt(globalIdx, false);
             }
             return action; // Pass through if digit out of range
         }
 
-        if (key.vk == kVkDown || key.vk == kVkRight || key.ascii == '=') {
+        if (key.vk == kVkDown || key.vk == kVkRight) {
             return moveSelection(1);
         }
-        if (key.vk == kVkUp || key.vk == kVkLeft || key.ascii == '-') {
+        if (key.vk == kVkUp || key.vk == kVkLeft) {
             return moveSelection(-1);
         }
-        if (key.vk == kVkNext) {
-            return moveSelection(5);
+        if (key.vk == kVkNext || key.ascii == '=') {
+            return movePage(1);
         }
-        if (key.vk == kVkPrior) {
-            return moveSelection(-5);
+        if (key.vk == kVkPrior || key.ascii == '-') {
+            return movePage(-1);
         }
     }
 
@@ -311,6 +312,38 @@ KeyAction KeyHandler::moveSelection(int delta) {
     action.candidates = candidates_;
     action.selectedIndex = selectedIndex_;
     return action;
+}
+
+KeyAction KeyHandler::movePage(int delta) {
+    KeyAction action;
+    if (candidates_.empty() || delta == 0) return action;
+    int total = static_cast<int>(totalPages());
+    int curPage = static_cast<int>(currentPage());
+    int targetPage = std::clamp(curPage + delta, 0, std::max(0, total - 1));
+    if (targetPage != curPage) {
+        selectedIndex_ = targetPage * static_cast<int>(kPageSize);
+    }
+    action.handled = true;
+    action.showCandidates = true;
+    action.candidatesPending = candidatesPending_;
+    action.candidates = candidates_;
+    action.selectedIndex = selectedIndex_;
+    return action;
+}
+
+size_t KeyHandler::currentPage() const {
+    if (candidates_.empty() || selectedIndex_ <= 0) return 0;
+    size_t idx = std::min(static_cast<size_t>(selectedIndex_), candidates_.size() - 1);
+    return idx / kPageSize;
+}
+
+size_t KeyHandler::pageStart() const {
+    return currentPage() * kPageSize;
+}
+
+size_t KeyHandler::totalPages() const {
+    if (candidates_.empty()) return 0;
+    return (candidates_.size() + kPageSize - 1) / kPageSize;
 }
 
 KeyAction KeyHandler::commitCandidateAt(size_t index, bool appendEnglishSpace) {

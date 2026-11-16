@@ -23,10 +23,16 @@ namespace fangcun::tsf {
  */
 class CandidateWindow {
 public:
+    static constexpr size_t kPageSize = 9;
+
     using SelectCallback = std::function<void(size_t index)>;
     using SettingsCallback = std::function<void()>;
+    using PageCallback = std::function<void(int delta)>;
 
-    explicit CandidateWindow(SelectCallback onSelect, SettingsCallback onOpenSettings = nullptr);
+    explicit CandidateWindow(
+        SelectCallback onSelect,
+        SettingsCallback onOpenSettings = nullptr,
+        PageCallback onPageChange = nullptr);
     ~CandidateWindow();
 
     CandidateWindow(const CandidateWindow&) = delete;
@@ -65,6 +71,7 @@ private:
     void recomputeHeaderBudget();
     void recalculateSize();
     void updateWindowRegion();
+    void computePageBounds(size_t& pageStart, size_t& pageEnd, size_t& currentPage, size_t& totalPages) const;
 
     bool ensureFactories();
     void releaseFactories();
@@ -75,11 +82,15 @@ private:
     HWND hwnd_ = nullptr;
     SelectCallback onSelect_;
     SettingsCallback onOpenSettings_;
+    PageCallback onPageChange_;
 
     std::string composing_;
     std::string lastGlowComposing_;
     std::vector<std::string> candidates_;
     std::vector<RECT> candidateRects_;
+    std::vector<size_t> candidateIndices_;
+    RECT prevPageRect_{0, 0, 0, 0};
+    RECT nextPageRect_{0, 0, 0, 0};
     RECT settingsRect_{0, 0, 0, 0};
     int selectedIndex_ = 0;
     bool pending_ = false;

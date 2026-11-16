@@ -70,17 +70,23 @@ public:
     // Called when background engine returns candidates; verifies sessionGen + input match
     KeyAction onAsyncCandidates(uint64_t sessionGen, const std::string& input, std::vector<std::string> results);
 
-    // Select a candidate by 0-based index (e.g. mouse click on candidate window or digit key)
+    static constexpr size_t kPageSize = 9;
+
+    // Select a candidate by 0-based global index (e.g. mouse click on candidate window or digit key)
     KeyAction selectCandidateIndex(size_t index);
 
-    // Page navigation
+    // Selection and page navigation
     KeyAction moveSelection(int delta);
+    KeyAction movePage(int delta);
 
     uint64_t sessionGeneration() const { return sessionGeneration_; }
     const std::string& composing() const { return composing_; }
     const std::vector<std::string>& candidates() const { return candidates_; }
     bool candidatesPending() const { return candidatesPending_; }
     int32_t selectedIndex() const { return selectedIndex_; }
+    size_t currentPage() const;
+    size_t pageStart() const;
+    size_t totalPages() const;
 
 private:
     enum class PendingBoundaryType {

@@ -88,6 +88,7 @@ private:
 
     void applyKeyAction(ITfContext* context, const KeyAction& action);
     void onCandidateClicked(size_t index);
+    void onPageChange(int delta);
     void openSettingsWindow();
     void applySettings(const AppSettings& newSettings);
     void requestCaretRect(ITfContext* context);

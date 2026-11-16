@@ -144,5 +144,70 @@ int runKeyHandlerTests() {
         KH_ASSERT(glow.activeCount() == 0, "Pulses must expire after 1100ms");
     }
 
+    // 9. Candidate pagination (> 9 candidates): =/-/PageDown/PageUp, arrow wrap, and page-relative digit selection
+    {
+        std::vector<std::string> manyCands;
+        for (int i = 0; i < 12; ++i) {
+            manyCands.push_back("词" + std::to_string(i));
+        }
+
+        handler.onKeyDown(keyW);
+        handler.onAsyncCandidates(lastQuerySession, "w", manyCands);
+        KH_ASSERT(handler.totalPages() == 2, "12 candidates should have 2 pages");
+        KH_ASSERT(handler.currentPage() == 0 && handler.pageStart() == 0, "Initial page should be 0");
+
+        KeyInput pageNext{'=', '=', false, false, false, false, false};
+        KeyInput pagePrev{'-', '-', false, false, false, false, false};
+        KeyInput vkNext{0x22, 0, false, false, false, false, false};
+        KeyInput vkPrior{0x21, 0, false, false, false, false, false};
+        KeyInput vkRight{0x27, 0, false, false, false, false, false};
+        KeyInput vkLeft{0x25, 0, false, false, false, false, false};
+
+        // '=' flips to page 1 (selectedIndex = 9)
+        auto actPage1 = handler.onKeyDown(pageNext);
+        KH_ASSERT(actPage1.handled && actPage1.selectedIndex == 9, "= should flip to page 1");
+        KH_ASSERT(handler.currentPage() == 1 && handler.pageStart() == 9, "Should be on page 1");
+
+        // '=' on last page stays on page 1 and still consumes key
+        auto actPage1Stay = handler.onKeyDown(vkNext);
+        KH_ASSERT(actPage1Stay.handled && handler.currentPage() == 1 && handler.selectedIndex() == 9,
+                  "PageDown on last page should stay on last page");
+
+        // On page 1 (items 9, 10, 11), '3' is valid and '4' is out of range
+        KeyInput digit3{'3', '3', false, false, false, false, false};
+        KeyInput digit4{'4', '4', false, false, false, false, false};
+        KH_ASSERT(handler.shouldEatKey(digit3), "Digit 3 on page 1 should be eaten");
+        KH_ASSERT(!handler.shouldEatKey(digit4), "Digit 4 on page 1 (only 3 items) should pass through");
+
+        // '-' flips back to page 0
+        auto actPage0 = handler.onKeyDown(pagePrev);
+        KH_ASSERT(actPage0.handled && actPage0.selectedIndex == 0 && handler.currentPage() == 0,
+                  "- should flip back to page 0");
+
+        // Arrow right from 8 crosses into page 1 (index 9), arrow left crosses back to 8
+        for (int i = 0; i < 8; ++i) handler.onKeyDown(vkRight);
+        KH_ASSERT(handler.selectedIndex() == 8 && handler.currentPage() == 0, "Should be at index 8 on page 0");
+        handler.onKeyDown(vkRight);
+        KH_ASSERT(handler.selectedIndex() == 9 && handler.currentPage() == 1, "Right from 8 should enter page 1");
+        handler.onKeyDown(vkLeft);
+        KH_ASSERT(handler.selectedIndex() == 8 && handler.currentPage() == 0, "Left from 9 should return to page 0");
+
+        // PageDown then press '2' -> commits manyCands[10] ("词10")
+        handler.onKeyDown(vkNext);
+        KH_ASSERT(handler.currentPage() == 1, "PageDown should move to page 1");
+        auto actCommitP2 = handler.onKeyDown(digit2);
+        KH_ASSERT(actCommitP2.commitText && actCommitP2.textToCommit == "词10",
+                  "Digit 2 on page 1 should commit candidate[10]");
+
+        // PageUp on empty composing does nothing; test PageUp from page 1
+        handler.onKeyDown(keyW);
+        handler.onAsyncCandidates(lastQuerySession, "w", manyCands);
+        handler.onKeyDown(vkNext);
+        auto actPrior = handler.onKeyDown(vkPrior);
+        KH_ASSERT(actPrior.handled && handler.currentPage() == 0 && handler.selectedIndex() == 0,
+                  "PageUp should return to page 0");
+        handler.resetContext();
+    }
+
     return 0;
 }

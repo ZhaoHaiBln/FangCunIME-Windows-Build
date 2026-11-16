@@ -108,8 +108,13 @@ float measureTextHeightDip(IDWriteFactory* factory, IDWriteTextFormat* format, c
 
 } // namespace
 
-CandidateWindow::CandidateWindow(SelectCallback onSelect, SettingsCallback onOpenSettings)
-    : onSelect_(std::move(onSelect)), onOpenSettings_(std::move(onOpenSettings)) {}
+CandidateWindow::CandidateWindow(
+    SelectCallback onSelect,
+    SettingsCallback onOpenSettings,
+    PageCallback onPageChange)
+    : onSelect_(std::move(onSelect)),
+      onOpenSettings_(std::move(onOpenSettings)),
+      onPageChange_(std::move(onPageChange)) {}
 
 CandidateWindow::~CandidateWindow() {
     destroy();
@@ -317,6 +322,28 @@ void CandidateWindow::recomputeHeaderBudget() {
     lastBudgetDpi_ = dpi_;
 }
 
+void CandidateWindow::computePageBounds(
+    size_t& pageStart,
+    size_t& pageEnd,
+    size_t& currentPage,
+    size_t& totalPages) const {
+    size_t totalCount = candidates_.size();
+    if (totalCount == 0) {
+        pageStart = 0;
+        pageEnd = 0;
+        currentPage = 0;
+        totalPages = 0;
+        return;
+    }
+    totalPages = (totalCount + kPageSize - 1) / kPageSize;
+    size_t safeSelected = (selectedIndex_ >= 0 && static_cast<size_t>(selectedIndex_) < totalCount)
+        ? static_cast<size_t>(selectedIndex_)
+        : 0;
+    currentPage = safeSelected / kPageSize;
+    pageStart = currentPage * kPageSize;
+    pageEnd = std::min(totalCount, pageStart + kPageSize);
+}
+
 void CandidateWindow::recalculateSize() {
     if (!hwnd_) return;
     ensureFactories();
@@ -325,27 +352,39 @@ void CandidateWindow::recalculateSize() {
     const float padYDp = 4.0f;
     const float itemGapDp = 4.0f;
 
+    size_t pageStart = 0;
+    size_t pageEnd = 0;
+    size_t currentPage = 0;
+    size_t totalPages = 0;
+    computePageBounds(pageStart, pageEnd, currentPage, totalPages);
+
     float contentWDp = padXDp * 2.0f;
-    size_t maxDisplay = std::min<size_t>(candidates_.size(), 9);
-    if (maxDisplay == 0) {
+    if (pageEnd <= pageStart) {
         float codeW = measureTextWidthDip(dwriteFactory_, codeFormat_, utf8ToWide(composing_));
         contentWDp = std::max(220.0f, codeW + 96.0f);
     } else {
-        for (size_t i = 0; i < maxDisplay; ++i) {
-            std::wstring idxStr = std::to_wstring(i + 1);
-            std::wstring candStr = utf8ToWide(candidates_[i]);
+        for (size_t idx = pageStart; idx < pageEnd; ++idx) {
+            size_t localIdx = idx - pageStart;
+            std::wstring idxStr = std::to_wstring(localIdx + 1);
+            std::wstring candStr = utf8ToWide(candidates_[idx]);
             float idxW = measureTextWidthDip(dwriteFactory_, indexFormat_, idxStr);
             float txtW = measureTextWidthDip(
                 dwriteFactory_,
-                (i == 0) ? primaryFormat_ : secondaryFormat_,
+                (localIdx == 0) ? primaryFormat_ : secondaryFormat_,
                 candStr);
             float itemW = HeaderMetricsSpec::kItemHorizontalPaddingDp * 2.0f + idxW + 4.0f + txtW;
-            contentWDp += itemW + (i + 1 < maxDisplay ? itemGapDp : 0.0f);
+            contentWDp += itemW + (idx + 1 < pageEnd ? itemGapDp : 0.0f);
+        }
+        if (totalPages > 1) {
+            std::wstring pageLabel = std::to_wstring(currentPage + 1) + L"/" + std::to_wstring(totalPages);
+            float labelW = measureTextWidthDip(dwriteFactory_, indexFormat_, pageLabel);
+            float pagerW = 6.0f + 16.0f + 2.0f + labelW + 2.0f + 16.0f;
+            contentWDp += pagerW;
         }
     }
 
     float totalHDp = headerHeightDp_ + padYDp * 2.0f;
-    float clampedWDp = std::clamp(contentWDp, 220.0f, 680.0f);
+    float clampedWDp = std::clamp(contentWDp, 220.0f, 760.0f);
 
     int newW = static_cast<int>(std::ceil(dpToPx(clampedWDp)));
     int newH = static_cast<int>(std::ceil(dpToPx(totalHDp)));
@@ -464,6 +503,13 @@ LRESULT CALLBACK CandidateWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
             case WM_LBUTTONDOWN:
                 self->onLButtonDown(static_cast<short>(LOWORD(lp)), static_cast<short>(HIWORD(lp)));
                 return 0;
+            case WM_MOUSEWHEEL: {
+                short delta = GET_WHEEL_DELTA_WPARAM(wp);
+                if (!self->pending_ && self->onPageChange_ && delta != 0) {
+                    self->onPageChange_(delta < 0 ? 1 : -1);
+                }
+                return 0;
+            }
             case WM_MOUSEACTIVATE:
                 return MA_NOACTIVATE;
             case WM_DPICHANGED:
@@ -488,10 +534,19 @@ void CandidateWindow::onLButtonDown(int x, int y) {
         onOpenSettings_();
         return;
     }
-    if (pending_ || !onSelect_) return;
-    for (size_t i = 0; i < candidateRects_.size(); ++i) {
+    if (pending_) return;
+    if (onPageChange_ && PtInRect(&prevPageRect_, pt)) {
+        onPageChange_(-1);
+        return;
+    }
+    if (onPageChange_ && PtInRect(&nextPageRect_, pt)) {
+        onPageChange_(1);
+        return;
+    }
+    if (!onSelect_) return;
+    for (size_t i = 0; i < candidateRects_.size() && i < candidateIndices_.size(); ++i) {
         if (PtInRect(&candidateRects_[i], pt)) {
-            onSelect_(i);
+            onSelect_(candidateIndices_[i]);
             return;
         }
     }
@@ -664,33 +719,56 @@ void CandidateWindow::onPaint() {
 
     // 4. Candidate row (stable candidateHeightDp_ slot)
     candidateRects_.clear();
+    candidateIndices_.clear();
+    prevPageRect_ = RECT{0, 0, 0, 0};
+    nextPageRect_ = RECT{0, 0, 0, 0};
+
     float curXDip = padXDip;
     float candTopDip = padYDip + codeHeightDp_ + 2.0f;
     float candBottomDip = candTopDip + candidateHeightDp_;
-    size_t maxDisplay = std::min<size_t>(candidates_.size(), 9);
 
-    for (size_t i = 0; i < maxDisplay; ++i) {
-        std::wstring idxWide = std::to_wstring(i + 1);
-        std::wstring candWide = utf8ToWide(candidates_[i]);
-        IDWriteTextFormat* wordFormat = (i == 0) ? primaryFormat_ : secondaryFormat_;
+    size_t pageStart = 0;
+    size_t pageEnd = 0;
+    size_t currentPage = 0;
+    size_t totalPages = 0;
+    computePageBounds(pageStart, pageEnd, currentPage, totalPages);
+
+    float pagerTotalDip = 0.0f;
+    float labelWDip = 0.0f;
+    std::wstring pageLabel;
+    const float pagerBtnWDip = 16.0f;
+    if (totalPages > 1) {
+        pageLabel = std::to_wstring(currentPage + 1) + L"/" + std::to_wstring(totalPages);
+        labelWDip = measureTextWidthDip(dwriteFactory_, indexFormat_, pageLabel);
+        pagerTotalDip = 6.0f + pagerBtnWDip + 2.0f + labelWDip + 2.0f + pagerBtnWDip;
+    }
+
+    float maxCandRightDip = wDip - padXDip - pagerTotalDip;
+
+    for (size_t idx = pageStart; idx < pageEnd; ++idx) {
+        size_t localIdx = idx - pageStart;
+        std::wstring idxWide = std::to_wstring(localIdx + 1);
+        std::wstring candWide = utf8ToWide(candidates_[idx]);
+        IDWriteTextFormat* wordFormat = (localIdx == 0) ? primaryFormat_ : secondaryFormat_;
 
         float idxWDip = measureTextWidthDip(dwriteFactory_, indexFormat_, idxWide);
         float wordWDip = measureTextWidthDip(dwriteFactory_, wordFormat, candWide);
         float itemWDip = HeaderMetricsSpec::kItemHorizontalPaddingDp * 2.0f + idxWDip + 4.0f + wordWDip;
 
-        if (curXDip + itemWDip > wDip - padXDip && i > 0) break;
+        if (curXDip + itemWDip > maxCandRightDip && localIdx > 0) break;
 
         D2D1_RECT_F itemRc = D2D1::RectF(curXDip, candTopDip, curXDip + itemWDip, candBottomDip);
+        bool isSelected = (static_cast<int>(idx) == selectedIndex_);
 
-        // First candidate: accent text + accent @ 3.5% alpha background + 4dp corner (NOT solid fill!)
-        if (i == 0 && !pending_ && textBrush) {
+        // Selected candidate highlight: accent @ 3.5% alpha for first slot, pressed alpha for others
+        if (isSelected && localIdx == 0 && !pending_ && textBrush) {
             D2D1_ROUNDED_RECT firstBg = D2D1::RoundedRect(
                 itemRc,
                 HeaderMetricsSpec::kFirstCornerDp,
                 HeaderMetricsSpec::kFirstCornerDp);
             textBrush->SetColor(toD2DColor(colors.accent.withAlpha(HeaderMetricsSpec::kFirstBackgroundAlpha)));
             renderTarget_->FillRoundedRectangle(firstBg, textBrush);
-        } else if (static_cast<int>(i) == selectedIndex_ && i > 0 && !pending_ && textBrush) {
+        } else if (isSelected && localIdx > 0 && !pending_ && textBrush) {
             D2D1_ROUNDED_RECT selBg = D2D1::RoundedRect(
                 itemRc,
                 HeaderMetricsSpec::kFirstCornerDp,
@@ -702,10 +780,10 @@ void CandidateWindow::onPaint() {
         if (textBrush && indexFormat_ && wordFormat) {
             ColorArgb idxColor = pending_
                 ? colors.secondary.withAlpha(HeaderMetricsSpec::kPendingAlpha)
-                : ((i == 0) ? colors.accent : colors.secondary);
+                : (isSelected ? colors.accent : colors.secondary);
             ColorArgb wordColor = pending_
                 ? colors.secondary.withAlpha(HeaderMetricsSpec::kPendingAlpha)
-                : ((i == 0) ? colors.accent : colors.text);
+                : (isSelected ? colors.accent : colors.text);
 
             float textX = curXDip + HeaderMetricsSpec::kItemHorizontalPaddingDp;
             D2D1_RECT_F idxRc = D2D1::RectF(textX, candTopDip, textX + idxWDip + 2.0f, candBottomDip);
@@ -735,7 +813,50 @@ void CandidateWindow::onPaint() {
             static_cast<LONG>(std::ceil(dpToPx(itemRc.bottom)))
         };
         candidateRects_.push_back(hitRc);
+        candidateIndices_.push_back(idx);
         curXDip += itemWDip + 4.0f;
+    }
+
+    if (totalPages > 1 && textBrush && indexFormat_ && codeFormat_) {
+        float pagerRightDip = wDip - padXDip;
+        float nextLeftDip = pagerRightDip - pagerBtnWDip;
+        float labelLeftDip = nextLeftDip - 2.0f - labelWDip;
+        float prevLeftDip = labelLeftDip - 2.0f - pagerBtnWDip;
+
+        bool canPrev = (currentPage > 0) && !pending_;
+        bool canNext = (currentPage + 1 < totalPages) && !pending_;
+
+        D2D1_RECT_F prevRc = D2D1::RectF(prevLeftDip, candTopDip, prevLeftDip + pagerBtnWDip, candBottomDip);
+        D2D1_RECT_F labelRc = D2D1::RectF(labelLeftDip, candTopDip, labelLeftDip + labelWDip + 2.0f, candBottomDip);
+        D2D1_RECT_F nextRc = D2D1::RectF(nextLeftDip, candTopDip, nextLeftDip + pagerBtnWDip, candBottomDip);
+
+        codeFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        textBrush->SetColor(toD2DColor(canPrev ? colors.text : colors.secondary.withAlpha(0.35f)));
+        renderTarget_->DrawText(L"‹", 1, codeFormat_, prevRc, textBrush);
+
+        textBrush->SetColor(toD2DColor(colors.secondary));
+        renderTarget_->DrawText(pageLabel.c_str(), static_cast<UINT32>(pageLabel.size()), indexFormat_, labelRc, textBrush);
+
+        textBrush->SetColor(toD2DColor(canNext ? colors.text : colors.secondary.withAlpha(0.35f)));
+        renderTarget_->DrawText(L"›", 1, codeFormat_, nextRc, textBrush);
+        codeFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        if (canPrev) {
+            prevPageRect_ = RECT{
+                static_cast<LONG>(std::floor(dpToPx(prevRc.left))),
+                static_cast<LONG>(std::floor(dpToPx(prevRc.top))),
+                static_cast<LONG>(std::ceil(dpToPx(prevRc.right))),
+                static_cast<LONG>(std::ceil(dpToPx(prevRc.bottom)))
+            };
+        }
+        if (canNext) {
+            nextPageRect_ = RECT{
+                static_cast<LONG>(std::floor(dpToPx(nextRc.left))),
+                static_cast<LONG>(std::floor(dpToPx(nextRc.top))),
+                static_cast<LONG>(std::ceil(dpToPx(nextRc.right))),
+                static_cast<LONG>(std::ceil(dpToPx(nextRc.bottom)))
+            };
+        }
     }
 
     // 5. Outer border (0.6dp stroke)
