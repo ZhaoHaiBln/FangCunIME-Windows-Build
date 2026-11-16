@@ -56,6 +56,114 @@ int64_t monotonicNowNanos() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
 }
 
+uint32_t packArgb(ColorArgb c) {
+    return (static_cast<uint32_t>(c.a) << 24) |
+           (static_cast<uint32_t>(c.r) << 16) |
+           (static_cast<uint32_t>(c.g) << 8) |
+           static_cast<uint32_t>(c.b);
+}
+
+uint32_t blendOver(ColorArgb fg, ColorArgb bg) {
+    float a = static_cast<float>(fg.a) / 255.0f;
+    float inv = 1.0f - a;
+    uint8_t r = static_cast<uint8_t>(std::lround(fg.r * a + bg.r * inv));
+    uint8_t g = static_cast<uint8_t>(std::lround(fg.g * a + bg.g * inv));
+    uint8_t b = static_cast<uint8_t>(std::lround(fg.b * a + bg.b * inv));
+    return (0xFFu << 24) | (static_cast<uint32_t>(r) << 16) | (static_cast<uint32_t>(g) << 8) | static_cast<uint32_t>(b);
+}
+
+HICON buildTianzigeIcon(int sizePx) {
+    if (sizePx <= 0) return nullptr;
+    BITMAPV5HEADER bi = {};
+    bi.bV5Size = sizeof(bi);
+    bi.bV5Width = sizePx;
+    bi.bV5Height = -sizePx;
+    bi.bV5Planes = 1;
+    bi.bV5BitCount = 32;
+    bi.bV5Compression = BI_BITFIELDS;
+    bi.bV5RedMask = 0x00FF0000;
+    bi.bV5GreenMask = 0x0000FF00;
+    bi.bV5BlueMask = 0x000000FF;
+    bi.bV5AlphaMask = 0xFF000000;
+
+    void* bits = nullptr;
+    HDC screenDc = GetDC(nullptr);
+    HBITMAP colorBmp = CreateDIBSection(screenDc, reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (screenDc) ReleaseDC(nullptr, screenDc);
+    if (!colorBmp || !bits) {
+        if (colorBmp) DeleteObject(colorBmp);
+        return nullptr;
+    }
+
+    auto* pixels = static_cast<uint32_t*>(bits);
+    const uint32_t cream = packArgb(BrandMark::CreamBackground);
+    const uint32_t frame = packArgb(BrandMark::FrameColor);
+    const uint32_t guide = blendOver(BrandMark::FrameColor.withAlpha(0.45f), BrandMark::CreamBackground);
+    const uint32_t center = packArgb(BrandMark::CenterTerracotta);
+
+    const int radius = std::max(2, sizePx / 6);
+    const int pad = std::max(2, sizePx * 16 / 100);
+    const int stroke = std::max(1, sizePx * 8 / 100);
+    const int mid = sizePx / 2;
+    const int cMin = sizePx * 38 / 100;
+    const int cMax = sizePx * 62 / 100;
+
+    for (int y = 0; y < sizePx; ++y) {
+        for (int x = 0; x < sizePx; ++x) {
+            bool inside = true;
+            int dx = 0;
+            int dy = 0;
+            if (x < radius && y < radius) {
+                dx = radius - x - 1;
+                dy = radius - y - 1;
+                inside = (dx * dx + dy * dy) <= (radius * radius);
+            } else if (x >= sizePx - radius && y < radius) {
+                dx = x - (sizePx - radius);
+                dy = radius - y - 1;
+                inside = (dx * dx + dy * dy) <= (radius * radius);
+            } else if (x < radius && y >= sizePx - radius) {
+                dx = radius - x - 1;
+                dy = y - (sizePx - radius);
+                inside = (dx * dx + dy * dy) <= (radius * radius);
+            } else if (x >= sizePx - radius && y >= sizePx - radius) {
+                dx = x - (sizePx - radius);
+                dy = y - (sizePx - radius);
+                inside = (dx * dx + dy * dy) <= (radius * radius);
+            }
+            if (!inside) {
+                pixels[y * sizePx + x] = 0x00000000;
+                continue;
+            }
+
+            uint32_t px = cream;
+            bool inFrameBox = (x >= pad && x < sizePx - pad && y >= pad && y < sizePx - pad);
+            if (inFrameBox) {
+                bool onBorder = (x < pad + stroke || x >= sizePx - pad - stroke ||
+                                 y < pad + stroke || y >= sizePx - pad - stroke);
+                if (onBorder) {
+                    px = frame;
+                } else if (x >= cMin && x < cMax && y >= cMin && y < cMax) {
+                    px = center;
+                } else if (x == mid || y == mid) {
+                    px = guide;
+                }
+            }
+            pixels[y * sizePx + x] = px;
+        }
+    }
+
+    HBITMAP maskBmp = CreateBitmap(sizePx, sizePx, 1, 1, nullptr);
+    ICONINFO ii = {};
+    ii.fIcon = TRUE;
+    ii.hbmMask = maskBmp;
+    ii.hbmColor = colorBmp;
+    HICON icon = CreateIconIndirect(&ii);
+
+    if (maskBmp) DeleteObject(maskBmp);
+    DeleteObject(colorBmp);
+    return icon;
+}
+
 } // namespace
 
 UINT SettingsWindow::settingsChangedMessage() {
@@ -94,18 +202,19 @@ bool SettingsWindow::ensureFactories() {
         }
     }
     if (dwriteFactory_ && !titleFormat_) {
-        auto makeFmt = [this](float size, DWRITE_FONT_WEIGHT weight, IDWriteTextFormat** out) {
+        auto makeFmt = [this](const wchar_t* family, float size, DWRITE_FONT_WEIGHT weight, IDWriteTextFormat** out) {
             if (SUCCEEDED(dwriteFactory_->CreateTextFormat(
-                    kUiFontFamily, nullptr, weight, DWRITE_FONT_STYLE_NORMAL,
+                    family, nullptr, weight, DWRITE_FONT_STYLE_NORMAL,
                     DWRITE_FONT_STRETCH_NORMAL, size, L"", out)) && *out) {
                 (*out)->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
                 (*out)->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             }
         };
-        makeFmt(18.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD, &titleFormat_);
-        makeFmt(13.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD, &sectionFormat_);
-        makeFmt(13.0f, DWRITE_FONT_WEIGHT_NORMAL, &bodyFormat_);
-        makeFmt(11.0f, DWRITE_FONT_WEIGHT_NORMAL, &smallFormat_);
+        makeFmt(kUiFontFamily, 18.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD, &titleFormat_);
+        makeFmt(kUiFontFamily, 13.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD, &sectionFormat_);
+        makeFmt(kUiFontFamily, 12.5f, DWRITE_FONT_WEIGHT_NORMAL, &bodyFormat_);
+        makeFmt(kUiFontFamily, 11.0f, DWRITE_FONT_WEIGHT_NORMAL, &smallFormat_);
+        makeFmt(L"Consolas", 10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, &monoFormat_);
     }
     return true;
 }
@@ -115,6 +224,7 @@ void SettingsWindow::releaseFactories() {
     safeRelease(sectionFormat_);
     safeRelease(bodyFormat_);
     safeRelease(smallFormat_);
+    safeRelease(monoFormat_);
     releaseDeviceResources();
     safeRelease(dwriteFactory_);
     safeRelease(d2dFactory_);
@@ -190,7 +300,7 @@ void SettingsWindow::showOrActivate(HWND owner) {
     }
 
     DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    RECT wr{0, 0, static_cast<LONG>(dpToPx(560.0f)), static_cast<LONG>(dpToPx(650.0f))};
+    RECT wr{0, 0, static_cast<LONG>(dpToPx(820.0f)), static_cast<LONG>(dpToPx(640.0f))};
     AdjustWindowRectEx(&wr, style, FALSE, 0);
     width_ = wr.right - wr.left;
     height_ = wr.bottom - wr.top;
@@ -211,8 +321,32 @@ void SettingsWindow::showOrActivate(HWND owner) {
 
     if (hwnd_) {
         dpi_ = queryDpiForWindow(hwnd_);
+        createTianzigeIcons();
         ShowWindow(hwnd_, SW_SHOW);
         UpdateWindow(hwnd_);
+    }
+}
+
+void SettingsWindow::createTianzigeIcons() {
+    destroyTianzigeIcons();
+    int smallPx = std::max(16, static_cast<int>(std::lround(dpToPx(16.0f))));
+    int bigPx = std::max(32, static_cast<int>(std::lround(dpToPx(32.0f))));
+    smallIcon_ = buildTianzigeIcon(smallPx);
+    bigIcon_ = buildTianzigeIcon(bigPx);
+    if (hwnd_) {
+        if (smallIcon_) SendMessageW(hwnd_, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon_));
+        if (bigIcon_) SendMessageW(hwnd_, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(bigIcon_));
+    }
+}
+
+void SettingsWindow::destroyTianzigeIcons() {
+    if (smallIcon_) {
+        DestroyIcon(smallIcon_);
+        smallIcon_ = nullptr;
+    }
+    if (bigIcon_) {
+        DestroyIcon(bigIcon_);
+        bigIcon_ = nullptr;
     }
 }
 
@@ -229,6 +363,7 @@ void SettingsWindow::destroy() {
     } else {
         releaseFactories();
     }
+    destroyTianzigeIcons();
 }
 
 bool SettingsWindow::isOpen() const {
@@ -339,7 +474,7 @@ void SettingsWindow::onLButtonDown(int x, int y) {
             if (hc.action == ActionId::PreviewGlowTrigger) {
                 glowEngine_.setEnabled(settings_.typingGlow);
                 glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
-                glowEngine_.trigger(true, xDip - 16.0f, yDip - 58.0f);
+                glowEngine_.trigger(true, xDip - hc.rectDip.left, yDip - hc.rectDip.top);
                 glowEngine_.advanceFrame(monotonicNowNanos());
                 syncGlowTimer();
                 InvalidateRect(hwnd_, nullptr, FALSE);
@@ -363,6 +498,22 @@ void SettingsWindow::saveAndNotify() {
 
 void SettingsWindow::applyAction(ActionId action) {
     switch (action) {
+        case ActionId::TabAll:
+            activeTab_ = CategoryTab::All;
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        case ActionId::TabInput:
+            activeTab_ = CategoryTab::Input;
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        case ActionId::TabTheme:
+            activeTab_ = CategoryTab::Theme;
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        case ActionId::TabTypography:
+            activeTab_ = CategoryTab::Typography;
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
         case ActionId::SchemeFlypy: settings_.scheme = InputScheme::Flypy; break;
         case ActionId::SchemePinyin: settings_.scheme = InputScheme::Pinyin; break;
         case ActionId::SchemeNineKey: settings_.scheme = InputScheme::NineKey; break;
@@ -607,29 +758,97 @@ void SettingsWindow::onPaint() {
         return;
     }
 
-    const float pad = 16.0f;
+    const float pad = 20.0f;
+    const float fullW = wDip - pad * 2.0f;
+    const float cardRadius = metrics.cornerRadiusDp + 6.0f;
     float y = 14.0f;
 
-    // Header: Tianzige Logo + Title
-    drawTianzigeLogo(pad, y, 28.0f);
+    auto addPill = [&](float x, float py, float w, float h, const std::wstring& label, ActionId act,
+                       bool sel, bool func = false, bool emph = false, float fSize = 12.5f) {
+        D2D1_RECT_F r = D2D1::RectF(x, py, x + w, py + h);
+        hitControls_.push_back({r, act});
+        drawGlassButton(r, label, settings_.skin, colors, sel, func, emph, hoveredAction_ == act, fSize, false);
+    };
+
+    // 1. Showcase Top Bar: Tianzige Logo + Brand + ~/SETTINGS + Action Pills
+    drawTianzigeLogo(pad, y + 4.0f, 32.0f);
     brush->SetColor(toD2DColor(colors.text));
     if (titleFormat_) {
-        renderTarget_->DrawText(L"方寸输入法 设置", 8, titleFormat_,
-                                D2D1::RectF(pad + 38.0f, y, wDip - pad, y + 28.0f), brush);
+        renderTarget_->DrawText(L"方寸输入法", 5, titleFormat_,
+                                D2D1::RectF(pad + 42.0f, y + 1.0f, pad + 190.0f, y + 24.0f), brush);
     }
-    brush->SetColor(toD2DColor(colors.secondary));
+    if (monoFormat_) {
+        brush->SetColor(toD2DColor(colors.accent));
+        std::wstring tag = L"~/SETTINGS";
+        renderTarget_->DrawText(tag.c_str(), static_cast<UINT32>(tag.size()), monoFormat_,
+                                D2D1::RectF(pad + 42.0f, y + 23.0f, pad + 130.0f, y + 38.0f), brush);
+    }
     if (smallFormat_) {
-        std::wstring sub = L"方寸之间，自有天地  ·  点击预览区可测试流光";
+        brush->SetColor(toD2DColor(colors.secondary));
+        std::wstring sub = L"·  方寸之间，自有天地";
         renderTarget_->DrawText(sub.c_str(), static_cast<UINT32>(sub.size()), smallFormat_,
-                                D2D1::RectF(wDip - 260.0f, y + 4.0f, wDip - pad, y + 26.0f), brush);
+                                D2D1::RectF(pad + 126.0f, y + 23.0f, pad + 320.0f, y + 38.0f), brush);
     }
-    y += 42.0f;
 
-    // Live Preview Card (Candidate Bar + 3D Glass Keys + TypingGlow)
-    D2D1_RECT_F previewRc = D2D1::RectF(pad, y, wDip - pad, y + 118.0f);
+    // Top-right version badge + Reset + Done
+    {
+        float rightX = wDip - pad;
+        addPill(rightX - 88.0f, y + 3.0f, 88.0f, 32.0f, L"完成", ActionId::CloseWindow, false, false, true, 12.5f);
+        addPill(rightX - 184.0f, y + 3.0f, 88.0f, 32.0f, L"恢复默认", ActionId::ResetDefaults, false, true, false, 12.0f);
+
+        D2D1_RECT_F verRc = D2D1::RectF(rightX - 294.0f, y + 6.0f, rightX - 194.0f, y + 32.0f);
+        D2D1_ROUNDED_RECT verRR = D2D1::RoundedRect(verRc, 6.0f, 6.0f);
+        brush->SetColor(toD2DColor(colors.key.withAlpha(0.65f)));
+        renderTarget_->FillRoundedRectangle(verRR, brush);
+        brush->SetColor(toD2DColor(colors.border.withAlpha(0.75f)));
+        renderTarget_->DrawRoundedRectangle(verRR, brush, 0.8f);
+        if (monoFormat_) {
+            monoFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+            brush->SetColor(toD2DColor(colors.secondary));
+            std::wstring ver = L"v0.1.0 · x64";
+            renderTarget_->DrawText(ver.c_str(), static_cast<UINT32>(ver.size()), monoFormat_, verRc, brush);
+            monoFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        }
+    }
+    y += 48.0f;
+
+    // Subtle hairline divider
+    brush->SetColor(toD2DColor(colors.border.withAlpha(0.45f)));
+    renderTarget_->DrawLine(D2D1::Point2F(pad, y), D2D1::Point2F(wDip - pad, y), brush, 0.8f);
+    y += 8.0f;
+
+    // 2. Category Filter Bar (awesomemygo.dev showcase style)
+    {
+        float tx = pad;
+        auto addTab = [&](const std::wstring& label, float w, ActionId act, CategoryTab tab) {
+            addPill(tx, y, w, 28.0f, label, act, activeTab_ == tab, false, false, 12.0f);
+            tx += w + 8.0f;
+        };
+        addTab(L"全部 · 4", 82.0f, ActionId::TabAll, CategoryTab::All);
+        addTab(L"输入方案", 86.0f, ActionId::TabInput, CategoryTab::Input);
+        addTab(L"皮肤外观", 86.0f, ActionId::TabTheme, CategoryTab::Theme);
+        addTab(L"字号与特效", 96.0f, ActionId::TabTypography, CategoryTab::Typography);
+
+        if (smallFormat_) {
+            smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+            brush->SetColor(toD2DColor(colors.secondary));
+            std::wstring status = L"当前方案：";
+            if (settings_.scheme == InputScheme::Flypy) status += L"小鹤双拼";
+            else if (settings_.scheme == InputScheme::Pinyin) status += L"全拼";
+            else status += L"九宫格";
+            status += settings_.mixedInput ? L" · 中英混输" : L" · 纯中文";
+            renderTarget_->DrawText(status.c_str(), static_cast<UINT32>(status.size()), smallFormat_,
+                                    D2D1::RectF(tx, y, wDip - pad, y + 28.0f), brush);
+            smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        }
+    }
+    y += 38.0f;
+
+    // 3. Live Preview Showcase Card (Candidate Bar + 3D Glass Keys + TypingGlow)
+    D2D1_RECT_F previewRc = D2D1::RectF(pad, y, wDip - pad, y + 114.0f);
     hitControls_.push_back({previewRc, ActionId::PreviewGlowTrigger});
 
-    D2D1_ROUNDED_RECT previewRR = D2D1::RoundedRect(previewRc, metrics.cornerRadiusDp + 2.0f, metrics.cornerRadiusDp + 2.0f);
+    D2D1_ROUNDED_RECT previewRR = D2D1::RoundedRect(previewRc, cardRadius, cardRadius);
     brush->SetColor(toD2DColor(colors.keyboard));
     renderTarget_->FillRoundedRectangle(previewRR, brush);
 
@@ -671,18 +890,27 @@ void SettingsWindow::onPaint() {
         prevGeo->Release();
     }
 
-    brush->SetColor(toD2DColor(colors.border.withAlpha(0.75f)));
-    renderTarget_->DrawRoundedRectangle(previewRR, brush, 0.8f);
+    brush->SetColor(toD2DColor(colors.border.withAlpha(0.85f)));
+    renderTarget_->DrawRoundedRectangle(previewRR, brush, 1.0f);
 
-    // Preview candidate bar
     if (smallFormat_) {
         brush->SetColor(toD2DColor(colors.secondary));
         renderTarget_->DrawText(L"wanshang", 8, smallFormat_,
-                                D2D1::RectF(previewRc.left + 12.0f, previewRc.top + 4.0f, previewRc.left + 160.0f, previewRc.top + 20.0f),
+                                D2D1::RectF(previewRc.left + 14.0f, previewRc.top + 5.0f, previewRc.left + 180.0f, previewRc.top + 21.0f),
                                 brush);
     }
-    // First candidate highlight (accent @ 3.5% alpha + 4dp corner)
-    D2D1_RECT_F firstCandRc = D2D1::RectF(previewRc.left + 10.0f, previewRc.top + 22.0f, previewRc.left + 94.0f, previewRc.top + 56.0f);
+    if (monoFormat_) {
+        monoFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+        brush->SetColor(toD2DColor(colors.secondary.withAlpha(0.85f)));
+        std::wstring hint = L"LIVE PREVIEW · 点击预览区测试流光";
+        renderTarget_->DrawText(hint.c_str(), static_cast<UINT32>(hint.size()), monoFormat_,
+                                D2D1::RectF(previewRc.left + 200.0f, previewRc.top + 5.0f, previewRc.right - 14.0f, previewRc.top + 21.0f),
+                                brush);
+        monoFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+
+    // First candidate highlight
+    D2D1_RECT_F firstCandRc = D2D1::RectF(previewRc.left + 12.0f, previewRc.top + 22.0f, previewRc.left + 98.0f, previewRc.top + 56.0f);
     brush->SetColor(toD2DColor(colors.accent.withAlpha(HeaderMetricsSpec::kFirstBackgroundAlpha)));
     renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(firstCandRc, 4.0f, 4.0f), brush);
 
@@ -704,127 +932,184 @@ void SettingsWindow::onPaint() {
                 DWRITE_FONT_STRETCH_NORMAL, 17.0f, L"", &oFmt)) && oFmt) {
             oFmt->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             brush->SetColor(toD2DColor(colors.text));
-            renderTarget_->DrawText(L"2 网上   3 晚上好", 11, oFmt,
-                                    D2D1::RectF(firstCandRc.right + 14.0f, firstCandRc.top, previewRc.right - 12.0f, firstCandRc.bottom),
+            renderTarget_->DrawText(L"2 网上   3 晚上好   4 婉赏   ‹ 1/3 ›", 26, oFmt,
+                                    D2D1::RectF(firstCandRc.right + 14.0f, firstCandRc.top, previewRc.right - 14.0f, firstCandRc.bottom),
                                     brush);
             oFmt->Release();
         }
     }
 
     // Preview 3D glass keycaps row
-    float kx = previewRc.left + 10.0f;
-    float ky = previewRc.top + 64.0f;
-    float kh = 44.0f;
-    drawGlassButton(D2D1::RectF(kx, ky, kx + 48.0f, ky + kh), L"q", settings_.skin, colors,
-                    false, false, false, false, static_cast<float>(settings_.keyLetterSize), settings_.keyLetterBold);
-    kx += 54.0f;
-    drawGlassButton(D2D1::RectF(kx, ky, kx + 48.0f, ky + kh), L"w", settings_.skin, colors,
-                    false, false, false, false, static_cast<float>(settings_.keyLetterSize), settings_.keyLetterBold);
-    kx += 54.0f;
-    drawGlassButton(D2D1::RectF(kx, ky, kx + 48.0f, ky + kh), L"e", settings_.skin, colors,
-                    false, false, false, false, static_cast<float>(settings_.keyLetterSize), settings_.keyLetterBold);
-    kx += 54.0f;
-    drawGlassButton(D2D1::RectF(kx, ky, kx + 150.0f, ky + kh),
-                    settings_.mixedInput ? L"中英混输" : schemeLabel(settings_.scheme) == "小鹤" ? L"小鹤双拼" : L"全拼",
-                    settings_.skin, colors, false, true, false, false, 13.0f, false);
-    kx += 156.0f;
-    drawGlassButton(D2D1::RectF(kx, ky, previewRc.right - 10.0f, ky + kh), L"发送", settings_.skin, colors,
-                    false, false, true, false, 13.0f, false);
+    {
+        float kx = previewRc.left + 12.0f;
+        float ky = previewRc.top + 62.0f;
+        float kh = 42.0f;
+        drawGlassButton(D2D1::RectF(kx, ky, kx + 52.0f, ky + kh), L"q", settings_.skin, colors,
+                        false, false, false, false, static_cast<float>(settings_.keyLetterSize), settings_.keyLetterBold);
+        kx += 58.0f;
+        drawGlassButton(D2D1::RectF(kx, ky, kx + 52.0f, ky + kh), L"w", settings_.skin, colors,
+                        false, false, false, false, static_cast<float>(settings_.keyLetterSize), settings_.keyLetterBold);
+        kx += 58.0f;
+        drawGlassButton(D2D1::RectF(kx, ky, kx + 52.0f, ky + kh), L"e", settings_.skin, colors,
+                        false, false, false, false, static_cast<float>(settings_.keyLetterSize), settings_.keyLetterBold);
+        kx += 58.0f;
+        std::wstring modeKeyLabel = settings_.mixedInput ? L"中英混输"
+            : (settings_.scheme == InputScheme::Flypy ? L"小鹤双拼"
+                : (settings_.scheme == InputScheme::Pinyin ? L"全拼" : L"九宫格"));
+        drawGlassButton(D2D1::RectF(kx, ky, kx + 200.0f, ky + kh), modeKeyLabel,
+                        settings_.skin, colors, false, true, false, false, 13.0f, false);
+        kx += 206.0f;
+        drawGlassButton(D2D1::RectF(kx, ky, previewRc.right - 12.0f, ky + kh), L"发送", settings_.skin, colors,
+                        false, false, true, false, 13.0f, false);
+    }
 
-    y += 132.0f;
+    y += 126.0f;
 
-    auto drawSectionLabel = [&](const std::wstring& title) {
-        brush->SetColor(toD2DColor(colors.secondary));
-        if (sectionFormat_) {
-            renderTarget_->DrawText(title.c_str(), static_cast<UINT32>(title.size()), sectionFormat_,
-                                    D2D1::RectF(pad, y, wDip - pad, y + 20.0f), brush);
-        }
-        y += 24.0f;
-    };
+    // Helper to draw a showcase Bento card container
+    auto drawCardFrame = [&](float x, float cy, float w, float h, const std::wstring& monoTag, const std::wstring& title) {
+        D2D1_RECT_F rc = D2D1::RectF(x, cy, x + w, cy + h);
+        D2D1_ROUNDED_RECT rr = D2D1::RoundedRect(rc, cardRadius, cardRadius);
+        brush->SetColor(toD2DColor(colors.key.withAlpha(colors.isDarkKeyboard() ? 0.35f : 0.55f)));
+        renderTarget_->FillRoundedRectangle(rr, brush);
+        brush->SetColor(toD2DColor(colors.border.withAlpha(0.75f)));
+        renderTarget_->DrawRoundedRectangle(rr, brush, 0.9f);
 
-    auto addPill = [&](float x, float w, float h, const std::wstring& label, ActionId act, bool sel, bool func = false, bool emph = false) {
-        D2D1_RECT_F r = D2D1::RectF(x, y, x + w, y + h);
-        hitControls_.push_back({r, act});
-        drawGlassButton(r, label, settings_.skin, colors, sel, func, emph, hoveredAction_ == act, 13.0f, false);
-    };
-
-    const float fullW = wDip - pad * 2.0f;
-
-    // Section 1: Input Scheme & Toggles
-    drawSectionLabel(L"输入方案与行为");
-    float w3 = (fullW - 12.0f) / 3.0f;
-    addPill(pad, w3, 36.0f, L"小鹤双拼", ActionId::SchemeFlypy, settings_.scheme == InputScheme::Flypy);
-    addPill(pad + w3 + 6.0f, w3, 36.0f, L"全拼", ActionId::SchemePinyin, settings_.scheme == InputScheme::Pinyin);
-    addPill(pad + (w3 + 6.0f) * 2.0f, w3, 36.0f, L"九宫格", ActionId::SchemeNineKey, settings_.scheme == InputScheme::NineKey);
-    y += 42.0f;
-
-    float w2 = (fullW - 6.0f) / 2.0f;
-    addPill(pad, w2, 34.0f, settings_.mixedInput ? L"✓ 中英混输：开启" : L"中英混输：关闭",
-            ActionId::ToggleMixedInput, settings_.mixedInput, true);
-    addPill(pad + w2 + 6.0f, w2, 34.0f, settings_.chinesePunctuation ? L"✓ 中文标点：开启" : L"中文标点：关闭",
-            ActionId::ToggleChinesePunct, settings_.chinesePunctuation, true);
-    y += 46.0f;
-
-    // Section 2: 4 Skins
-    drawSectionLabel(L"皮肤预设");
-    float w4 = (fullW - 18.0f) / 4.0f;
-    addPill(pad, w4, 38.0f, L"原生轻白", ActionId::SkinNativeLight, settings_.skin == SkinPreset::NativeLight);
-    addPill(pad + w4 + 6.0f, w4, 38.0f, L"米白田字格", ActionId::SkinWarmGrid, settings_.skin == SkinPreset::WarmGrid);
-    addPill(pad + (w4 + 6.0f) * 2.0f, w4, 38.0f, L"薄荷绿", ActionId::SkinMint, settings_.skin == SkinPreset::Mint);
-    addPill(pad + (w4 + 6.0f) * 3.0f, w4, 38.0f, L"深蓝珊瑚", ActionId::SkinDeepBlue, settings_.skin == SkinPreset::DeepBlue);
-    y += 48.0f;
-
-    // Section 3: Theme Mode & Effects
-    drawSectionLabel(L"明暗模式与特效");
-    addPill(pad, w3, 34.0f, L"跟随系统", ActionId::ModeSystem, settings_.themeMode == ThemeMode::System);
-    addPill(pad + w3 + 6.0f, w3, 34.0f, L"浅色模式", ActionId::ModeLight, settings_.themeMode == ThemeMode::Light);
-    addPill(pad + (w3 + 6.0f) * 2.0f, w3, 34.0f, L"深色模式", ActionId::ModeDark, settings_.themeMode == ThemeMode::Dark);
-    y += 40.0f;
-
-    addPill(pad, w2, 34.0f, settings_.typingGlow ? L"✓ 打字流光：开启" : L"打字流光：关闭",
-            ActionId::ToggleTypingGlow, settings_.typingGlow, true);
-    addPill(pad + w2 + 6.0f, w2, 34.0f, settings_.keyLetterBold ? L"✓ 键帽字母：加粗" : L"键帽字母：常规",
-            ActionId::ToggleKeyBold, settings_.keyLetterBold, true);
-    y += 46.0f;
-
-    // Section 4: Stepper sliders (First Candidate Size, Key Letter Size, Key Opacity)
-    drawSectionLabel(L"字号与透明度");
-    auto drawStepper = [&](const std::wstring& title, const std::wstring& valueStr, ActionId minusAct, ActionId plusAct) {
-        brush->SetColor(toD2DColor(colors.text));
-        if (bodyFormat_) {
-            renderTarget_->DrawText(title.c_str(), static_cast<UINT32>(title.size()), bodyFormat_,
-                                    D2D1::RectF(pad, y, pad + 180.0f, y + 32.0f), brush);
-        }
-        float rightX = wDip - pad;
-        addPill(rightX - 42.0f, 42.0f, 32.0f, L"+", plusAct, false, true);
+        // Accent indicator dot + monospace tag + title
+        float innerX = x + 14.0f;
+        float headerY = cy + 12.0f;
         brush->SetColor(toD2DColor(colors.accent));
-        if (sectionFormat_) {
-            IDWriteTextFormat* cFmt = nullptr;
-            if (SUCCEEDED(dwriteFactory_->CreateTextFormat(
-                    kUiFontFamily, nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
-                    DWRITE_FONT_STRETCH_NORMAL, 13.0f, L"", &cFmt)) && cFmt) {
-                cFmt->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-                cFmt->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-                renderTarget_->DrawText(valueStr.c_str(), static_cast<UINT32>(valueStr.size()), cFmt,
-                                        D2D1::RectF(rightX - 108.0f, y, rightX - 46.0f, y + 32.0f), brush);
-                cFmt->Release();
-            }
+        renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(innerX + 3.0f, headerY + 9.0f), 3.0f, 3.0f), brush);
+
+        if (monoFormat_) {
+            brush->SetColor(toD2DColor(colors.accent));
+            renderTarget_->DrawText(monoTag.c_str(), static_cast<UINT32>(monoTag.size()), monoFormat_,
+                                    D2D1::RectF(innerX + 11.0f, headerY, innerX + 110.0f, headerY + 18.0f), brush);
         }
-        addPill(rightX - 154.0f, 42.0f, 32.0f, L"−", minusAct, false, true);
-        y += 38.0f;
+        if (sectionFormat_) {
+            brush->SetColor(toD2DColor(colors.text));
+            renderTarget_->DrawText(title.c_str(), static_cast<UINT32>(title.size()), sectionFormat_,
+                                    D2D1::RectF(innerX + 106.0f, headerY - 1.0f, x + w - 14.0f, headerY + 19.0f), brush);
+        }
     };
 
-    drawStepper(L"第一候选字号 (16–30)", std::to_wstring(settings_.firstCandidateSize) + L" pt",
-                ActionId::FirstSizeMinus, ActionId::FirstSizePlus);
-    drawStepper(L"键帽字母字号 (14–30)", std::to_wstring(settings_.keyLetterSize) + L" pt",
-                ActionId::LetterSizeMinus, ActionId::LetterSizePlus);
-    int opacityPct = static_cast<int>(std::lround(settings_.keyOpacity * 100.0f));
-    drawStepper(L"键帽透明度 (40%–100%)", std::to_wstring(opacityPct) + L"%",
-                ActionId::OpacityMinus, ActionId::OpacityPlus);
+    auto drawInputCard = [&](float x, float cy, float w, float h) {
+        drawCardFrame(x, cy, w, h, L"01 · ~/INPUT", L"输入方案与行为");
+        float ix = x + 14.0f;
+        float iw = w - 28.0f;
+        float ry = cy + 40.0f;
+        float w3 = (iw - 12.0f) / 3.0f;
+        addPill(ix, ry, w3, 36.0f, L"小鹤双拼", ActionId::SchemeFlypy, settings_.scheme == InputScheme::Flypy);
+        addPill(ix + w3 + 6.0f, ry, w3, 36.0f, L"全拼", ActionId::SchemePinyin, settings_.scheme == InputScheme::Pinyin);
+        addPill(ix + (w3 + 6.0f) * 2.0f, ry, w3, 36.0f, L"九宫格", ActionId::SchemeNineKey, settings_.scheme == InputScheme::NineKey);
 
-    y += 10.0f;
-    addPill(pad, 120.0f, 36.0f, L"恢复默认", ActionId::ResetDefaults, false, true);
-    addPill(wDip - pad - 120.0f, 120.0f, 36.0f, L"完成", ActionId::CloseWindow, false, false, true);
+        ry += 44.0f;
+        float w2 = (iw - 6.0f) / 2.0f;
+        addPill(ix, ry, w2, 34.0f, settings_.mixedInput ? L"✓ 中英混输：开启" : L"中英混输：关闭",
+                ActionId::ToggleMixedInput, settings_.mixedInput, true);
+        addPill(ix + w2 + 6.0f, ry, w2, 34.0f, settings_.chinesePunctuation ? L"✓ 中文标点：开启" : L"中文标点：关闭",
+                ActionId::ToggleChinesePunct, settings_.chinesePunctuation, true);
+
+        ry += 44.0f;
+        if (smallFormat_) {
+            brush->SetColor(toD2DColor(colors.secondary));
+            std::wstring tip = L"候选分页：每页 9 项 · 支持 = / - / PageUp / PageDown / 滚轮翻页";
+            renderTarget_->DrawText(tip.c_str(), static_cast<UINT32>(tip.size()), smallFormat_,
+                                    D2D1::RectF(ix, ry, ix + iw, ry + 24.0f), brush);
+        }
+    };
+
+    auto drawThemeCard = [&](float x, float cy, float w, float h) {
+        drawCardFrame(x, cy, w, h, L"02 · ~/THEME", L"皮肤预设与明暗");
+        float ix = x + 14.0f;
+        float iw = w - 28.0f;
+        float ry = cy + 40.0f;
+        float w2 = (iw - 6.0f) / 2.0f;
+        addPill(ix, ry, w2, 36.0f, L"原生轻白", ActionId::SkinNativeLight, settings_.skin == SkinPreset::NativeLight);
+        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"米白田字格", ActionId::SkinWarmGrid, settings_.skin == SkinPreset::WarmGrid);
+
+        ry += 42.0f;
+        addPill(ix, ry, w2, 36.0f, L"薄荷绿", ActionId::SkinMint, settings_.skin == SkinPreset::Mint);
+        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"深蓝珊瑚", ActionId::SkinDeepBlue, settings_.skin == SkinPreset::DeepBlue);
+
+        ry += 46.0f;
+        float w3 = (iw - 12.0f) / 3.0f;
+        addPill(ix, ry, w3, 34.0f, L"跟随系统", ActionId::ModeSystem, settings_.themeMode == ThemeMode::System);
+        addPill(ix + w3 + 6.0f, ry, w3, 34.0f, L"浅色模式", ActionId::ModeLight, settings_.themeMode == ThemeMode::Light);
+        addPill(ix + (w3 + 6.0f) * 2.0f, ry, w3, 34.0f, L"深色模式", ActionId::ModeDark, settings_.themeMode == ThemeMode::Dark);
+    };
+
+    auto drawEffectsCard = [&](float x, float cy, float w, float h) {
+        drawCardFrame(x, cy, w, h, L"03 · ~/EFFECTS", L"特效与视觉");
+        float ix = x + 14.0f;
+        float iw = w - 28.0f;
+        float ry = cy + 42.0f;
+        addPill(ix, ry, iw, 36.0f, settings_.typingGlow ? L"✓ 打字流光特效：开启" : L"打字流光特效：关闭",
+                ActionId::ToggleTypingGlow, settings_.typingGlow, true);
+        ry += 44.0f;
+        addPill(ix, ry, iw, 36.0f, settings_.keyLetterBold ? L"✓ 键帽字母加粗：开启" : L"键帽字母加粗：常规",
+                ActionId::ToggleKeyBold, settings_.keyLetterBold, true);
+        ry += 44.0f;
+        if (smallFormat_) {
+            brush->SetColor(toD2DColor(colors.secondary));
+            std::wstring note = L"窗口标题栏、候选窗与设置页已启用田字格品牌标识";
+            renderTarget_->DrawText(note.c_str(), static_cast<UINT32>(note.size()), smallFormat_,
+                                    D2D1::RectF(ix, ry, ix + iw, ry + 22.0f), brush);
+        }
+    };
+
+    auto drawTypographyCard = [&](float x, float cy, float w, float h) {
+        drawCardFrame(x, cy, w, h, L"04 · ~/METRICS", L"字号与透明度");
+        float ix = x + 14.0f;
+        float iw = w - 28.0f;
+        float ry = cy + 42.0f;
+
+        auto drawStepper = [&](const std::wstring& title, const std::wstring& valueStr, ActionId minusAct, ActionId plusAct) {
+            brush->SetColor(toD2DColor(colors.text));
+            if (bodyFormat_) {
+                renderTarget_->DrawText(title.c_str(), static_cast<UINT32>(title.size()), bodyFormat_,
+                                        D2D1::RectF(ix, ry, ix + iw - 146.0f, ry + 32.0f), brush);
+            }
+            float rightX = ix + iw;
+            addPill(rightX - 38.0f, ry, 38.0f, 32.0f, L"+", plusAct, false, true);
+            brush->SetColor(toD2DColor(colors.accent));
+            if (sectionFormat_) {
+                sectionFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                renderTarget_->DrawText(valueStr.c_str(), static_cast<UINT32>(valueStr.size()), sectionFormat_,
+                                        D2D1::RectF(rightX - 98.0f, ry, rightX - 42.0f, ry + 32.0f), brush);
+                sectionFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+            }
+            addPill(rightX - 140.0f, ry, 38.0f, 32.0f, L"−", minusAct, false, true);
+            ry += 42.0f;
+        };
+
+        drawStepper(L"第一候选字号 (16–30)", std::to_wstring(settings_.firstCandidateSize) + L" pt",
+                    ActionId::FirstSizeMinus, ActionId::FirstSizePlus);
+        drawStepper(L"键帽字母字号 (14–30)", std::to_wstring(settings_.keyLetterSize) + L" pt",
+                    ActionId::LetterSizeMinus, ActionId::LetterSizePlus);
+        int opacityPct = static_cast<int>(std::lround(settings_.keyOpacity * 100.0f));
+        drawStepper(L"键帽透明度 (40%–100%)", std::to_wstring(opacityPct) + L"%",
+                    ActionId::OpacityMinus, ActionId::OpacityPlus);
+    };
+
+    // 4. Render Bento Grid based on active category tab
+    const float colGap = 14.0f;
+    const float colW = (fullW - colGap) / 2.0f;
+    const float leftX = pad;
+    const float rightX = pad + colW + colGap;
+
+    if (activeTab_ == CategoryTab::All) {
+        drawInputCard(leftX, y, colW, 184.0f);
+        drawThemeCard(rightX, y, colW, 184.0f);
+        drawEffectsCard(leftX, y + 196.0f, colW, 184.0f);
+        drawTypographyCard(rightX, y + 196.0f, colW, 184.0f);
+    } else if (activeTab_ == CategoryTab::Input) {
+        drawInputCard(pad, y, fullW, 200.0f);
+    } else if (activeTab_ == CategoryTab::Theme) {
+        drawThemeCard(pad, y, fullW, 200.0f);
+    } else if (activeTab_ == CategoryTab::Typography) {
+        drawEffectsCard(leftX, y, colW, 200.0f);
+        drawTypographyCard(rightX, y, colW, 200.0f);
+    }
 
     brush->Release();
 

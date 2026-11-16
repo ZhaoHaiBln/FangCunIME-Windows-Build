@@ -36,8 +36,19 @@ public:
     static void broadcastSettingsChanged();
 
 private:
+    enum class CategoryTab {
+        All = 0,
+        Input,
+        Theme,
+        Typography,
+    };
+
     enum class ActionId {
         None = 0,
+        TabAll,
+        TabInput,
+        TabTheme,
+        TabTypography,
         SchemeFlypy,
         SchemePinyin,
         SchemeNineKey,
@@ -85,6 +96,8 @@ private:
     void releaseFactories();
     bool ensureDeviceResources();
     void releaseDeviceResources();
+    void createTianzigeIcons();
+    void destroyTianzigeIcons();
 
     void drawTianzigeLogo(float x, float y, float size);
     void drawGlassButton(
@@ -102,9 +115,13 @@ private:
     HWND hwnd_ = nullptr;
     ChangeCallback onChanged_;
     AppSettings settings_;
+    CategoryTab activeTab_ = CategoryTab::All;
     UINT dpi_ = 96;
-    int width_ = 540;
-    int height_ = 640;
+    int width_ = 820;
+    int height_ = 650;
+
+    HICON smallIcon_ = nullptr;
+    HICON bigIcon_ = nullptr;
 
     std::vector<HitControl> hitControls_;
     ActionId hoveredAction_ = ActionId::None;
@@ -119,6 +136,7 @@ private:
     IDWriteTextFormat* sectionFormat_ = nullptr;
     IDWriteTextFormat* bodyFormat_ = nullptr;
     IDWriteTextFormat* smallFormat_ = nullptr;
+    IDWriteTextFormat* monoFormat_ = nullptr;
 };
 
 } // namespace fangcun::tsf
