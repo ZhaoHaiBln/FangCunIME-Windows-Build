@@ -54,6 +54,7 @@ public:
 
     void setEnglishMode(bool english);
     bool englishMode() const { return englishMode_; }
+    KeyAction toggleEnglishMode();
 
     void setChinesePunctuation(bool chinesePunct);
     bool chinesePunctuation() const { return chinesePunctuation_; }

@@ -209,5 +209,27 @@ int runKeyHandlerTests() {
         handler.resetContext();
     }
 
+    // 7. English mode toggle and CapsLock uppercase passthrough
+    {
+        KeyInput upperA{'A', 'A', false, false, false, false, true};
+        KH_ASSERT(!handler.shouldEatKey(upperA), "CapsLock uppercase letter on empty composing should pass through");
+
+        KeyInput shiftA{'A', 'A', false, false, false, true, false};
+        KH_ASSERT(handler.shouldEatKey(shiftA), "Shift+A in mixed mode should still compose");
+
+        handler.onKeyDown(keyW);
+        KH_ASSERT(handler.composing() == "w", "Composing should be 'w'");
+        auto toggleAct = handler.toggleEnglishMode();
+        KH_ASSERT(handler.englishMode(), "Should now be in English mode");
+        KH_ASSERT(toggleAct.commitText && toggleAct.textToCommit == "w",
+                  "Toggling to English while composing should commit raw text");
+        KH_ASSERT(!handler.shouldEatKey(keyW), "Letters should pass through in English mode");
+
+        handler.toggleEnglishMode();
+        KH_ASSERT(!handler.englishMode() && handler.shouldEatKey(keyW),
+                  "Toggling back to Chinese mode should resume composing");
+        handler.resetContext();
+    }
+
     return 0;
 }

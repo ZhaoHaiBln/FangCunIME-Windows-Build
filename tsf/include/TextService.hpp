@@ -115,6 +115,7 @@ private:
 
     std::mutex asyncMutex_;
     std::vector<AsyncPayload> asyncQueue_;
+    bool shiftTapPending_ = false;
 };
 
 } // namespace fangcun::tsf

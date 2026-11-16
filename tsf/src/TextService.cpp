@@ -589,6 +589,7 @@ STDMETHODIMP TextService::OnPopContext(ITfContext*) {
 // ITfKeyEventSink
 STDMETHODIMP TextService::OnSetFocus(BOOL fForeground) {
     if (!fForeground) {
+        shiftTapPending_ = false;
         resetAllState(activeContext_);
     }
     return S_OK;
@@ -605,6 +606,13 @@ STDMETHODIMP TextService::OnTestKeyDown(ITfContext* pic, WPARAM wParam, LPARAM l
         if (activeContext_) activeContext_->AddRef();
     }
     KeyInput ki = translateKey(wParam, lParam);
+    if (wParam == VK_SHIFT || wParam == VK_LSHIFT || wParam == VK_RSHIFT) {
+        if (!ki.ctrl && !ki.alt && !ki.win && (lParam & (1LL << 30)) == 0) {
+            shiftTapPending_ = true;
+        }
+        return S_OK;
+    }
+    shiftTapPending_ = false;
     *pfEaten = keyHandler_->shouldEatKey(ki) ? TRUE : FALSE;
     return S_OK;
 }
@@ -626,9 +634,18 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* pic, WPARAM wParam, LPARAM lPara
     return S_OK;
 }
 
-STDMETHODIMP TextService::OnTestKeyUp(ITfContext*, WPARAM, LPARAM, BOOL* pfEaten) {
+STDMETHODIMP TextService::OnTestKeyUp(ITfContext* pic, WPARAM wParam, LPARAM, BOOL* pfEaten) {
     if (!pfEaten) return E_INVALIDARG;
     *pfEaten = FALSE;
+    if ((wParam == VK_SHIFT || wParam == VK_LSHIFT || wParam == VK_RSHIFT) && shiftTapPending_) {
+        shiftTapPending_ = false;
+        if (keyHandler_) {
+            KeyAction act = keyHandler_->toggleEnglishMode();
+            if (act.handled || act.hideCandidates || act.updateComposition) {
+                applyKeyAction(pic ? pic : activeContext_, act);
+            }
+        }
+    }
     return S_OK;
 }
 

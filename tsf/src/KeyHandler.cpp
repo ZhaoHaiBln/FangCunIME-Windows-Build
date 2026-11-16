@@ -49,6 +49,20 @@ void KeyHandler::setChinesePunctuation(bool chinesePunct) {
     chinesePunctuation_ = chinesePunct;
 }
 
+KeyAction KeyHandler::toggleEnglishMode() {
+    KeyAction action;
+    if (!englishMode_ && !composing_.empty()) {
+        std::string raw = composing_;
+        action = resetContext();
+        action.handled = true;
+        action.commitText = true;
+        action.textToCommit = std::move(raw);
+        action.hideCandidates = true;
+    }
+    englishMode_ = !englishMode_;
+    return action;
+}
+
 KeyAction KeyHandler::resetContext() {
     ++sessionGeneration_;
     if (cancelFn_) cancelFn_();
@@ -76,6 +90,9 @@ bool KeyHandler::isComposingKey(const KeyInput& key) const {
         return key.ascii >= '2' && key.ascii <= '9';
     }
     if ((key.ascii >= 'a' && key.ascii <= 'z') || (key.ascii >= 'A' && key.ascii <= 'Z')) {
+        if (composing_.empty() && key.capsLock) {
+            return false;
+        }
         return true;
     }
     if (scheme_ == InputScheme::Pinyin && key.ascii == '\'' && !composing_.empty() && composing_.back() != '\'') {
