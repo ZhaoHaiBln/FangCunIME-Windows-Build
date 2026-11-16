@@ -34,6 +34,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.27.x'
+          cache: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -44,6 +45,7 @@ jobs:
         shell: pwsh
         run: |
           Set-Location app
+          go mod tidy
           bun install
           bunx mygo generate
           bun run build
