@@ -35,3 +35,6 @@ Source: "{#MySourceDir}\assets\pinyin-v1.json"; DestDir: "{app}\assets"; Flags: 
 Source: "{#MySourceDir}\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MySourceDir}\rime-ice-LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MySourceDir}\installer\*"; DestDir: "{app}\installer"; Flags: ignoreversion
+
+[Icons]
+Name: "{group}\方寸输入法设置"; Filename: "rundll32.exe"; Parameters: """{app}\FangCunTSF.dll"",OpenSettings"; WorkingDir: "{app}"

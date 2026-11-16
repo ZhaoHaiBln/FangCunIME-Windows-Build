@@ -24,8 +24,9 @@ namespace fangcun::tsf {
 class CandidateWindow {
 public:
     using SelectCallback = std::function<void(size_t index)>;
+    using SettingsCallback = std::function<void()>;
 
-    explicit CandidateWindow(SelectCallback onSelect);
+    explicit CandidateWindow(SelectCallback onSelect, SettingsCallback onOpenSettings = nullptr);
     ~CandidateWindow();
 
     CandidateWindow(const CandidateWindow&) = delete;
@@ -73,11 +74,13 @@ private:
 
     HWND hwnd_ = nullptr;
     SelectCallback onSelect_;
+    SettingsCallback onOpenSettings_;
 
     std::string composing_;
     std::string lastGlowComposing_;
     std::vector<std::string> candidates_;
     std::vector<RECT> candidateRects_;
+    RECT settingsRect_{0, 0, 0, 0};
     int selectedIndex_ = 0;
     bool pending_ = false;
     InputScheme scheme_ = InputScheme::Flypy;

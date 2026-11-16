@@ -193,9 +193,9 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD) 
 
     createMessageWindow();
 
-    candidateWindow_ = std::make_unique<CandidateWindow>([this](size_t index) {
-        onCandidateClicked(index);
-    });
+    candidateWindow_ = std::make_unique<CandidateWindow>(
+        [this](size_t index) { onCandidateClicked(index); },
+        [this]() { openSettingsWindow(); });
     candidateWindow_->create(nullptr);
 
     keyHandler_ = std::make_unique<KeyHandler>(
@@ -239,6 +239,10 @@ STDMETHODIMP TextService::Deactivate() {
     uninitKeyEventSink();
     uninitThreadMgrSink();
 
+    if (settingsWindow_) {
+        settingsWindow_->destroy();
+        settingsWindow_.reset();
+    }
     if (candidateWindow_) {
         candidateWindow_->destroy();
         candidateWindow_.reset();
@@ -365,7 +369,45 @@ LRESULT CALLBACK TextService::msgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
         }
         return 0;
     }
+    if (self && msg == SettingsWindow::settingsChangedMessage()) {
+        self->applySettings(SettingsStore::load());
+        return 0;
+    }
     return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void TextService::openSettingsWindow() {
+    if (!settingsWindow_) {
+        settingsWindow_ = std::make_unique<SettingsWindow>([this](const AppSettings& updated) {
+            applySettings(updated);
+        });
+    }
+    settingsWindow_->showOrActivate(nullptr);
+}
+
+void TextService::applySettings(const AppSettings& newSettings) {
+    bool schemeChanged = (settings_.scheme != newSettings.scheme);
+    settings_ = newSettings;
+    if (engine_ && schemeChanged) {
+        engine_->prepare(settings_.scheme);
+    }
+    if (keyHandler_) {
+        keyHandler_->setScheme(settings_.scheme);
+        keyHandler_->setMixedInput(settings_.mixedInput);
+        keyHandler_->setChinesePunctuation(settings_.chinesePunctuation);
+    }
+    if (candidateWindow_ && candidateWindow_->isVisible() && keyHandler_) {
+        candidateWindow_->update(
+            keyHandler_->composing(),
+            {},
+            0,
+            false,
+            keyHandler_->scheme(),
+            settings_.skin,
+            SettingsStore::effectiveDarkMode(settings_),
+            settings_.firstCandidateSize,
+            settings_.typingGlow);
+    }
 }
 
 void TextService::setComposition(ITfComposition* comp) {

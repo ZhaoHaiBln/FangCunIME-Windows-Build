@@ -108,8 +108,8 @@ float measureTextHeightDip(IDWriteFactory* factory, IDWriteTextFormat* format, c
 
 } // namespace
 
-CandidateWindow::CandidateWindow(SelectCallback onSelect)
-    : onSelect_(std::move(onSelect)) {}
+CandidateWindow::CandidateWindow(SelectCallback onSelect, SettingsCallback onOpenSettings)
+    : onSelect_(std::move(onSelect)), onOpenSettings_(std::move(onOpenSettings)) {}
 
 CandidateWindow::~CandidateWindow() {
     destroy();
@@ -483,8 +483,12 @@ LRESULT CALLBACK CandidateWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
 }
 
 void CandidateWindow::onLButtonDown(int x, int y) {
-    if (pending_ || !onSelect_) return;
     POINT pt{x, y};
+    if (onOpenSettings_ && PtInRect(&settingsRect_, pt)) {
+        onOpenSettings_();
+        return;
+    }
+    if (pending_ || !onSelect_) return;
     for (size_t i = 0; i < candidateRects_.size(); ++i) {
         if (PtInRect(&candidateRects_[i], pt)) {
             onSelect_(i);
@@ -649,6 +653,13 @@ void CandidateWindow::onPaint() {
         float logoX = badgeX - logoSizeDip - 5.0f;
         float logoY = padYDip + (codeHeightDp_ - logoSizeDip) * 0.5f;
         drawTianzigeLogoD2D(logoX, logoY, logoSizeDip);
+
+        settingsRect_ = RECT{
+            static_cast<LONG>(std::floor(dpToPx(logoX - 4.0f))),
+            static_cast<LONG>(std::floor(dpToPx(padYDip))),
+            static_cast<LONG>(std::ceil(dpToPx(wDip - padXDip + 4.0f))),
+            static_cast<LONG>(std::ceil(dpToPx(padYDip + codeHeightDp_ + 2.0f)))
+        };
     }
 
     // 4. Candidate row (stable candidateHeightDp_ slot)

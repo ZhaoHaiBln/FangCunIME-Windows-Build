@@ -1,5 +1,6 @@
 #include "DllMain.hpp"
 #include "Guid.hpp"
+#include "SettingsWindow.hpp"
 #include "TextService.hpp"
 
 #include <atomic>
@@ -93,4 +94,17 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void** ppvObj) {
 
 STDAPI DllCanUnloadNow() {
     return (fangcun::tsf::g_dllRefCount.load(std::memory_order_relaxed) == 0) ? S_OK : S_FALSE;
+}
+
+extern "C" void CALLBACK OpenSettings(HWND hwnd, HINSTANCE, LPSTR, int) {
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    fangcun::tsf::SettingsWindow win;
+    win.showOrActivate(hwnd);
+
+    MSG msg = {};
+    while (win.isOpen() && GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    CoUninitialize();
 }

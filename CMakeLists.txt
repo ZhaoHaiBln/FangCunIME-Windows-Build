@@ -99,6 +99,7 @@ if(FANGCUN_BUILD_TSF)
         tsf/src/KeyHandler.cpp
         tsf/src/CandidateWindow.cpp
         tsf/src/SettingsStore.cpp
+        tsf/src/SettingsWindow.cpp
         tsf/src/FangCunTSF.def
     )
 

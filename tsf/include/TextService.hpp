@@ -3,6 +3,7 @@
 #include "CandidateWindow.hpp"
 #include "KeyHandler.hpp"
 #include "SettingsStore.hpp"
+#include "SettingsWindow.hpp"
 #include "fangcun/FangCunEngine.hpp"
 
 #include <msctf.h>
@@ -87,6 +88,8 @@ private:
 
     void applyKeyAction(ITfContext* context, const KeyAction& action);
     void onCandidateClicked(size_t index);
+    void openSettingsWindow();
+    void applySettings(const AppSettings& newSettings);
     void requestCaretRect(ITfContext* context);
     void resetAllState(ITfContext* context = nullptr);
 
@@ -107,6 +110,7 @@ private:
     std::unique_ptr<FangCunEngine> engine_;
     std::unique_ptr<KeyHandler> keyHandler_;
     std::unique_ptr<CandidateWindow> candidateWindow_;
+    std::unique_ptr<SettingsWindow> settingsWindow_;
 
     std::mutex asyncMutex_;
     std::vector<AsyncPayload> asyncQueue_;
