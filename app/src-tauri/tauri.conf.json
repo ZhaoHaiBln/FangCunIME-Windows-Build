@@ -21,6 +21,32 @@
         "minHeight": 600,
         "resizable": true,
         "center": true
+      },
+      {
+        "label": "clipboard",
+        "url": "index.html?mode=clipboard",
+        "title": "方寸剪贴板",
+        "width": 340,
+        "height": 450,
+        "decorations": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "center": true
+      },
+      {
+        "label": "statusbar",
+        "url": "index.html?mode=statusbar",
+        "title": "方寸状态栏",
+        "width": 224,
+        "height": 44,
+        "decorations": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": true,
+        "focusable": false
       }
     ],
     "security": {

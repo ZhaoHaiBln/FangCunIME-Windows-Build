@@ -487,8 +487,8 @@
       <!-- Compact Alt+V Clipboard Floating Popup Drawer (Mockup 2 #4) -->
       <div id="altv-overlay" class="altv-overlay is-hidden" role="dialog" aria-label="剪贴板快速面板">
         <div class="altv-popup">
-          <div class="altv-header">
-            <div class="altv-brand">
+          <div class="altv-header" data-tauri-drag-region>
+            <div class="altv-brand" data-tauri-drag-region>
               <svg class="altv-logo" viewBox="0 0 100 100" aria-hidden="true">
                 <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
                 <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
@@ -524,6 +524,26 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Compact Floating Status Bar near Taskbar (Mockup 2 #3) -->
+    <div id="floating-statusbar" class="floating-statusbar is-hidden" data-tauri-drag-region>
+      <button id="sb-lang" class="sb-btn sb-lang-btn" type="button" title="切换中/英文模式">中</button>
+      <button id="sb-punct" class="sb-btn" type="button" title="切换中/英文标点">“。</button>
+      <button id="sb-width" class="sb-btn sb-width-btn" type="button" title="切换半角/全角">半/全</button>
+      <span class="sb-sep"></span>
+      <button id="sb-skin" class="sb-btn sb-icon-btn" type="button" title="切换皮肤外观">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M13.8 3.2L16.8 6.2L8.4 14.6L4.6 15.4L5.4 11.6L13.8 3.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+          <path d="M11.8 5.2L14.8 8.2" stroke="currentColor" stroke-width="1.6" />
+        </svg>
+      </button>
+      <button id="sb-settings" class="sb-btn sb-icon-btn" type="button" title="打开方寸设置">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.6" />
+          <path d="M10 3.2V5M10 15V16.8M3.2 10H5M15 10H16.8M5.2 5.2L6.5 6.5M13.5 13.5L14.8 14.8M14.8 5.2L13.5 6.5M6.5 13.5L5.2 14.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
+      </button>
     </div>
 
     <div id="toast" class="toast"></div>

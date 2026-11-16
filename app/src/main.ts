@@ -70,6 +70,7 @@ const SAMPLE_CLIP_ITEMS: ClipboardItem[] = [
   },
 ];
 
+const appMode = new URLSearchParams(window.location.search).get("mode") ?? "main";
 let state: AppSettings = { ...DEFAULT_SETTINGS };
 let clipItems: ClipboardItem[] = [...SAMPLE_CLIP_ITEMS];
 let clipEnabled = true;
@@ -190,6 +191,9 @@ function buildClipboardRow(item: ClipboardItem): HTMLElement {
     } catch {
       await navigator.clipboard?.writeText(item.text).catch(() => {});
       showToast("已复制到剪贴板");
+    }
+    if (appMode === "clipboard") {
+      void invoke("hide_clipboard_window").catch(() => {});
     }
   });
 
@@ -522,21 +526,75 @@ document.getElementById("sw-gen-clip")!.addEventListener("change", () => void to
 document.getElementById("clip-clear")!.addEventListener("click", () => void clearUnpinnedClipboard());
 document.getElementById("altv-clear")!.addEventListener("click", () => void clearUnpinnedClipboard());
 
-document.getElementById("altv-close")!.addEventListener("click", () => openAltVPopup(false));
+function closeAltVOrHide(): void {
+  if (appMode === "clipboard") {
+    void invoke("hide_clipboard_window").catch(() => {});
+  } else {
+    openAltVPopup(false);
+  }
+}
+
+document.getElementById("altv-close")!.addEventListener("click", closeAltVOrHide);
 document.getElementById("altv-open-settings")!.addEventListener("click", () => {
-  openAltVPopup(false);
-  switchTab("clipboard");
+  if (appMode === "clipboard") {
+    void invoke("open_settings_tab", { tab: "clipboard" }).catch(() => {});
+  } else {
+    openAltVPopup(false);
+    switchTab("clipboard");
+  }
 });
 document.getElementById("altv-overlay")!.addEventListener("click", (e) => {
-  if (e.target === e.currentTarget) openAltVPopup(false);
+  if (e.target === e.currentTarget && appMode !== "clipboard") openAltVPopup(false);
 });
 
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") openAltVPopup(false);
-  if (e.altKey && (e.key === "v" || e.key === "V")) {
+  if (e.key === "Escape") closeAltVOrHide();
+  if (appMode === "main" && e.altKey && (e.key === "v" || e.key === "V")) {
     e.preventDefault();
     openAltVPopup(true);
   }
+});
+
+// Floating Status Bar Controls (Mockup 2 #3)
+function renderFloatingStatusBar(): void {
+  const sbLang = document.getElementById("sb-lang");
+  const sbPunct = document.getElementById("sb-punct");
+  const sbWidth = document.getElementById("sb-width");
+  if (sbLang) {
+    sbLang.textContent = previewLangEng ? "英" : "中";
+    sbLang.classList.toggle("is-english", previewLangEng);
+  }
+  if (sbPunct) {
+    sbPunct.textContent = state.chinesePunctuation ? "“。" : ".,";
+    sbPunct.classList.toggle("is-muted", !state.chinesePunctuation);
+  }
+  if (sbWidth) {
+    sbWidth.textContent = previewHalfWidth ? "半/全" : "全角";
+  }
+}
+
+document.getElementById("sb-lang")?.addEventListener("click", () => {
+  previewLangEng = !previewLangEng;
+  void save({ mixedInput: !previewLangEng });
+  renderFloatingStatusBar();
+});
+document.getElementById("sb-punct")?.addEventListener("click", () => {
+  void save({ chinesePunctuation: !state.chinesePunctuation }).then(() => {
+    renderFloatingStatusBar();
+  });
+});
+document.getElementById("sb-width")?.addEventListener("click", () => {
+  previewHalfWidth = !previewHalfWidth;
+  renderFloatingStatusBar();
+});
+document.getElementById("sb-skin")?.addEventListener("click", () => {
+  const order = ["warm_grid", "native_light", "mint", "deep_blue"];
+  const idx = order.indexOf(state.skin);
+  const nextSkin = order[(idx + 1) % order.length];
+  void save({ skin: nextSkin });
+});
+document.getElementById("sb-settings")?.addEventListener("click", () => {
+  void invoke("open_settings_tab", { tab: "input" }).catch(() => {});
 });
 
 // Footer Buttons
@@ -557,6 +615,14 @@ document.getElementById("btn-close")!.addEventListener("click", () => {
 });
 
 async function init(): Promise<void> {
+  if (appMode === "clipboard") {
+    document.body.classList.add("mode-clipboard");
+    openAltVPopup(true);
+  } else if (appMode === "statusbar") {
+    document.body.classList.add("mode-statusbar");
+    document.getElementById("floating-statusbar")?.classList.remove("is-hidden");
+  }
+
   try {
     state = await invoke<AppSettings>("load_settings");
     const loadedClips = await invoke<ClipboardItem[]>("list_clipboard");
@@ -568,14 +634,32 @@ async function init(): Promise<void> {
       clipItems = event.payload;
       renderClipboard();
     });
+    await listen<AppSettings>("settings://changed", (event) => {
+      state = event.payload;
+      render();
+      renderFloatingStatusBar();
+    });
+    await listen("ui://clipboard-opened", () => {
+      if (appMode === "clipboard") {
+        openAltVPopup(true);
+      }
+    });
+    await listen<string>("ui://switch-tab", (event) => {
+      if (appMode === "main" && event.payload) {
+        switchTab(event.payload);
+      }
+    });
     await listen("ui://open-clipboard", () => {
-      openAltVPopup(true);
+      if (appMode === "main") {
+        openAltVPopup(true);
+      }
     });
   } catch {
     // Standalone web preview fallback
   }
   render();
   renderClipboard();
+  renderFloatingStatusBar();
 }
 
 void init();

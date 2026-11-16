@@ -39,3 +39,9 @@ Source: "{#MySourceDir}\installer\*"; DestDir: "{app}\installer"; Flags: ignorev
 
 [Icons]
 Name: "{group}\方寸输入法设置"; Filename: "{app}\FangCunSettings.exe"; WorkingDir: "{app}"
+
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "FangCunIMECompanion"; ValueData: """{app}\FangCunSettings.exe"" --tray"; Flags: uninsdeletevalue
+
+[Run]
+Filename: "{app}\FangCunSettings.exe"; Parameters: "--tray"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent; Description: "启动方寸输入法伴侣（浮动状态栏、托盘与 Alt+V 剪贴板）"
