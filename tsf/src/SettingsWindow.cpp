@@ -102,8 +102,8 @@ bool SettingsWindow::ensureFactories() {
                 (*out)->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             }
         };
-        makeFmt(18.0f, DWRITE_FONT_WEIGHT_SEMIBOLD, &titleFormat_);
-        makeFmt(13.0f, DWRITE_FONT_WEIGHT_SEMIBOLD, &sectionFormat_);
+        makeFmt(18.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD, &titleFormat_);
+        makeFmt(13.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD, &sectionFormat_);
         makeFmt(13.0f, DWRITE_FONT_WEIGHT_NORMAL, &bodyFormat_);
         makeFmt(11.0f, DWRITE_FONT_WEIGHT_NORMAL, &smallFormat_);
     }
@@ -801,7 +801,7 @@ void SettingsWindow::onPaint() {
         if (sectionFormat_) {
             IDWriteTextFormat* cFmt = nullptr;
             if (SUCCEEDED(dwriteFactory_->CreateTextFormat(
-                    kUiFontFamily, nullptr, DWRITE_FONT_WEIGHT_SEMIBOLD, DWRITE_FONT_STYLE_NORMAL,
+                    kUiFontFamily, nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
                     DWRITE_FONT_STRETCH_NORMAL, 13.0f, L"", &cFmt)) && cFmt) {
                 cFmt->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
                 cFmt->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
