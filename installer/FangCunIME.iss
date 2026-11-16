@@ -29,6 +29,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "{#MySourceDir}\FangCunTSF.dll"; DestDir: "{app}"; Flags: ignoreversion regserver 64bit restartreplace uninsrestartdelete
+Source: "{#MySourceDir}\FangCunSettings.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MySourceDir}\assets\dict.db"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "{#MySourceDir}\assets\pinyin-v1.dbz"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "{#MySourceDir}\assets\pinyin-v1.json"; DestDir: "{app}\assets"; Flags: ignoreversion
@@ -37,4 +38,4 @@ Source: "{#MySourceDir}\rime-ice-LICENSE.txt"; DestDir: "{app}"; Flags: ignoreve
 Source: "{#MySourceDir}\installer\*"; DestDir: "{app}\installer"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\方寸输入法设置"; Filename: "rundll32.exe"; Parameters: """{app}\FangCunTSF.dll"",OpenSettings"; WorkingDir: "{app}"
+Name: "{group}\方寸输入法设置"; Filename: "{app}\FangCunSettings.exe"; WorkingDir: "{app}"

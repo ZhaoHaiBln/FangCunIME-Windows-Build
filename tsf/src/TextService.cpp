@@ -378,6 +378,29 @@ LRESULT CALLBACK TextService::msgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
 }
 
 void TextService::openSettingsWindow() {
+    std::filesystem::path exePath = SettingsStore::getDllDirectory() / L"FangCunSettings.exe";
+    std::error_code ec;
+    if (std::filesystem::exists(exePath, ec)) {
+        STARTUPINFOW si = {};
+        si.cb = sizeof(si);
+        PROCESS_INFORMATION pi = {};
+        std::wstring cmd = L"\"" + exePath.wstring() + L"\"";
+        if (CreateProcessW(
+                exePath.c_str(),
+                cmd.data(),
+                nullptr,
+                nullptr,
+                FALSE,
+                0,
+                nullptr,
+                nullptr,
+                &si,
+                &pi)) {
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            return;
+        }
+    }
     if (!settingsWindow_) {
         settingsWindow_ = std::make_unique<SettingsWindow>([this](const AppSettings& updated) {
             applySettings(updated);

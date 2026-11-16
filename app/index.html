@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>方寸输入法 设置</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <svg class="tianzige-logo" viewBox="0 0 100 100" aria-hidden="true">
+            <rect x="0" y="0" width="100" height="100" rx="18" fill="#FFF8ED" />
+            <rect x="16" y="16" width="68" height="68" fill="none" stroke="#A94B2B" stroke-width="6.5" />
+            <line x1="50" y1="19" x2="50" y2="81" stroke="#A94B2B" stroke-opacity="0.45" stroke-width="3" />
+            <line x1="19" y1="50" x2="81" y2="50" stroke="#A94B2B" stroke-opacity="0.45" stroke-width="3" />
+            <rect x="40" y="40" width="20" height="20" fill="#A94B2B" />
+          </svg>
+          <div class="brand-text">
+            <div class="brand-title-row">
+              <h1>方寸输入法</h1>
+              <span class="badge-mono">~/SETTINGS</span>
+            </div>
+            <p class="brand-sub">方寸之间，自有天地 · Windows TSF 原生输入法</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <span class="badge-version">v0.1.0 · x64</span>
+          <button id="btn-reset" class="btn btn-ghost" type="button">恢复默认</button>
+          <button id="btn-close" class="btn btn-primary" type="button">完成</button>
+        </div>
+      </header>
+
+      <nav class="filter-bar" aria-label="设置分类">
+        <div class="filter-tabs" id="filter-tabs">
+          <button class="filter-tab is-active" data-tab="all" type="button">全部 <span class="tab-count">4</span></button>
+          <button class="filter-tab" data-tab="input" type="button">输入方案</button>
+          <button class="filter-tab" data-tab="theme" type="button">皮肤外观</button>
+          <button class="filter-tab" data-tab="effects" type="button">字号与特效</button>
+        </div>
+        <div id="status-summary" class="status-summary">小鹤双拼 · 中英混输 · 原生轻白</div>
+      </nav>
+
+      <section id="preview-card" class="preview-card" title="点击预览区测试打字流光">
+        <div id="glow-layer" class="glow-layer"></div>
+        <div class="preview-top">
+          <span class="preview-code">wanshang</span>
+          <span class="preview-hint">LIVE PREVIEW · 点击测试流光</span>
+        </div>
+        <div class="preview-candidates">
+          <span id="preview-first-cand" class="cand-item cand-first">
+            <span class="cand-idx">1</span>
+            <span class="cand-word">晚上</span>
+          </span>
+          <span class="cand-item"><span class="cand-idx">2</span><span class="cand-word">网上</span></span>
+          <span class="cand-item"><span class="cand-idx">3</span><span class="cand-word">晚上好</span></span>
+          <span class="cand-item"><span class="cand-idx">4</span><span class="cand-word">婉赏</span></span>
+          <span class="cand-pager">‹ 1/3 ›</span>
+        </div>
+        <div class="preview-keys">
+          <div class="glass-key key-letter">q</div>
+          <div class="glass-key key-letter">w</div>
+          <div class="glass-key key-letter">e</div>
+          <div id="preview-mode-key" class="glass-key key-func">中英混输</div>
+          <div class="glass-key key-emph">发送</div>
+        </div>
+      </section>
+
+      <main id="bento-grid" class="bento-grid">
+        <article class="bento-card" data-category="input">
+          <div class="card-head">
+            <span class="card-dot"></span>
+            <span class="card-mono">01 · ~/INPUT</span>
+            <h2>输入方案与行为</h2>
+          </div>
+          <div class="pill-row cols-3" id="scheme-group">
+            <button class="pill" data-scheme="flypy" type="button">小鹤双拼</button>
+            <button class="pill" data-scheme="pinyin" type="button">全拼</button>
+            <button class="pill" data-scheme="ninekey" type="button">九宫格</button>
+          </div>
+          <div class="pill-row cols-2">
+            <button id="toggle-mixed" class="pill" type="button"></button>
+            <button id="toggle-punct" class="pill" type="button"></button>
+          </div>
+          <p class="card-foot">候选分页：每页 9 项 · 支持 <code>=</code> / <code>-</code> / <code>PageUp</code> / <code>PageDown</code> / 滚轮翻页</p>
+        </article>
+
+        <article class="bento-card" data-category="theme">
+          <div class="card-head">
+            <span class="card-dot"></span>
+            <span class="card-mono">02 · ~/THEME</span>
+            <h2>皮肤预设与明暗</h2>
+          </div>
+          <div class="pill-row cols-2" id="skin-group">
+            <button class="pill skin-pill" data-skin="native_light" type="button">
+              <span class="swatch" style="background:#5E72E4"></span>原生轻白
+            </button>
+            <button class="pill skin-pill" data-skin="warm_grid" type="button">
+              <span class="swatch" style="background:#A94B2B"></span>米白田字格
+            </button>
+            <button class="pill skin-pill" data-skin="mint" type="button">
+              <span class="swatch" style="background:#1F8A68"></span>薄荷绿
+            </button>
+            <button class="pill skin-pill" data-skin="deep_blue" type="button">
+              <span class="swatch" style="background:#F28B66"></span>深蓝珊瑚
+            </button>
+          </div>
+          <div class="pill-row cols-3" id="mode-group">
+            <button class="pill" data-mode="system" type="button">跟随系统</button>
+            <button class="pill" data-mode="light" type="button">浅色模式</button>
+            <button class="pill" data-mode="dark" type="button">深色模式</button>
+          </div>
+        </article>
+
+        <article class="bento-card" data-category="effects">
+          <div class="card-head">
+            <span class="card-dot"></span>
+            <span class="card-mono">03 · ~/EFFECTS</span>
+            <h2>特效与视觉</h2>
+          </div>
+          <div class="pill-stack">
+            <button id="toggle-glow" class="pill" type="button"></button>
+            <button id="toggle-bold" class="pill" type="button"></button>
+          </div>
+          <p class="card-foot">高 DPI 矢量渲染 · 设置修改后实时同步至 TSF 输入法</p>
+        </article>
+
+        <article class="bento-card" data-category="effects">
+          <div class="card-head">
+            <span class="card-dot"></span>
+            <span class="card-mono">04 · ~/METRICS</span>
+            <h2>字号与透明度</h2>
+          </div>
+          <div class="stepper-list">
+            <div class="stepper-row">
+              <span class="stepper-label">第一候选字号 <small>(16–30)</small></span>
+              <div class="stepper-ctrl">
+                <button id="first-minus" class="stepper-btn" type="button">−</button>
+                <span id="first-val" class="stepper-val">20 pt</span>
+                <button id="first-plus" class="stepper-btn" type="button">+</button>
+              </div>
+            </div>
+            <div class="stepper-row">
+              <span class="stepper-label">键帽字母字号 <small>(14–30)</small></span>
+              <div class="stepper-ctrl">
+                <button id="letter-minus" class="stepper-btn" type="button">−</button>
+                <span id="letter-val" class="stepper-val">18 pt</span>
+                <button id="letter-plus" class="stepper-btn" type="button">+</button>
+              </div>
+            </div>
+            <div class="stepper-row">
+              <span class="stepper-label">键帽透明度 <small>(40%–100%)</small></span>
+              <div class="stepper-ctrl">
+                <button id="opacity-minus" class="stepper-btn" type="button">−</button>
+                <span id="opacity-val" class="stepper-val">82%</span>
+                <button id="opacity-plus" class="stepper-btn" type="button">+</button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </main>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

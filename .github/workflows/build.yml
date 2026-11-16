@@ -30,11 +30,35 @@ jobs:
         run: |
           ctest --test-dir build-x64 --output-on-failure
 
+      - name: Setup Go 1.27
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build MyGo Settings App (FangCunSettings.exe)
+        shell: pwsh
+        run: |
+          Set-Location app
+          bun install
+          bunx mygo generate
+          bun run build
+
       - name: Stage Windows Bundle
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist/assets, dist/installer, out | Out-Null
           Copy-Item build-x64/FangCunTSF.dll dist/
+          $settingsExe = Get-ChildItem -Path app/build -Filter *.exe -Recurse | Select-Object -First 1
+          if ($settingsExe) {
+            Copy-Item $settingsExe.FullName dist/FangCunSettings.exe
+          } else {
+            throw "FangCunSettings.exe not found in app/build"
+          }
           Copy-Item assets/dict.db dist/assets/
           Copy-Item assets/pinyin-v1.dbz dist/assets/
           Copy-Item assets/pinyin-v1.json dist/assets/
