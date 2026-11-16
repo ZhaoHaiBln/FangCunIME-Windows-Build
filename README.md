@@ -2,6 +2,10 @@
 
 基于方寸输入法 Android 1.5.1（`865fade`）独立构建的 Windows 10/11 系统级输入法，采用 **C++20 + CMake + SQLite + Windows TSF (Text Services Framework)**。
 
+## 交给 Antigravity 继续修改
+
+打开整个仓库文件夹，先看 [ANTIGRAVITY.md](ANTIGRAVITY.md)。其中包含源码地图、准确的构建安装命令、已知问题、验证范围，以及[可直接复制的交接提示词](docs/handoff/COPY_TO_ANTIGRAVITY.md)。三份词库已经包含在 `assets/`。Windows 开发和 CI 统一使用本公开仓库的 `main`；从源码安装时需按交接文档显式传入 `-AssetsDir .\assets`。
+
 ## 工程结构
 
 ```
@@ -27,8 +31,8 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## 安装、升级与卸载（管理员 PowerShell）
 
-- **安装**：`.\installer\install.ps1`（部署 `FangCunTSF.dll` 与词库至 `%ProgramFiles%\FangCunIME`，执行 `regsvr32 /s`，随后按 `Win+Space` 选择「方寸输入法」）
-- **升级**：`.\installer\upgrade.ps1`（安全注销并替换 DLL，保留 `%LOCALAPPDATA%\FangCunIME` 词频与个人词典）
+- **安装**：`.\installer\install.ps1 -BuildDir .\build\Release -AssetsDir .\assets`（部署 `FangCunTSF.dll` 与词库至 `%ProgramFiles%\FangCunIME`，执行 `regsvr32 /s`，随后按 `Win+Space` 选择「方寸输入法」）
+- **升级**：`.\installer\upgrade.ps1 -BuildDir .\build\Release -AssetsDir .\assets`（注销并替换 DLL，保留 `%LOCALAPPDATA%\FangCunIME` 词频与个人词典；DLL 被宿主占用时可能报错，详见交接说明）
 - **卸载**：`.\installer\uninstall.ps1`（注销 COM/TSF 并清理程序目录；加 `-PurgeUserData` 可同时清理本机学习数据）
 
 ## 键盘行为（MVP）
