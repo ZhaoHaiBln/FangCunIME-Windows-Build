@@ -429,7 +429,7 @@ std::vector<DictionaryEntry> DictionaryRepository::compose(
         for (auto& p : paths) {
             if (seen.insert(p.text).second) {
                 out.push_back(std::move(p));
-                if (out.size() >= 8) break;
+                if (out.size() >= 27) break;
             }
         }
         return out;
@@ -537,7 +537,7 @@ std::vector<DictionaryEntry> DictionaryRepository::compose(
             std::max(0, partialWeight - idx),
             utf8CodePointCount(comp.path.text),
         });
-        if (partial.size() >= 8) break;
+        if (partial.size() >= 27) break;
     }
     return partial;
 }
@@ -562,7 +562,7 @@ std::vector<DictionaryRepository::Word> DictionaryRepository::segments(
         for (size_t i = 0; i < missing.size(); ++i) {
             if (i > 0) sql += " UNION ALL ";
             sql += "SELECT * FROM (SELECT " + cols + " FROM entries WHERE " + col +
-                   " = ? ORDER BY weight DESC,len ASC LIMIT 6)";
+                   " = ? ORDER BY weight DESC,len ASC LIMIT 12)";
         }
         auto found = queryWords(db, sql, missing, scheme, cancelFlag);
         std::unordered_map<std::string, std::vector<Word>> grouped;
