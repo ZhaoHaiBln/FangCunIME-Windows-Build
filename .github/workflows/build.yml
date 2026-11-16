@@ -1,0 +1,65 @@
+name: FangCun IME Windows Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC x64 Developer Environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure CMake (x64 Ninja)
+        run: |
+          cmake -S . -B build-x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DFANGCUN_BUILD_TSF=ON -DFANGCUN_BUILD_TESTS=ON
+
+      - name: Build Release (x64)
+        run: |
+          cmake --build build-x64
+
+      - name: Run C++20 Core & KeyHandler Tests
+        run: |
+          ctest --test-dir build-x64 --output-on-failure
+
+      - name: Stage Windows Bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/assets, dist/installer, out | Out-Null
+          Copy-Item build-x64/FangCunTSF.dll dist/
+          Copy-Item assets/dict.db dist/assets/
+          Copy-Item assets/pinyin-v1.dbz dist/assets/
+          Copy-Item assets/pinyin-v1.json dist/assets/
+          Copy-Item installer/*.ps1 dist/installer/
+          Copy-Item installer/*.bat dist/installer/
+          Copy-Item THIRD_PARTY_NOTICES.md dist/
+          Copy-Item licenses/rime-ice-LICENSE.txt dist/
+
+      - name: Build Inno Setup Installer (.exe)
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc /DMySourceDir="$PWD\dist" /O"$PWD\out" "installer\FangCunIME.iss"
+
+      - name: Upload Windows Setup Installer (.exe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fangcun-ime-windows-x64-setup
+          path: out/FangCunIME-*.exe
+
+      - name: Upload Windows Portable Bundle (.zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fangcun-ime-windows-x64-portable
+          path: dist/
