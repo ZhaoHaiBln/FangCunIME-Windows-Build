@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability for FangCunSettings windows",
-  "windows": ["main", "clipboard", "statusbar"],
+  "windows": ["main", "clipboard"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

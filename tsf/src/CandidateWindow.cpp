@@ -469,14 +469,27 @@ void CandidateWindow::updateWindowRegion() {
 }
 
 void CandidateWindow::moveNearCaret(const RECT& caretRect) {
-    lastCaretRect_ = caretRect;
+    RECT resolved = caretRect;
+    if (resolved.left == 0 && resolved.top == 0 && resolved.right == 0 && resolved.bottom == 0) {
+        GUITHREADINFO gti = {};
+        gti.cbSize = sizeof(gti);
+        if (GetGUIThreadInfo(0, &gti) && gti.hwndCaret) {
+            RECT rc = gti.rcCaret;
+            POINT tl{rc.left, rc.top};
+            POINT br{rc.right, rc.bottom};
+            if (ClientToScreen(gti.hwndCaret, &tl) && ClientToScreen(gti.hwndCaret, &br)) {
+                resolved = RECT{tl.x, tl.y, br.x, br.y};
+            }
+        }
+    }
+    lastCaretRect_ = resolved;
     hasCaretRect_ = true;
     if (!hwnd_) return;
 
-    int x = caretRect.left;
-    int y = caretRect.bottom + scaleForDpi(6);
+    int x = resolved.left;
+    int y = resolved.bottom + scaleForDpi(6);
 
-    POINT pt{caretRect.left, caretRect.bottom};
+    POINT pt{resolved.left, resolved.bottom};
     HMONITOR mon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
     MONITORINFO mi = {};
     mi.cbSize = sizeof(mi);
@@ -487,7 +500,7 @@ void CandidateWindow::moveNearCaret(const RECT& caretRect) {
         }
         if (x < work.left) x = work.left;
         if (y + height_ > work.bottom) {
-            y = std::max<int>(work.top, caretRect.top - height_ - scaleForDpi(6));
+            y = std::max<int>(work.top, resolved.top - height_ - scaleForDpi(6));
         }
         if (y < work.top) y = work.top;
     }

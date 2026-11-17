@@ -339,24 +339,20 @@ pub fn run() {
             } else if !start_in_tray {
                 show_main_window(app.handle());
             }
-            position_statusbar_near_taskbar(app.handle());
 
             let open_item =
                 MenuItem::with_id(app, "open", "打开方寸设置", true, None::<&str>)?;
             let clip_item =
                 MenuItem::with_id(app, "clipboard", "打开剪贴板 (Alt+V)", true, None::<&str>)?;
-            let bar_item =
-                MenuItem::with_id(app, "statusbar", "显示/隐藏浮动状态栏", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出方寸伴侣", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open_item, &clip_item, &bar_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&open_item, &clip_item, &quit_item])?;
 
             let mut tray_builder = TrayIconBuilder::new()
                 .menu(&menu)
-                .tooltip("方寸输入法 · 状态栏与剪贴板 (Alt+V)")
+                .tooltip("方寸输入法 · 设置与剪贴板 (Alt+V)")
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => show_main_window(app),
                     "clipboard" => toggle_clipboard_window(app),
-                    "statusbar" => toggle_statusbar(app.clone()),
                     "quit" => app.exit(0),
                     _ => {}
                 })

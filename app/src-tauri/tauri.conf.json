@@ -35,20 +35,6 @@
         "skipTaskbar": true,
         "visible": false,
         "center": true
-      },
-      {
-        "label": "statusbar",
-        "url": "index.html?mode=statusbar",
-        "title": "方寸状态栏",
-        "width": 196,
-        "height": 42,
-        "decorations": false,
-        "transparent": true,
-        "resizable": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "visible": true,
-        "focusable": false
       }
     ],
     "security": {
