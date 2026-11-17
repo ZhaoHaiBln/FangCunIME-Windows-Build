@@ -469,8 +469,15 @@ void CandidateWindow::updateWindowRegion() {
 }
 
 void CandidateWindow::moveNearCaret(const RECT& caretRect) {
+    HWND fg = GetForegroundWindow();
+    auto isValidRect = [](const RECT& r) {
+        if (r.left == 0 && r.top == 0 && r.right == 0 && r.bottom == 0) return false;
+        if (r.left < -32000 || r.top < -32000 || r.right > 32000 || r.bottom > 32000) return false;
+        return MonitorFromRect(&r, MONITOR_DEFAULTTONULL) != nullptr;
+    };
+
     RECT resolved = caretRect;
-    if (resolved.left == 0 && resolved.top == 0 && resolved.right == 0 && resolved.bottom == 0) {
+    if (!isValidRect(resolved)) {
         GUITHREADINFO gti = {};
         gti.cbSize = sizeof(gti);
         if (GetGUIThreadInfo(0, &gti) && gti.hwndCaret) {
@@ -478,12 +485,34 @@ void CandidateWindow::moveNearCaret(const RECT& caretRect) {
             POINT tl{rc.left, rc.top};
             POINT br{rc.right, rc.bottom};
             if (ClientToScreen(gti.hwndCaret, &tl) && ClientToScreen(gti.hwndCaret, &br)) {
-                resolved = RECT{tl.x, tl.y, br.x, br.y};
+                RECT candidate{tl.x, tl.y, br.x, br.y};
+                if (isValidRect(candidate)) {
+                    resolved = candidate;
+                }
             }
         }
     }
+
+    if (!isValidRect(resolved) && hasCaretRect_ && fg && lastCaretFgWnd_ == fg && isValidRect(lastCaretRect_)) {
+        resolved = lastCaretRect_;
+    }
+
+    if (!isValidRect(resolved)) {
+        RECT fgRect{};
+        bool hasFgRect = fg && GetWindowRect(fg, &fgRect);
+        POINT pt{};
+        if (GetCursorPos(&pt) && (!hasFgRect || PtInRect(&fgRect, pt))) {
+            resolved = RECT{pt.x, pt.y - scaleForDpi(20), pt.x + 2, pt.y};
+        } else if (hasFgRect) {
+            int cx = fgRect.left + std::max<int>(scaleForDpi(40), static_cast<int>(fgRect.right - fgRect.left) / 3);
+            int cy = fgRect.bottom - scaleForDpi(120);
+            resolved = RECT{cx, cy - scaleForDpi(20), cx + 2, cy};
+        }
+    }
+
     lastCaretRect_ = resolved;
-    hasCaretRect_ = true;
+    lastCaretFgWnd_ = fg;
+    hasCaretRect_ = isValidRect(resolved);
     if (!hwnd_) return;
 
     int x = resolved.left;
@@ -496,11 +525,14 @@ void CandidateWindow::moveNearCaret(const RECT& caretRect) {
     if (GetMonitorInfoW(mon, &mi)) {
         RECT work = mi.rcWork;
         if (x + width_ > work.right) {
-            x = std::max<int>(work.left, work.right - width_ - scaleForDpi(8));
+            x = std::max<int>(work.left, static_cast<int>(work.right) - width_ - scaleForDpi(8));
         }
         if (x < work.left) x = work.left;
         if (y + height_ > work.bottom) {
-            y = std::max<int>(work.top, resolved.top - height_ - scaleForDpi(6));
+            y = resolved.top - height_ - scaleForDpi(6);
+        }
+        if (y + height_ > work.bottom) {
+            y = static_cast<int>(work.bottom) - height_ - scaleForDpi(8);
         }
         if (y < work.top) y = work.top;
     }
@@ -509,7 +541,12 @@ void CandidateWindow::moveNearCaret(const RECT& caretRect) {
 }
 
 void CandidateWindow::show() {
-    if (hwnd_ && !IsWindowVisible(hwnd_)) {
+    if (!hwnd_) return;
+    HWND fg = GetForegroundWindow();
+    if (!hasCaretRect_ || (fg && lastCaretFgWnd_ != fg)) {
+        moveNearCaret(RECT{});
+    }
+    if (!IsWindowVisible(hwnd_)) {
         ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
     }
     syncGlowTimer();

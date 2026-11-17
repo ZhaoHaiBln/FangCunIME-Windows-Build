@@ -119,6 +119,7 @@ private:
     UINT lastBudgetDpi_ = 0;
 
     RECT lastCaretRect_{0, 0, 0, 0};
+    HWND lastCaretFgWnd_ = nullptr;
     bool hasCaretRect_ = false;
 
     TypingGlowEngine glowEngine_;
