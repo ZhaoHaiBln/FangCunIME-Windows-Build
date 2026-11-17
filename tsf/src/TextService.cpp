@@ -260,7 +260,22 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD) 
         return E_FAIL;
     }
     initDisplayAttribute();
-    postToCompanion(3, 1);
+    if (!FindWindowExW(HWND_MESSAGE, nullptr, L"Static", kCompanionWndTitle)) {
+        std::filesystem::path exePath = SettingsStore::getDllDirectory() / L"FangCunSettings.exe";
+        std::error_code ec;
+        if (std::filesystem::exists(exePath, ec)) {
+            STARTUPINFOW si = {};
+            si.cb = sizeof(si);
+            PROCESS_INFORMATION pi = {};
+            std::wstring cmd = L"\"" + exePath.wstring() + L"\" --tray";
+            if (CreateProcessW(exePath.c_str(), cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+                CloseHandle(pi.hThread);
+                CloseHandle(pi.hProcess);
+            }
+        }
+    } else {
+        postToCompanion(3, 1);
+    }
     return S_OK;
 }
 
@@ -659,6 +674,10 @@ STDMETHODIMP TextService::OnTestKeyDown(ITfContext* pic, WPARAM wParam, LPARAM l
         return S_OK;
     }
     shiftTapPending_ = false;
+    if (ki.alt && !ki.ctrl && !ki.win && !ki.shift && (wParam == 'V' || wParam == 'v')) {
+        *pfEaten = TRUE;
+        return S_OK;
+    }
     if (ki.ctrl && !ki.alt && !ki.win && !ki.shift && (wParam == VK_OEM_PERIOD || ki.ascii == '.')) {
         *pfEaten = TRUE;
         return S_OK;
@@ -673,6 +692,27 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* pic, WPARAM wParam, LPARAM lPara
     if (!keyHandler_) return S_OK;
 
     KeyInput ki = translateKey(wParam, lParam);
+    if (ki.alt && !ki.ctrl && !ki.win && !ki.shift && (wParam == 'V' || wParam == 'v')) {
+        HWND h = FindWindowExW(HWND_MESSAGE, nullptr, L"Static", kCompanionWndTitle);
+        if (h) {
+            PostMessageW(h, companionNotifyMessage(), 4, 0);
+        } else {
+            std::filesystem::path exePath = SettingsStore::getDllDirectory() / L"FangCunSettings.exe";
+            std::error_code ec;
+            if (std::filesystem::exists(exePath, ec)) {
+                STARTUPINFOW si = {};
+                si.cb = sizeof(si);
+                PROCESS_INFORMATION pi = {};
+                std::wstring cmd = L"\"" + exePath.wstring() + L"\" --clipboard";
+                if (CreateProcessW(exePath.c_str(), cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+                    CloseHandle(pi.hThread);
+                    CloseHandle(pi.hProcess);
+                }
+            }
+        }
+        *pfEaten = TRUE;
+        return S_OK;
+    }
     if (ki.ctrl && !ki.alt && !ki.win && !ki.shift && (wParam == VK_OEM_PERIOD || ki.ascii == '.')) {
         settings_.chinesePunctuation = !settings_.chinesePunctuation;
         keyHandler_->setChinesePunctuation(settings_.chinesePunctuation);

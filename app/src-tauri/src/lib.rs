@@ -191,16 +191,37 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
+static LAST_CLIPBOARD_SHOW_MS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+fn now_epoch_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 fn toggle_clipboard_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("clipboard") {
         let visible = win.is_visible().unwrap_or(false);
-        let focused = win.is_focused().unwrap_or(false);
-        if visible && focused {
+        let since_show = now_epoch_ms()
+            .saturating_sub(LAST_CLIPBOARD_SHOW_MS.load(std::sync::atomic::Ordering::Relaxed));
+        if visible && since_show > 350 {
             let _ = win.hide();
         } else {
+            LAST_CLIPBOARD_SHOW_MS
+                .store(now_epoch_ms(), std::sync::atomic::Ordering::Relaxed);
             let _ = win.show();
             let _ = win.unminimize();
             let _ = win.set_focus();
+            #[cfg(target_os = "windows")]
+            if let Ok(hwnd) = win.hwnd() {
+                unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(
+                        hwnd.0 as windows_sys::Win32::Foundation::HWND,
+                    );
+                }
+            }
             let _ = app.emit("ui://clipboard-opened", ());
         }
     }
@@ -275,6 +296,9 @@ fn start_hotkey_listener(app: AppHandle) {
                             let fresh = settings::load_from_disk();
                             let _ = app.emit("settings://changed", &fresh);
                         }
+                        4 => {
+                            toggle_clipboard_window(&app);
+                        }
                         _ => {}
                     }
                 } else {
@@ -300,6 +324,7 @@ pub fn run() {
     let clipboard_state = Arc::new(Mutex::new(ClipboardState::load()));
     let watcher_state = Arc::clone(&clipboard_state);
     let start_in_tray = std::env::args().any(|a| a == "--tray");
+    let start_in_clipboard = std::env::args().any(|a| a == "--clipboard");
 
     tauri::Builder::default()
         .manage(AppState {
@@ -309,7 +334,9 @@ pub fn run() {
             clipboard::start_watcher(app.handle().clone(), watcher_state);
             start_hotkey_listener(app.handle().clone());
 
-            if !start_in_tray {
+            if start_in_clipboard {
+                toggle_clipboard_window(app.handle());
+            } else if !start_in_tray {
                 show_main_window(app.handle());
             }
             position_statusbar_near_taskbar(app.handle());
@@ -356,7 +383,12 @@ pub fn run() {
                 let _ = window.hide();
             }
             WindowEvent::Focused(false) if window.label() == "clipboard" => {
-                let _ = window.hide();
+                let since_show = now_epoch_ms().saturating_sub(
+                    LAST_CLIPBOARD_SHOW_MS.load(std::sync::atomic::Ordering::Relaxed),
+                );
+                if since_show > 450 {
+                    let _ = window.hide();
+                }
             }
             _ => {}
         })
