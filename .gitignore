@@ -1,0 +1,10 @@
+node_modules/
+/dist/
+/build/
+/build-x64/
+/out/
+app/node_modules/
+app/dist/
+app/package-lock.json
+app/src-tauri/target/
+app/src-tauri/gen/

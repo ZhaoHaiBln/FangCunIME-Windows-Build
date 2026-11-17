@@ -2,7 +2,7 @@
 param(
     [string]$BuildDir = "$PSScriptRoot\..\build\Release",
     [string]$InstallDir = "$env:ProgramFiles\FangCunIME",
-    [string]$AssetsDir = "$PSScriptRoot\..\..\方寸输入法-FangCunIME\app\src\main\assets"
+    [string]$AssetsDir = "$PSScriptRoot\..\assets"
 )
 
 $ErrorActionPreference = "Stop"

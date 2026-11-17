@@ -10,6 +10,30 @@ namespace fangcun::tsf {
 namespace {
 
 constexpr wchar_t kMsgWndClass[] = L"FangCunTsfMessageWindow";
+constexpr wchar_t kCompanionWndTitle[] = L"FangCunCompanionMsgWindow";
+
+// Companion notify codes (wParam): 1 = English mode (lParam 0/1), 2 = settings changed, 3 = IME active (lParam 0/1)
+UINT companionNotifyMessage() {
+    static UINT m = RegisterWindowMessageW(L"FangCunIME_CompanionNotify");
+    return m;
+}
+
+UINT setEnglishMessage() {
+    static UINT m = RegisterWindowMessageW(L"FangCunIME_SetEnglish");
+    return m;
+}
+
+void postToCompanion(WPARAM code, LPARAM value) {
+    HWND h = FindWindowExW(HWND_MESSAGE, nullptr, L"Static", kCompanionWndTitle);
+    if (h) PostMessageW(h, companionNotifyMessage(), code, value);
+}
+
+void broadcastEnglishToTsf(bool english) {
+    HWND h = nullptr;
+    while ((h = FindWindowExW(HWND_MESSAGE, h, kMsgWndClass, nullptr)) != nullptr) {
+        PostMessageW(h, setEnglishMessage(), english ? 1 : 0, 0);
+    }
+}
 
 class FangCunDisplayAttributeInfo : public ITfDisplayAttributeInfo {
 public:
@@ -236,10 +260,12 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD) 
         return E_FAIL;
     }
     initDisplayAttribute();
+    postToCompanion(3, 1);
     return S_OK;
 }
 
 STDMETHODIMP TextService::Deactivate() {
+    postToCompanion(3, 0);
     resetAllState();
     uninitKeyEventSink();
     uninitThreadMgrSink();
@@ -376,6 +402,16 @@ LRESULT CALLBACK TextService::msgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
     }
     if (self && msg == SettingsWindow::settingsChangedMessage()) {
         self->applySettings(SettingsStore::load());
+        return 0;
+    }
+    if (self && msg == setEnglishMessage()) {
+        bool want = (wp != 0);
+        if (self->keyHandler_ && self->keyHandler_->englishMode() != want) {
+            KeyAction act = self->keyHandler_->toggleEnglishMode();
+            if (act.handled || act.hideCandidates || act.updateComposition) {
+                self->applyKeyAction(self->activeContext_, act);
+            }
+        }
         return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
@@ -641,6 +677,8 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* pic, WPARAM wParam, LPARAM lPara
         settings_.chinesePunctuation = !settings_.chinesePunctuation;
         keyHandler_->setChinesePunctuation(settings_.chinesePunctuation);
         SettingsStore::save(settings_);
+        SettingsWindow::broadcastSettingsChanged();
+        postToCompanion(2, 0);
         *pfEaten = TRUE;
         return S_OK;
     }
@@ -669,6 +707,8 @@ STDMETHODIMP TextService::OnTestKeyUp(ITfContext* pic, WPARAM wParam, LPARAM, BO
             if (ctx) {
                 requestCaretRect(ctx);
             }
+            broadcastEnglishToTsf(keyHandler_->englishMode());
+            postToCompanion(1, keyHandler_->englishMode() ? 1 : 0);
             if (candidateWindow_) {
                 candidateWindow_->showModeToast(
                     keyHandler_->englishMode(),

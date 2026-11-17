@@ -15,7 +15,7 @@ if exist "%ROOT_DIR%\FangCunTSF.dll" (
     set "ASSETS_DIR=%ROOT_DIR%\assets"
 ) else (
     set "BUILD_DIR=%ROOT_DIR%\build\Release"
-    set "ASSETS_DIR=%ROOT_DIR%\..\方寸输入法-FangCunIME\app\src\main\assets"
+    set "ASSETS_DIR=%ROOT_DIR%\assets"
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%upgrade.ps1" -BuildDir "%BUILD_DIR%" -AssetsDir "%ASSETS_DIR%"

@@ -251,14 +251,14 @@
               <div class="section-card-head">
                 <div>
                   <h3>任务栏紧凑浮动状态栏</h3>
-                  <p>点击下方按钮可直接切换输入模式、中英标点、全半角与皮肤外观</p>
+                  <p>点击下方按钮可直接切换中/英输入模式、中英标点、皮肤外观或隐藏浮动栏</p>
                 </div>
+                <button id="btn-toggle-statusbar" class="mini-pill" type="button">显示/隐藏桌面状态栏</button>
               </div>
               <div class="floating-bar-stage">
                 <div class="floating-status-bar" id="floating-status-bar">
                   <button id="fb-lang" class="fb-lang-badge" type="button" title="点击切换中/英模式 (Shift)">中</button>
                   <button id="fb-punct" class="fb-tool-btn" type="button" title="点击切换中英标点 (Ctrl+.)">“。</button>
-                  <button id="fb-width" class="fb-tool-btn" type="button" title="点击切换半角/全角">半</button>
                   <button id="fb-skin" class="fb-tool-btn" type="button" title="切换皮肤外观">🖌️</button>
                   <button id="fb-settings" class="fb-tool-btn" type="button" title="输入方案设置">⚙️</button>
                 </div>
@@ -270,14 +270,10 @@
                 <span class="setting-label">当前输入方案</span>
                 <span id="gen-scheme-summary" class="setting-value-tag">小鹤双拼</span>
               </div>
-              <div class="setting-row">
+              <label class="setting-row">
                 <span class="setting-label">剪贴板后台监听 (<kbd class="kbd-inline">Alt+V</kbd>)</span>
                 <input id="sw-gen-clip" class="ui-switch" type="checkbox" checked />
-              </div>
-              <div class="setting-row">
-                <span class="setting-label">打字流光动效</span>
-                <input id="sw-gen-glow" class="ui-switch" type="checkbox" checked />
-              </div>
+              </label>
             </div>
           </section>
 
@@ -363,42 +359,25 @@
 
           <!-- TAB: 字号与特效 -->
           <section class="tab-pane" data-pane="effects">
-            <h2 class="pane-title">字号与特效</h2>
+            <h2 class="pane-title">候选字号与打字动效</h2>
             <div class="settings-list-card">
               <label class="setting-row">
-                <span class="setting-label">打字流光特效</span>
+                <div>
+                  <div class="setting-label">候选窗打字流光特效</div>
+                  <div class="muted-sub">按键输入时在候选窗背景呈现柔和径向流光</div>
+                </div>
                 <input id="sw-glow" class="ui-switch" type="checkbox" checked />
               </label>
 
-              <label class="setting-row">
-                <span class="setting-label">键帽字母加粗</span>
-                <input id="sw-bold" class="ui-switch" type="checkbox" />
-              </label>
-
               <div class="setting-row">
-                <span class="setting-label">第一候选字号 <small class="muted">(16–30 pt)</small></span>
+                <div>
+                  <div class="setting-label">第一候选字号 <small class="muted">(16–30 pt)</small></div>
+                  <div class="muted-sub">实时调整桌面 TSF 候选窗字号比例</div>
+                </div>
                 <div class="stepper-ctrl">
                   <button id="first-minus" class="stepper-btn" type="button">−</button>
                   <span id="first-val" class="stepper-val">20 pt</span>
                   <button id="first-plus" class="stepper-btn" type="button">+</button>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <span class="setting-label">键帽字母字号 <small class="muted">(14–30 pt)</small></span>
-                <div class="stepper-ctrl">
-                  <button id="letter-minus" class="stepper-btn" type="button">−</button>
-                  <span id="letter-val" class="stepper-val">18 pt</span>
-                  <button id="letter-plus" class="stepper-btn" type="button">+</button>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <span class="setting-label">候选窗/键帽不透明度 <small class="muted">(40%–100%)</small></span>
-                <div class="stepper-ctrl">
-                  <button id="opacity-minus" class="stepper-btn" type="button">−</button>
-                  <span id="opacity-val" class="stepper-val">82%</span>
-                  <button id="opacity-plus" class="stepper-btn" type="button">+</button>
                 </div>
               </div>
             </div>
@@ -463,7 +442,7 @@
             <div class="settings-list-card">
               <div class="setting-row">
                 <span class="setting-label">当前版本</span>
-                <span class="setting-value-tag">v0.1.0 (Windows x64 · TSF + Tauri v2)</span>
+                <span class="setting-value-tag">v0.2.0 (Windows x64 · TSF + Tauri v2)</span>
               </div>
               <div class="setting-row">
                 <span class="setting-label">核心特性</span>
@@ -528,9 +507,8 @@
 
     <!-- Compact Floating Status Bar near Taskbar (Mockup 2 #3) -->
     <div id="floating-statusbar" class="floating-statusbar is-hidden" data-tauri-drag-region>
-      <button id="sb-lang" class="sb-btn sb-lang-btn" type="button" title="切换中/英文模式">中</button>
-      <button id="sb-punct" class="sb-btn" type="button" title="切换中/英文标点">“。</button>
-      <button id="sb-width" class="sb-btn sb-width-btn" type="button" title="切换半角/全角">半/全</button>
+      <button id="sb-lang" class="sb-btn sb-lang-btn" type="button" title="点击切换中/英文模式 (Shift)">中</button>
+      <button id="sb-punct" class="sb-btn" type="button" title="点击切换中/英文标点 (Ctrl+.)">“。</button>
       <span class="sb-sep"></span>
       <button id="sb-skin" class="sb-btn sb-icon-btn" type="button" title="切换皮肤外观">
         <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">

@@ -1,3 +1,7 @@
 @echo off
 cd /d "%~dp0.."
-start "" rundll32.exe "%CD%\FangCunTSF.dll",OpenSettings
+if exist "%CD%\FangCunSettings.exe" (
+    start "" "%CD%\FangCunSettings.exe"
+) else (
+    start "" rundll32.exe "%CD%\FangCunTSF.dll",OpenSettings
+)

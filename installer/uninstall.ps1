@@ -6,6 +6,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Stop-Process -Name "FangCunSettings" -Force -ErrorAction SilentlyContinue
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "FangCunIMECompanion" -ErrorAction SilentlyContinue
+
 $TargetDll = Join-Path $InstallDir "FangCunTSF.dll"
 $RegSvr = Join-Path $env:SystemRoot "System32\regsvr32.exe"
 

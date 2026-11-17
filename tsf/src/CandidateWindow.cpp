@@ -683,10 +683,16 @@ void CandidateWindow::onPaint() {
     ColorArgb subText = darkMode_ ? ColorArgb::fromHex(0xFFB48372) : ColorArgb::fromHex(0xFF6E6659);
     ColorArgb borderCol = darkMode_ ? ColorArgb::fromHex(0xFF333D4F) : ColorArgb::fromHex(0xFFDDD4C0);
 
-    if (skin_ == SkinPreset::Mint && !darkMode_) {
+    if (skin_ == SkinPreset::NativeLight && !darkMode_) {
+        topBg = ColorArgb::fromHex(0xFFFCFDFB);
+        bottomBandBg = ColorArgb::fromHex(0xFFF2F5F2);
+        pillAccent = ColorArgb::fromHex(0xFF28593A);
+        borderCol = ColorArgb::fromHex(0xFFD6DFD8);
+    } else if (skin_ == SkinPreset::Mint && !darkMode_) {
         topBg = ColorArgb::fromHex(0xFFF1F7F4);
         bottomBandBg = ColorArgb::fromHex(0xFFE5F0EB);
         pillAccent = ColorArgb::fromHex(0xFF1F8A68);
+        borderCol = ColorArgb::fromHex(0xFFC8E0D6);
     } else if (skin_ == SkinPreset::DeepBlue) {
         topBg = ColorArgb::fromHex(0xFF18243A);
         bottomBandBg = ColorArgb::fromHex(0xFF131D30);

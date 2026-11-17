@@ -1,7 +1,7 @@
 #define MyAppName "方寸输入法"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.2.0"
 #define MyAppPublisher "FangCunIME"
-#define MyAppURL "https://github.com/ZhaoHaiBln/cursor-apps-archive"
+#define MyAppURL "https://github.com/ZhaoHaiBln/FangCunIME-Windows-Build"
 #ifndef MySourceDir
   #define MySourceDir "dist"
 #endif
@@ -23,6 +23,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 WizardStyle=modern
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -35,7 +37,6 @@ Source: "{#MySourceDir}\assets\pinyin-v1.dbz"; DestDir: "{app}\assets"; Flags: i
 Source: "{#MySourceDir}\assets\pinyin-v1.json"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "{#MySourceDir}\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MySourceDir}\rime-ice-LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#MySourceDir}\installer\*"; DestDir: "{app}\installer"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\方寸输入法设置"; Filename: "{app}\FangCunSettings.exe"; WorkingDir: "{app}"
@@ -45,3 +46,15 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\FangCunSettings.exe"; Parameters: "--tray"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent; Description: "启动方寸输入法伴侣（浮动状态栏、托盘与 Alt+V 剪贴板）"
+
+[UninstallRun]
+Filename: "taskkill.exe"; Parameters: "/F /IM FangCunSettings.exe"; Flags: runhidden; RunOnceId: "StopFangCunSettings"
+
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM FangCunSettings.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := '';
+end;

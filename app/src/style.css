@@ -1327,8 +1327,9 @@ body.mode-clipboard .altv-popup {
 }
 
 /* Compact Floating Status Bar Window Mode (Mockup 2 #3) */
+html:has(body.mode-statusbar),
 body.mode-statusbar {
-  background: var(--bg-main);
+  background: transparent;
   overflow: hidden;
 }
 
@@ -1346,13 +1347,36 @@ body.mode-statusbar .win-shell {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 5px;
+  padding: 5px 10px;
   background: #f6f1e6;
-  border: 1px solid #d9cfba;
-  border-radius: 10px;
-  box-shadow: 0 4px 14px rgba(38, 32, 22, 0.12);
+  border: 1px solid #d5cab4;
+  border-radius: 11px;
+  box-shadow: 0 3px 10px rgba(38, 32, 22, 0.14);
   cursor: grab;
+}
+
+/* Skin-specific Candidate Preview */
+.cand-window[data-skin="native_light"]:not(.is-dark) {
+  background: #fcfdfb;
+  border-color: #d6dfd8;
+}
+.cand-window[data-skin="native_light"]:not(.is-dark) .cand-bottom-strip {
+  background: #f2f5f2;
+}
+.cand-window[data-skin="native_light"]:not(.is-dark) .cand-pill.is-selected {
+  background: #28593a;
+}
+
+.cand-window[data-skin="mint"]:not(.is-dark) {
+  background: #f1f7f4;
+  border-color: #c8e0d6;
+}
+.cand-window[data-skin="mint"]:not(.is-dark) .cand-bottom-strip {
+  background: #e5f0eb;
+}
+.cand-window[data-skin="mint"]:not(.is-dark) .cand-pill.is-selected {
+  background: #1f8a68;
 }
 
 .sb-btn {

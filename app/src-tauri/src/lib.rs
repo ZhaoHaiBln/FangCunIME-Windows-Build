@@ -162,10 +162,25 @@ fn get_clipboard_enabled(state: State<'_, AppState>) -> bool {
 }
 
 #[tauri::command]
-fn set_clipboard_enabled(state: State<'_, AppState>, enabled: bool) -> bool {
-    let mut guard = state.clipboard.lock().unwrap();
-    guard.enabled = enabled;
-    guard.enabled
+fn set_clipboard_enabled(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> bool {
+    {
+        let mut guard = state.clipboard.lock().unwrap();
+        guard.enabled = enabled;
+    }
+    let mut s = settings::load_from_disk();
+    s.clipboard_enabled = enabled;
+    if let Ok(saved) = settings::save_to_disk(s) {
+        let _ = app.emit("settings://changed", &saved);
+    }
+    let _ = app.emit("clipboard://enabled-changed", enabled);
+    enabled
+}
+
+#[tauri::command]
+fn set_english_mode(app: AppHandle, english: bool) -> bool {
+    settings::broadcast_english_to_tsf(english);
+    let _ = app.emit("ime://english-changed", english);
+    english
 }
 
 fn show_main_window(app: &AppHandle) {
@@ -196,8 +211,8 @@ fn position_statusbar_near_taskbar(app: &AppHandle) {
         if let Ok(Some(monitor)) = win.primary_monitor() {
             let work = monitor.work_area();
             let scale = monitor.scale_factor();
-            let bar_w = (224.0 * scale).round() as i32;
-            let bar_h = (44.0 * scale).round() as i32;
+            let bar_w = (196.0 * scale).round() as i32;
+            let bar_h = (42.0 * scale).round() as i32;
             let margin_x = (18.0 * scale).round() as i32;
             let margin_y = (12.0 * scale).round() as i32;
             let x = work.position.x + (work.size.width as i32) - bar_w - margin_x;
@@ -213,26 +228,66 @@ fn start_hotkey_listener(app: AppHandle) {
         use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
             RegisterHotKey, UnregisterHotKey, MOD_ALT, MOD_NOREPEAT,
         };
-        use windows_sys::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, DispatchMessageW, GetMessageW, RegisterWindowMessageW,
+            TranslateMessage, HWND_MESSAGE, MSG, WM_HOTKEY,
+        };
 
         const HOTKEY_CLIPBOARD_ID: i32 = 1;
         unsafe {
-            if RegisterHotKey(
+            let class_name = settings::to_wide_null("Static");
+            let wnd_title = settings::to_wide_null("FangCunCompanionMsgWindow");
+            let msg_hwnd = CreateWindowExW(
+                0,
+                class_name.as_ptr(),
+                wnd_title.as_ptr(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                HWND_MESSAGE,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            );
+            let notify_msg_name = settings::to_wide_null("FangCunIME_CompanionNotify");
+            let notify_msg = RegisterWindowMessageW(notify_msg_name.as_ptr());
+
+            let hotkey_ok = RegisterHotKey(
                 std::ptr::null_mut(),
                 HOTKEY_CLIPBOARD_ID,
                 MOD_ALT | MOD_NOREPEAT,
                 'V' as u32,
-            ) == 0
-            {
-                return;
-            }
+            ) != 0;
+
             let mut msg: MSG = std::mem::zeroed();
             while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
                 if msg.message == WM_HOTKEY && msg.wParam == HOTKEY_CLIPBOARD_ID as usize {
                     toggle_clipboard_window(&app);
+                } else if notify_msg != 0 && msg.message == notify_msg {
+                    match msg.wParam {
+                        1 => {
+                            let english = msg.lParam != 0;
+                            let _ = app.emit("ime://english-changed", english);
+                        }
+                        2 => {
+                            let fresh = settings::load_from_disk();
+                            let _ = app.emit("settings://changed", &fresh);
+                        }
+                        _ => {}
+                    }
+                } else {
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
                 }
             }
-            UnregisterHotKey(std::ptr::null_mut(), HOTKEY_CLIPBOARD_ID);
+            if hotkey_ok {
+                UnregisterHotKey(std::ptr::null_mut(), HOTKEY_CLIPBOARD_ID);
+            }
+            if !msg_hwnd.is_null() {
+                DestroyWindow(msg_hwnd);
+            }
         }
     });
 }
@@ -254,10 +309,8 @@ pub fn run() {
             clipboard::start_watcher(app.handle().clone(), watcher_state);
             start_hotkey_listener(app.handle().clone());
 
-            if start_in_tray {
-                if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.hide();
-                }
+            if !start_in_tray {
+                show_main_window(app.handle());
             }
             position_statusbar_near_taskbar(app.handle());
 
@@ -322,6 +375,7 @@ pub fn run() {
             clear_clipboard,
             get_clipboard_enabled,
             set_clipboard_enabled,
+            set_english_mode,
         ])
         .run(tauri::generate_context!())
         .expect("error while running FangCunSettings");

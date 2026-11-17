@@ -18,6 +18,7 @@ export interface AppSettings {
   typingGlow: boolean;
   keyLetterSize: number;
   keyLetterBold: boolean;
+  clipboardEnabled?: boolean;
 }
 
 export interface ClipboardItem {
@@ -51,34 +52,17 @@ const DEFAULT_SETTINGS: AppSettings = {
   typingGlow: true,
   keyLetterSize: 18,
   keyLetterBold: false,
+  clipboardEnabled: true,
 };
-
-const SAMPLE_CLIP_ITEMS: ClipboardItem[] = [
-  {
-    id: "sample-1",
-    text: "https://github.com/fangcun-ime",
-    pinned: true,
-    createdAtMs: Date.now() - 2 * 60 * 1000,
-    source: "テキスト",
-  },
-  {
-    id: "sample-2",
-    text: "方寸之间，自有天地 — Windows 11 原生双拼与剪贴板历史",
-    pinned: false,
-    createdAtMs: Date.now() - 15 * 1000,
-    source: "テキスト",
-  },
-];
 
 const appMode = new URLSearchParams(window.location.search).get("mode") ?? "main";
 let state: AppSettings = { ...DEFAULT_SETTINGS };
-let clipItems: ClipboardItem[] = [...SAMPLE_CLIP_ITEMS];
+let clipItems: ClipboardItem[] = [];
 let clipEnabled = true;
 let clipQuery = "";
 let altvQuery = "";
 let previewDarkCand = false;
 let previewLangEng = false;
-let previewHalfWidth = true;
 let toastTimer: number | undefined;
 let shiftToastTimer: number | undefined;
 
@@ -260,16 +244,12 @@ function render(): void {
   (document.getElementById("sw-capslock") as HTMLInputElement).checked = state.capsLockBypass;
   (document.getElementById("sw-wheel") as HTMLInputElement).checked = state.wheelPaging;
   (document.getElementById("sw-glow") as HTMLInputElement).checked = state.typingGlow;
-  (document.getElementById("sw-gen-glow") as HTMLInputElement).checked = state.typingGlow;
-  (document.getElementById("sw-bold") as HTMLInputElement).checked = state.keyLetterBold;
 
   const pageSelect = document.getElementById("sel-page-size") as HTMLSelectElement;
   pageSelect.value = String(state.pageSize || 7);
 
   // Metrics
   document.getElementById("first-val")!.textContent = `${state.firstCandidateSize} pt`;
-  document.getElementById("letter-val")!.textContent = `${state.keyLetterSize} pt`;
-  document.getElementById("opacity-val")!.textContent = `${Math.round(state.keyOpacity * 100)}%`;
 
   // Live Candidate Window Preview
   const candWin = document.getElementById("cand-window-preview")!;
@@ -279,6 +259,7 @@ function render(): void {
     state.skin === "deep_blue" ||
     (state.themeMode === "system" && state.systemDark);
   candWin.classList.toggle("is-dark", isDark);
+  candWin.dataset.skin = state.skin;
 
   const firstWord = document.getElementById("preview-first-word")!;
   firstWord.style.fontSize = `${Math.max(14, state.firstCandidateSize - 4)}px`;
@@ -286,8 +267,6 @@ function render(): void {
   // Floating status bar
   const fbPunct = document.getElementById("fb-punct");
   if (fbPunct) fbPunct.textContent = state.chinesePunctuation ? "“。" : "\".";
-  const fbWidth = document.getElementById("fb-width");
-  if (fbWidth) fbWidth.textContent = previewHalfWidth ? "半" : "全";
 
   const genSummary = document.getElementById("gen-scheme-summary");
   if (genSummary) genSummary.textContent = SCHEME_LABELS[state.scheme] ?? "小鹤双拼";
@@ -432,20 +411,21 @@ document.getElementById("sc-ctrl-dot")!.addEventListener("click", () => {
 // Floating Status Bar Interactive Buttons
 document.getElementById("fb-lang")!.addEventListener("click", () => {
   showShiftCaretToast();
+  void invoke("set_english_mode", { english: previewLangEng }).catch(() => {});
+  renderFloatingStatusBar();
   showToast(previewLangEng ? "已切换为英文模式" : "已切换为中文模式");
 });
 document.getElementById("fb-punct")!.addEventListener("click", () => {
   void save({ chinesePunctuation: !state.chinesePunctuation });
-});
-document.getElementById("fb-width")!.addEventListener("click", () => {
-  previewHalfWidth = !previewHalfWidth;
-  render();
 });
 document.getElementById("fb-skin")!.addEventListener("click", () => {
   switchTab("theme");
 });
 document.getElementById("fb-settings")!.addEventListener("click", () => {
   switchTab("input");
+});
+document.getElementById("btn-toggle-statusbar")?.addEventListener("click", () => {
+  void invoke("toggle_statusbar").catch(() => {});
 });
 
 // Theme & Skin Controls
@@ -462,12 +442,6 @@ document.getElementById("mode-group")!.addEventListener("click", (e) => {
 document.getElementById("sw-glow")!.addEventListener("change", (e) => {
   void save({ typingGlow: (e.target as HTMLInputElement).checked });
 });
-document.getElementById("sw-gen-glow")!.addEventListener("change", (e) => {
-  void save({ typingGlow: (e.target as HTMLInputElement).checked });
-});
-document.getElementById("sw-bold")!.addEventListener("change", (e) => {
-  void save({ keyLetterBold: (e.target as HTMLInputElement).checked });
-});
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 document.getElementById("first-minus")!.addEventListener("click", () => {
@@ -476,25 +450,13 @@ document.getElementById("first-minus")!.addEventListener("click", () => {
 document.getElementById("first-plus")!.addEventListener("click", () => {
   void save({ firstCandidateSize: clamp(state.firstCandidateSize + 1, 16, 30) });
 });
-document.getElementById("letter-minus")!.addEventListener("click", () => {
-  void save({ keyLetterSize: clamp(state.keyLetterSize - 1, 14, 30) });
-});
-document.getElementById("letter-plus")!.addEventListener("click", () => {
-  void save({ keyLetterSize: clamp(state.keyLetterSize + 1, 14, 30) });
-});
-document.getElementById("opacity-minus")!.addEventListener("click", () => {
-  void save({ keyOpacity: clamp(Math.round((state.keyOpacity - 0.05) * 20) / 20, 0.4, 1.0) });
-});
-document.getElementById("opacity-plus")!.addEventListener("click", () => {
-  void save({ keyOpacity: clamp(Math.round((state.keyOpacity + 0.05) * 20) / 20, 0.4, 1.0) });
-});
 
 // Clipboard Controls
-async function toggleClipboardWatch(): Promise<void> {
+async function setClipboardWatch(want: boolean): Promise<void> {
   try {
-    clipEnabled = await invoke<boolean>("set_clipboard_enabled", { enabled: !clipEnabled });
+    clipEnabled = await invoke<boolean>("set_clipboard_enabled", { enabled: want });
   } catch {
-    clipEnabled = !clipEnabled;
+    clipEnabled = want;
   }
   renderClipboard();
   showToast(clipEnabled ? "已开启剪贴板监听" : "已暂停剪贴板监听");
@@ -519,9 +481,11 @@ document.getElementById("altv-search")!.addEventListener("input", (e) => {
   renderClipboard();
 });
 
-document.getElementById("clip-toggle-watch")!.addEventListener("click", () => void toggleClipboardWatch());
-document.getElementById("altv-toggle-watch")!.addEventListener("click", () => void toggleClipboardWatch());
-document.getElementById("sw-gen-clip")!.addEventListener("change", () => void toggleClipboardWatch());
+document.getElementById("clip-toggle-watch")!.addEventListener("click", () => void setClipboardWatch(!clipEnabled));
+document.getElementById("altv-toggle-watch")!.addEventListener("click", () => void setClipboardWatch(!clipEnabled));
+document.getElementById("sw-gen-clip")!.addEventListener("change", (e) => {
+  void setClipboardWatch((e.target as HTMLInputElement).checked);
+});
 
 document.getElementById("clip-clear")!.addEventListener("click", () => void clearUnpinnedClipboard());
 document.getElementById("altv-clear")!.addEventListener("click", () => void clearUnpinnedClipboard());
@@ -559,33 +523,29 @@ window.addEventListener("keydown", (e) => {
 function renderFloatingStatusBar(): void {
   const sbLang = document.getElementById("sb-lang");
   const sbPunct = document.getElementById("sb-punct");
-  const sbWidth = document.getElementById("sb-width");
+  const fbLang = document.getElementById("fb-lang");
   if (sbLang) {
     sbLang.textContent = previewLangEng ? "英" : "中";
     sbLang.classList.toggle("is-english", previewLangEng);
+  }
+  if (fbLang) {
+    fbLang.textContent = previewLangEng ? "英" : "中";
   }
   if (sbPunct) {
     sbPunct.textContent = state.chinesePunctuation ? "“。" : ".,";
     sbPunct.classList.toggle("is-muted", !state.chinesePunctuation);
   }
-  if (sbWidth) {
-    sbWidth.textContent = previewHalfWidth ? "半/全" : "全角";
-  }
 }
 
 document.getElementById("sb-lang")?.addEventListener("click", () => {
   previewLangEng = !previewLangEng;
-  void save({ mixedInput: !previewLangEng });
+  void invoke("set_english_mode", { english: previewLangEng }).catch(() => {});
   renderFloatingStatusBar();
 });
 document.getElementById("sb-punct")?.addEventListener("click", () => {
   void save({ chinesePunctuation: !state.chinesePunctuation }).then(() => {
     renderFloatingStatusBar();
   });
-});
-document.getElementById("sb-width")?.addEventListener("click", () => {
-  previewHalfWidth = !previewHalfWidth;
-  renderFloatingStatusBar();
 });
 document.getElementById("sb-skin")?.addEventListener("click", () => {
   const order = ["warm_grid", "native_light", "mint", "deep_blue"];
@@ -605,6 +565,7 @@ document.getElementById("btn-reset")!.addEventListener("click", async () => {
     state = { ...DEFAULT_SETTINGS };
   }
   render();
+  renderFloatingStatusBar();
   showToast("已恢复默认设置");
 });
 
@@ -625,18 +586,23 @@ async function init(): Promise<void> {
 
   try {
     state = await invoke<AppSettings>("load_settings");
-    const loadedClips = await invoke<ClipboardItem[]>("list_clipboard");
-    if (loadedClips.length > 0) {
-      clipItems = loadedClips;
-    }
+    clipItems = await invoke<ClipboardItem[]>("list_clipboard");
     clipEnabled = await invoke<boolean>("get_clipboard_enabled");
     await listen<ClipboardItem[]>("clipboard://changed", (event) => {
       clipItems = event.payload;
       renderClipboard();
     });
+    await listen<boolean>("clipboard://enabled-changed", (event) => {
+      clipEnabled = event.payload;
+      renderClipboard();
+    });
     await listen<AppSettings>("settings://changed", (event) => {
       state = event.payload;
       render();
+      renderFloatingStatusBar();
+    });
+    await listen<boolean>("ime://english-changed", (event) => {
+      previewLangEng = event.payload;
       renderFloatingStatusBar();
     });
     await listen("ui://clipboard-opened", () => {

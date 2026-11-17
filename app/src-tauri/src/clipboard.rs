@@ -36,21 +36,25 @@ impl ClipboardState {
             }
         }
         let last_seen_text = items.first().map(|i| i.text.clone()).unwrap_or_default();
+        let enabled = crate::settings::load_from_disk().clipboard_enabled;
         Self {
             items,
-            enabled: true,
+            enabled,
             last_seen_text,
         }
     }
 
     pub fn persist(&self) {
         let path = clipboard_path();
-        if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        if let Ok(json) = serde_json::to_string_pretty(&self.items) {
-            let _ = fs::write(&path, json);
-        }
+        let snapshot = self.items.clone();
+        std::thread::spawn(move || {
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            if let Ok(json) = serde_json::to_string_pretty(&snapshot) {
+                let _ = fs::write(&path, json);
+            }
+        });
     }
 
     pub fn ordered_items(&self) -> Vec<ClipboardItem> {

@@ -25,6 +25,8 @@ pub struct AppSettings {
     pub typing_glow: bool,
     pub key_letter_size: i32,
     pub key_letter_bold: bool,
+    #[serde(default = "default_true")]
+    pub clipboard_enabled: bool,
 }
 
 fn default_true() -> bool {
@@ -46,7 +48,7 @@ impl Default for AppSettings {
             caps_lock_bypass: true,
             page_size: 7,
             wheel_paging: true,
-            skin: "native_light".to_string(),
+            skin: "warm_grid".to_string(),
             theme_mode: "system".to_string(),
             dark_mode: sys_dark,
             system_dark: sys_dark,
@@ -55,6 +57,7 @@ impl Default for AppSettings {
             typing_glow: true,
             key_letter_size: 18,
             key_letter_bold: false,
+            clipboard_enabled: true,
         }
     }
 }
@@ -89,7 +92,7 @@ fn normalize(mut s: AppSettings) -> AppSettings {
         s.skin.as_str(),
         "native_light" | "warm_grid" | "mint" | "deep_blue"
     ) {
-        s.skin = "native_light".to_string();
+        s.skin = "warm_grid".to_string();
     }
     if !matches!(s.theme_mode.as_str(), "system" | "light" | "dark") {
         s.theme_mode = "system".to_string();
@@ -140,7 +143,9 @@ pub fn load_from_disk() -> AppSettings {
                 "wheel_paging" => s.wheel_paging = val == "1" || val.eq_ignore_ascii_case("true"),
                 "skin" => s.skin = val.to_string(),
                 "theme_mode" => s.theme_mode = val.to_string(),
-                "dark_mode" => s.dark_mode = val == "1" || val.eq_ignore_ascii_case("true"),
+                "dark" | "dark_mode" => {
+                    s.dark_mode = val == "1" || val.eq_ignore_ascii_case("true")
+                }
                 "first_candidate_size" => {
                     if let Ok(n) = val.parse::<i32>() {
                         s.first_candidate_size = n;
@@ -160,6 +165,9 @@ pub fn load_from_disk() -> AppSettings {
                 "key_letter_bold" => {
                     s.key_letter_bold = val == "1" || val.eq_ignore_ascii_case("true")
                 }
+                "clipboard_enabled" => {
+                    s.clipboard_enabled = val == "1" || val.eq_ignore_ascii_case("true")
+                }
                 _ => {}
             }
         }
@@ -175,7 +183,7 @@ pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
     }
     let bool_int = |b: bool| if b { 1 } else { 0 };
     let body = format!(
-        "scheme={}\nmixed_input={}\nchinese_punctuation={}\nshift_toggle_english={}\ncapslock_bypass={}\npage_size={}\nwheel_paging={}\nskin={}\ntheme_mode={}\ndark_mode={}\nfirst_candidate_size={}\nkey_opacity={:.2}\ntyping_glow={}\nkey_letter_size={}\nkey_letter_bold={}\n",
+        "scheme={}\nmixed_input={}\nchinese_punctuation={}\nshift_toggle_english={}\ncapslock_bypass={}\npage_size={}\nwheel_paging={}\nskin={}\ntheme_mode={}\ndark={}\ndark_mode={}\nfirst_candidate_size={}\nkey_opacity={:.2}\ntyping_glow={}\nkey_letter_size={}\nkey_letter_bold={}\nclipboard_enabled={}\n",
         s.scheme,
         bool_int(s.mixed_input),
         bool_int(s.chinese_punctuation),
@@ -186,11 +194,13 @@ pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
         s.skin,
         s.theme_mode,
         bool_int(s.dark_mode),
+        bool_int(s.dark_mode),
         s.first_candidate_size,
         s.key_opacity,
         bool_int(s.typing_glow),
         s.key_letter_size,
         bool_int(s.key_letter_bold),
+        bool_int(s.clipboard_enabled),
     );
     fs::write(&path, body).map_err(|e| format!("write settings.ini failed: {e}"))?;
     notify_tsf_settings_changed();
@@ -198,7 +208,7 @@ pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
 }
 
 #[cfg(target_os = "windows")]
-fn to_wide_null(s: &str) -> Vec<u16> {
+pub fn to_wide_null(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
@@ -227,6 +237,32 @@ pub fn notify_tsf_settings_changed() {
 
 #[cfg(not(target_os = "windows"))]
 pub fn notify_tsf_settings_changed() {}
+
+#[cfg(target_os = "windows")]
+pub fn broadcast_english_to_tsf(english: bool) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        FindWindowExW, PostMessageW, RegisterWindowMessageW, HWND_MESSAGE,
+    };
+    unsafe {
+        let msg_name = to_wide_null("FangCunIME_SetEnglish");
+        let msg = RegisterWindowMessageW(msg_name.as_ptr());
+        if msg == 0 {
+            return;
+        }
+        let class_name = to_wide_null("FangCunTsfMessageWindow");
+        let mut hwnd = 0isize as windows_sys::Win32::Foundation::HWND;
+        loop {
+            hwnd = FindWindowExW(HWND_MESSAGE, hwnd, class_name.as_ptr(), std::ptr::null());
+            if hwnd.is_null() {
+                break;
+            }
+            PostMessageW(hwnd, msg, usize::from(english), 0);
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn broadcast_english_to_tsf(_english: bool) {}
 
 #[cfg(target_os = "windows")]
 pub fn is_windows_apps_dark() -> bool {

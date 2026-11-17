@@ -106,8 +106,8 @@ AppSettings SettingsStore::load() {
             if (val == "light") s.themeMode = ThemeMode::Light;
             else if (val == "dark") s.themeMode = ThemeMode::Dark;
             else s.themeMode = ThemeMode::System;
-        } else if (key == "dark") {
-            s.darkMode = (val == "1");
+        } else if (key == "dark" || key == "dark_mode") {
+            s.darkMode = (val == "1" || val == "true");
             if (!hasThemeMode) {
                 s.themeMode = s.darkMode ? ThemeMode::Dark : ThemeMode::Light;
             }
@@ -158,13 +158,15 @@ void SettingsStore::save(const AppSettings& s) {
     const char* modeStr =
         (s.themeMode == ThemeMode::Light) ? "light" :
         (s.themeMode == ThemeMode::Dark) ? "dark" : "system";
+    const char* darkBit = effectiveDarkMode(s) ? "1" : "0";
 
     out << "scheme=" << schemeStr << "\n"
         << "mixed_input=" << (s.mixedInput ? "1" : "0") << "\n"
         << "chinese_punctuation=" << (s.chinesePunctuation ? "1" : "0") << "\n"
         << "skin=" << skinStr << "\n"
         << "theme_mode=" << modeStr << "\n"
-        << "dark=" << (effectiveDarkMode(s) ? "1" : "0") << "\n"
+        << "dark=" << darkBit << "\n"
+        << "dark_mode=" << darkBit << "\n"
         << "first_candidate_size=" << std::clamp(s.firstCandidateSize, 16, 30) << "\n"
         << "key_opacity=" << std::clamp(s.keyOpacity, 0.4f, 1.0f) << "\n"
         << "typing_glow=" << (s.typingGlow ? "1" : "0") << "\n"

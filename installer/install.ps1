@@ -2,7 +2,7 @@
 param(
     [string]$BuildDir = "$PSScriptRoot\..\build\Release",
     [string]$InstallDir = "$env:ProgramFiles\FangCunIME",
-    [string]$AssetsDir = "$PSScriptRoot\..\..\方寸输入法-FangCunIME\app\src\main\assets"
+    [string]$AssetsDir = "$PSScriptRoot\..\assets"
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,12 +12,22 @@ if (-not (Test-Path $DllSource)) {
     throw "未找到 $DllSource，请先使用 CMake 构建 Release 版本。"
 }
 
+Stop-Process -Name "FangCunSettings" -Force -ErrorAction SilentlyContinue
+
 Write-Host "[1/4] 创建安装目录: $InstallDir"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir "assets") | Out-Null
 
-Write-Host "[2/4] 复制 FangCunTSF.dll 与词库资产..."
+Write-Host "[2/4] 复制 FangCunTSF.dll、伴侣程序与词库资产..."
 Copy-Item -Force $DllSource (Join-Path $InstallDir "FangCunTSF.dll")
+
+$ExeSource = Join-Path $BuildDir "FangCunSettings.exe"
+if (-not (Test-Path $ExeSource)) {
+    $ExeSource = "$PSScriptRoot\..\app\src-tauri\target\release\FangCunSettings.exe"
+}
+if (Test-Path $ExeSource) {
+    Copy-Item -Force $ExeSource (Join-Path $InstallDir "FangCunSettings.exe")
+}
 
 $DictDb = Join-Path $AssetsDir "dict.db"
 $PinyinDbz = Join-Path $AssetsDir "pinyin-v1.dbz"
