@@ -136,6 +136,7 @@ fn load_settings() -> AppSettings {
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
     let saved = settings::save_to_disk(settings)?;
+    apply_window_appearance(&app, &saved);
     let _ = app.emit("settings://changed", &saved);
     Ok(saved)
 }
@@ -143,6 +144,7 @@ fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, S
 #[tauri::command]
 fn reset_settings(app: AppHandle) -> Result<AppSettings, String> {
     let saved = settings::save_to_disk(AppSettings::default())?;
+    apply_window_appearance(&app, &saved);
     let _ = app.emit("settings://changed", &saved);
     Ok(saved)
 }
@@ -296,6 +298,49 @@ fn set_english_mode(app: AppHandle, english: bool) -> bool {
     english
 }
 
+fn apply_window_appearance(app: &AppHandle, settings: &AppSettings) {
+    #[cfg(target_os = "windows")]
+    for window in app.webview_windows().values() {
+        let theme = match settings.theme_mode.as_str() {
+            "dark" => Some(tauri::Theme::Dark),
+            "light" => Some(tauri::Theme::Light),
+            _ => None,
+        };
+        let _ = window.set_theme(theme);
+        if let Ok(hwnd) = window.hwnd() {
+            apply_native_chrome(hwnd.0 as windows_sys::Win32::Foundation::HWND, settings);
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = (app, settings);
+}
+
+#[cfg(target_os = "windows")]
+fn apply_native_chrome(hwnd: windows_sys::Win32::Foundation::HWND, settings: &AppSettings) {
+    use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
+    // These Windows 11 attributes safely return E_INVALIDARG on older Windows.
+    // They affect only FangCun's own HWNDs; editor windows are never touched.
+    let no_rounding: i32 = 1;
+    let (background, text): (u32, u32) = match (settings.skin.as_str(), settings.dark_mode) {
+        ("square_aluminum", false) => (0xCFD4DA, 0x232C36),
+        ("square_aluminum", true) => (0x232A32, 0xF2F6FA),
+        ("square_amber", false) => (0xE5E0D7, 0x302C24),
+        ("square_amber", true) => (0x20211F, 0xF8F4E8),
+        ("square_jade", false) => (0xDCECE4, 0x233E32),
+        ("square_jade", true) => (0x1D2D27, 0xF0F8EE),
+        (_, false) => (0xF0EDE4, 0x292D29),
+        (_, true) => (0x242723, 0xF5F3EA),
+    };
+    let color_ref = |rgb: u32| ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
+    let caption = color_ref(background);
+    let foreground = color_ref(text);
+    unsafe {
+        let _ = DwmSetWindowAttribute(hwnd, 33, (&no_rounding as *const i32).cast(), 4);
+        let _ = DwmSetWindowAttribute(hwnd, 35, (&caption as *const u32).cast(), 4);
+        let _ = DwmSetWindowAttribute(hwnd, 36, (&foreground as *const u32).cast(), 4);
+    }
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
@@ -447,6 +492,7 @@ pub fn run() {
             share,
         })
         .setup(move |app| {
+            apply_window_appearance(app.handle(), &settings::load_from_disk());
             clipboard::start_watcher(
                 app.handle().clone(),
                 watcher_state,
@@ -494,6 +540,14 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| match event {
+            WindowEvent::ThemeChanged(_) => {
+                let saved = settings::load_from_disk();
+                #[cfg(target_os = "windows")]
+                if let Ok(hwnd) = window.hwnd() {
+                    apply_native_chrome(hwnd.0 as windows_sys::Win32::Foundation::HWND, &saved);
+                }
+                let _ = window.emit("settings://changed", saved);
+            }
             WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.hide();

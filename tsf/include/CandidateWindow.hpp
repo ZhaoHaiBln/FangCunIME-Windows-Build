@@ -18,7 +18,7 @@ namespace fangcun::tsf {
  * Rendered with Direct2D + DirectWrite matching Android 1.5.1 visual tokens:
  * - 4 skins x light/dark mode
  * - Probe-measured stable header height (no layout jumping)
- * - First candidate accent text + 3.5% alpha rounded highlight (4dp corner)
+ * - Solid theme-accent first candidate with contrast-safe text and square corners
  * - Tianzige brand mark + skin-matched TypingGlow behind header
  */
 class CandidateWindow {
@@ -100,7 +100,7 @@ private:
     int selectedIndex_ = 0;
     bool pending_ = false;
     InputScheme scheme_ = InputScheme::Flypy;
-    SkinPreset skin_ = SkinPreset::NativeLight;
+    SkinPreset skin_ = SkinPreset::SquareCream;
     bool darkMode_ = false;
     int firstCandidateSize_ = 20;
     bool typingGlow_ = true;

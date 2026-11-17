@@ -101,14 +101,14 @@ int runKeyHandlerTests() {
     KH_ASSERT(actEngSpace.commitText && actEngSpace.textToCommit == "AI ",
               "Space on English candidate should append trailing space");
 
-    // 8. Android 1.5.1 Theme tokens, GlassSurface math & TypingGlowEngine
+    // 8. Shared square skins, readable selection surfaces, GlassSurface math & TypingGlowEngine
     {
         auto wgMetrics = fangcun::skinMetrics(fangcun::SkinPreset::WarmGrid);
-        KH_ASSERT(wgMetrics.cornerRadiusDp == 2.0f && wgMetrics.ledgeDepthDp == 1.8f,
-                  "WarmGrid corner/ledge metrics mismatch");
+        KH_ASSERT(wgMetrics.cornerRadiusDp == 0.0f && wgMetrics.ledgeDepthDp == 2.2f,
+                  "Legacy WarmGrid must resolve to square cream metrics");
         auto nlMetrics = fangcun::skinMetrics(fangcun::SkinPreset::NativeLight);
-        KH_ASSERT(nlMetrics.cornerRadiusDp == 4.0f && nlMetrics.ledgeDepthDp == 2.1f,
-                  "NativeLight corner/ledge metrics mismatch");
+        KH_ASSERT(nlMetrics.cornerRadiusDp == 0.0f && nlMetrics.ledgeDepthDp == 2.6f,
+                  "Legacy NativeLight must resolve to square aluminum metrics");
 
         auto nlLight = fangcun::skinColors(fangcun::SkinPreset::NativeLight, false);
         auto nlDark = fangcun::skinColors(fangcun::SkinPreset::NativeLight, true);
@@ -129,6 +129,45 @@ int runKeyHandlerTests() {
         KH_ASSERT(wgBackdrop.isFlat, "WarmGrid backdrop must be flat");
         auto nlBackdrop = fangcun::computeBackdropGradient(fangcun::SkinPreset::NativeLight, nlLight);
         KH_ASSERT(!nlBackdrop.isFlat, "NativeLight backdrop must use 3-stop gradient");
+
+        const std::array presets{
+            fangcun::SkinPreset::SquareCream, fangcun::SkinPreset::SquareAluminum,
+            fangcun::SkinPreset::SquareAmber, fangcun::SkinPreset::SquareJade,
+        };
+        const std::array<std::string_view, 4> ids{"square_cream", "square_aluminum", "square_amber", "square_jade"};
+        const std::array<std::string_view, 4> oldIds{"warm_grid", "native_light", "deep_blue", "mint"};
+        for (size_t i = 0; i < presets.size(); ++i) {
+            const auto preset = presets[i];
+            const auto metrics = fangcun::skinMetrics(preset);
+            KH_ASSERT(fangcun::parseSkinPreset(ids[i]) == preset && fangcun::parseSkinPreset(oldIds[i]) == preset,
+                      "Canonical and old INI IDs must select the same square skin");
+            KH_ASSERT(std::string_view(metrics.id) == ids[i] && metrics.cornerRadiusDp == 0.0f,
+                      "Skin serialization and zero-radius geometry must agree");
+            KH_ASSERT(fangcun::resolveEffectiveDarkMode(fangcun::ThemeMode::Light, preset, true) == false &&
+                      fangcun::resolveEffectiveDarkMode(fangcun::ThemeMode::Dark, preset, false) == true,
+                      "Explicit light and dark modes must remain available for every square skin");
+            for (bool dark : {false, true}) {
+                const auto palette = fangcun::skinColors(preset, dark);
+                const auto foreground = fangcun::accentForeground(palette);
+                const auto luminance = palette.accent.relativeLuminance();
+                const auto foregroundLuminance = foreground.relativeLuminance();
+                const float contrast = (std::max(luminance, foregroundLuminance) + 0.05f) /
+                                       (std::min(luminance, foregroundLuminance) + 0.05f);
+                KH_ASSERT(contrast >= 4.5f, "Selected candidate text must remain readable in all eight palettes");
+                const auto baseLuminance = palette.keyboard.relativeLuminance();
+                const auto textLuminance = palette.text.relativeLuminance();
+                KH_ASSERT((std::max(baseLuminance, textLuminance) + 0.05f) /
+                          (std::min(baseLuminance, textLuminance) + 0.05f) >= 4.5f,
+                          "Candidate text must remain readable against every keyboard background");
+                const auto square = fangcun::computeGlassKeyColors(preset, palette, 0.4f, true, true, true);
+                KH_ASSERT(square.cornerRadiusDp == 0.0f && square.top.a == 255 && square.ledgeDepthDp > 0.0f,
+                          "Pressed functional and emphasized surfaces must stay square, solid, and dimensional");
+            }
+        }
+        KH_ASSERT(fangcun::parseSkinPreset("unknown") == fangcun::SkinPreset::SquareCream,
+                  "Invalid persisted skin falls back to cream without replacing unrelated preferences");
+        KH_ASSERT(fangcun::HeaderMetricsSpec::kFirstCornerDp == 0.0f && fangcun::HeaderMetricsSpec::kFirstBackgroundAlpha == 1.0f,
+                  "Candidate selection remains a solid square block");
 
         fangcun::TypingGlowEngine glow;
         glow.setEnabled(true);

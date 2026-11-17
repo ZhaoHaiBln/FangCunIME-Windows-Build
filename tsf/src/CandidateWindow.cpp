@@ -1,5 +1,6 @@
 #include "CandidateWindow.hpp"
 #include "DllMain.hpp"
+#include "SquareWindow.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -199,6 +200,7 @@ bool CandidateWindow::create(HWND parentOwner) {
         this);
 
     if (!hwnd_) return false;
+    preferSquareWindow(hwnd_);
     dpi_ = queryDpiForWindow(hwnd_);
     recomputeHeaderBudget();
     recalculateSize();
@@ -461,11 +463,9 @@ void CandidateWindow::recalculateSize() {
 
 void CandidateWindow::updateWindowRegion() {
     if (!hwnd_) return;
-    int cornerPx = std::max(6, static_cast<int>(std::lround(dpToPx(8.0f))));
-    HRGN rgn = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, cornerPx * 2, cornerPx * 2);
-    if (rgn) {
-        SetWindowRgn(hwnd_, rgn, TRUE);
-    }
+    // Remove the legacy rounded clipping region as well as the compositor's corners.
+    SetWindowRgn(hwnd_, nullptr, TRUE);
+    preferSquareWindow(hwnd_);
 }
 
 void CandidateWindow::moveNearCaret(const RECT& caretRect) {
@@ -672,35 +672,19 @@ void CandidateWindow::onLButtonDown(int x, int y) {
 void CandidateWindow::drawTianzigeLogoD2D(float x, float y, float size) {
     if (!renderTarget_) return;
     ID2D1SolidColorBrush* brush = nullptr;
-    ColorArgb tileColor = darkMode_ ? ColorArgb::fromHex(0xFFE07A5F) : ColorArgb::fromHex(0xFF2B5B3C);
-    ColorArgb gridColor = darkMode_ ? ColorArgb::fromHex(0xFF1F2633) : ColorArgb::fromHex(0xFFFBF8F2);
-    ColorArgb dotColor = darkMode_ ? ColorArgb::fromHex(0xFFFFF4E6) : ColorArgb::fromHex(0xFFE66E33);
-
-    if (FAILED(renderTarget_->CreateSolidColorBrush(toD2DColor(tileColor), &brush)) || !brush) {
-        return;
-    }
-
-    float rx = std::max(2.5f, size * 0.22f);
-    D2D1_ROUNDED_RECT tile = D2D1::RoundedRect(D2D1::RectF(x, y, x + size, y + size), rx, rx);
-    renderTarget_->FillRoundedRectangle(tile, brush);
-
-    float pad = std::max(2.0f, size * 0.20f);
-    float stroke = std::max(1.1f, size * 0.085f);
-    brush->SetColor(toD2DColor(gridColor));
-    D2D1_RECT_F frameRect = D2D1::RectF(x + pad, y + pad, x + size - pad, y + size - pad);
-    renderTarget_->DrawRectangle(frameRect, brush, stroke);
-
-    float midX = x + size * 0.5f;
-    float midY = y + size * 0.5f;
-    renderTarget_->DrawLine(D2D1::Point2F(midX, y + pad), D2D1::Point2F(midX, y + size - pad), brush, stroke * 0.85f);
-    renderTarget_->DrawLine(D2D1::Point2F(x + pad, midY), D2D1::Point2F(x + size - pad, midY), brush, stroke * 0.85f);
-
-    // Warm orange accent dot in bottom-right cell
-    brush->SetColor(toD2DColor(dotColor));
-    float dotR = std::max(1.4f, size * 0.105f);
-    float dotCx = x + size * 0.78f;
-    float dotCy = y + size * 0.78f;
-    renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(dotCx, dotCy), dotR, dotR), brush);
+    if (FAILED(renderTarget_->CreateSolidColorBrush(toD2DColor(BrandMark::CreamBackground), &brush)) || !brush) return;
+    renderTarget_->FillRectangle(D2D1::RectF(x, y, x + size, y + size), brush);
+    const float pad = std::max(2.0f, size * 0.16f);
+    const float stroke = std::max(1.0f, size * 0.06f);
+    brush->SetColor(toD2DColor(BrandMark::FrameColor));
+    renderTarget_->DrawRectangle(D2D1::RectF(x + pad, y + pad, x + size - pad, y + size - pad), brush, stroke);
+    brush->SetColor(toD2DColor(BrandMark::FrameColor.withAlpha(0.45f)));
+    const float midX = x + size * 0.5f;
+    const float midY = y + size * 0.5f;
+    renderTarget_->DrawLine(D2D1::Point2F(midX, y + pad), D2D1::Point2F(midX, y + size - pad), brush, 0.8f);
+    renderTarget_->DrawLine(D2D1::Point2F(x + pad, midY), D2D1::Point2F(x + size - pad, midY), brush, 0.8f);
+    brush->SetColor(toD2DColor(BrandMark::CenterTerracotta));
+    renderTarget_->FillRectangle(D2D1::RectF(x + size * 0.4f, y + size * 0.4f, x + size * 0.6f, y + size * 0.6f), brush);
     brush->Release();
 }
 
@@ -717,7 +701,7 @@ void CandidateWindow::onPaint() {
 
     const float wDip = static_cast<float>(width_) * 96.0f / static_cast<float>(dpi_);
     const float hDip = static_cast<float>(height_) * 96.0f / static_cast<float>(dpi_);
-    const float cornerDp = 8.0f;
+    const float cornerDp = 0.0f;
 
     renderTarget_->BeginDraw();
     renderTarget_->SetTransform(D2D1::Matrix3x2F::Identity());
@@ -725,33 +709,14 @@ void CandidateWindow::onPaint() {
     D2D1_RECT_F fullRect = D2D1::RectF(0.0f, 0.0f, wDip, hDip);
     D2D1_ROUNDED_RECT roundedBounds = D2D1::RoundedRect(fullRect, cornerDp, cornerDp);
 
-    ColorArgb topBg = darkMode_ ? ColorArgb::fromHex(0xFF1F2633) : ColorArgb::fromHex(0xFFF6F1E6);
-    ColorArgb bottomBandBg = darkMode_ ? ColorArgb::fromHex(0xFF19202B) : ColorArgb::fromHex(0xFFEFE8D9);
-    ColorArgb pillAccent = darkMode_ ? ColorArgb::fromHex(0xFFE07A5F) : ColorArgb::fromHex(0xFF2B5B3C);
-    ColorArgb pillText = darkMode_ ? ColorArgb::fromHex(0xFF1B222E) : ColorArgb::fromHex(0xFFFFFFFF);
-    ColorArgb mainText = darkMode_ ? ColorArgb::fromHex(0xFFE88D73) : ColorArgb::fromHex(0xFF23201C);
-    ColorArgb subText = darkMode_ ? ColorArgb::fromHex(0xFFB48372) : ColorArgb::fromHex(0xFF6E6659);
-    ColorArgb borderCol = darkMode_ ? ColorArgb::fromHex(0xFF333D4F) : ColorArgb::fromHex(0xFFDDD4C0);
-
-    if (skin_ == SkinPreset::NativeLight && !darkMode_) {
-        topBg = ColorArgb::fromHex(0xFFFCFDFB);
-        bottomBandBg = ColorArgb::fromHex(0xFFF2F5F2);
-        pillAccent = ColorArgb::fromHex(0xFF28593A);
-        borderCol = ColorArgb::fromHex(0xFFD6DFD8);
-    } else if (skin_ == SkinPreset::Mint && !darkMode_) {
-        topBg = ColorArgb::fromHex(0xFFF1F7F4);
-        bottomBandBg = ColorArgb::fromHex(0xFFE5F0EB);
-        pillAccent = ColorArgb::fromHex(0xFF1F8A68);
-        borderCol = ColorArgb::fromHex(0xFFC8E0D6);
-    } else if (skin_ == SkinPreset::DeepBlue) {
-        topBg = ColorArgb::fromHex(0xFF18243A);
-        bottomBandBg = ColorArgb::fromHex(0xFF131D30);
-        pillAccent = ColorArgb::fromHex(0xFFF28B66);
-        pillText = ColorArgb::fromHex(0xFF131D30);
-        mainText = ColorArgb::fromHex(0xFFEEF3FC);
-        subText = ColorArgb::fromHex(0xFF94A6C8);
-        borderCol = ColorArgb::fromHex(0xFF2C3F63);
-    }
+    const FangCunColors colors = skinColors(skin_, darkMode_);
+    const ColorArgb topBg = colors.keyboard;
+    const ColorArgb bottomBandBg = ColorArgb::lerp(colors.keyboard, colors.functionKey, 0.28f);
+    const ColorArgb pillAccent = colors.accent;
+    const ColorArgb pillText = accentForeground(colors);
+    const ColorArgb mainText = colors.text;
+    const ColorArgb subText = colors.secondary;
+    const ColorArgb borderCol = colors.border;
 
     ID2D1SolidColorBrush* brush = nullptr;
     renderTarget_->CreateSolidColorBrush(toD2DColor(topBg), &brush);
@@ -912,7 +877,7 @@ void CandidateWindow::onPaint() {
         bool isSelected = (static_cast<int>(idx) == selectedIndex_);
 
         if (isSelected && !pending_ && brush) {
-            D2D1_ROUNDED_RECT selPill = D2D1::RoundedRect(itemRc, 5.5f, 5.5f);
+            D2D1_ROUNDED_RECT selPill = D2D1::RoundedRect(itemRc, HeaderMetricsSpec::kFirstCornerDp, HeaderMetricsSpec::kFirstCornerDp);
             brush->SetColor(toD2DColor(pillAccent));
             renderTarget_->FillRoundedRectangle(selPill, brush);
         }

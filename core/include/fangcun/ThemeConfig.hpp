@@ -5,15 +5,28 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+#include <string_view>
 
 namespace fangcun {
 
 enum class SkinPreset {
-    NativeLight, // 原生轻白
-    WarmGrid,    // 米白田字格
-    Mint,        // 薄荷绿
-    DeepBlue,    // 深蓝珊瑚
+    SquareCream,
+    SquareAluminum,
+    SquareAmber,
+    SquareJade,
+    // Source aliases remain valid; persisted INI aliases decode below.
+    NativeLight = SquareAluminum,
+    WarmGrid = SquareCream,
+    Mint = SquareJade,
+    DeepBlue = SquareAmber,
 };
+
+inline SkinPreset parseSkinPreset(std::string_view id) {
+    if (id == "square_aluminum" || id == "native_light") return SkinPreset::SquareAluminum;
+    if (id == "square_amber" || id == "deep_blue") return SkinPreset::SquareAmber;
+    if (id == "square_jade" || id == "mint") return SkinPreset::SquareJade;
+    return SkinPreset::SquareCream;
+}
 
 enum class ThemeMode {
     System,
@@ -93,77 +106,53 @@ struct SkinMetrics {
     std::array<ColorArgb, 4> glowColors;
 };
 
-// Exact brand palette ported from Android Theme.kt & theme-tokens.json (v1.5.1)
+// Shared four-skin palettes, kept byte-for-byte with Android Theme.kt.
 inline FangCunColors skinColors(SkinPreset skin, bool dark) {
     switch (skin) {
-        case SkinPreset::NativeLight:
-            return dark
-                ? FangCunColors{{0xFF,0x19,0x1D,0x26}, {0xFF,0x30,0x36,0x43}, {0xFF,0x47,0x50,0x5F}, {0xFF,0x3C,0x43,0x50}, {0xFF,0xF2,0xF5,0xFA}, {0xFF,0xAF,0xBA,0xCB}, {0xFF,0x89,0xB4,0xFF}, {0xFF,0x2B,0x3A,0x55}}
-                : FangCunColors{{0xFF,0xEE,0xF1,0xF6}, {0xFF,0xFF,0xFF,0xFF}, {0xFF,0xC9,0xD0,0xDC}, {0xFF,0xDF,0xE5,0xEE}, {0xFF,0x20,0x26,0x32}, {0xFF,0x62,0x6D,0x80}, {0xFF,0x17,0x63,0xE8}, {0xFF,0xE5,0xEE,0xFF}};
-        case SkinPreset::WarmGrid:
-            return dark
-                ? FangCunColors{{0xFF,0x24,0x23,0x1E}, {0xFF,0x37,0x36,0x2E}, {0xFF,0x55,0x53,0x45}, {0xFF,0x45,0x42,0x37}, {0xFF,0xF4,0xF1,0xE6}, {0xFF,0xC2,0xBE,0xAA}, {0xFF,0xEA,0xA4,0x81}, {0xFF,0x49,0x33,0x26}}
-                : FangCunColors{{0xFF,0xF1,0xEE,0xE5}, {0xFF,0xFF,0xFE,0xF9}, {0xFF,0xCD,0xC7,0xB9}, {0xFF,0xE4,0xDF,0xD3}, {0xFF,0x30,0x2E,0x26}, {0xFF,0x6F,0x6B,0x5E}, {0xFF,0xA3,0x4E,0x2D}, {0xFF,0xF3,0xE3,0xD6}};
-        case SkinPreset::Mint:
-            return dark
-                ? FangCunColors{{0xFF,0x14,0x27,0x22}, {0xFF,0x25,0x40,0x39}, {0xFF,0x3D,0x5E,0x52}, {0xFF,0x30,0x4E,0x43}, {0xFF,0xED,0xF8,0xF2}, {0xFF,0xA1,0xC8,0xB7}, {0xFF,0x8A,0xD9,0xB7}, {0xFF,0x23,0x4B,0x3A}}
-                : FangCunColors{{0xFF,0xE9,0xF3,0xEF}, {0xFF,0xFA,0xFF,0xFD}, {0xFF,0xBF,0xD7,0xCC}, {0xFF,0xD6,0xE8,0xE0}, {0xFF,0x20,0x3E,0x34}, {0xFF,0x56,0x77,0x6A}, {0xFF,0x17,0x73,0x59}, {0xFF,0xDD,0xEF,0xE5}};
-        case SkinPreset::DeepBlue:
-            return dark
-                ? FangCunColors{{0xFF,0x17,0x28,0x3F}, {0xFF,0x2A,0x3D,0x58}, {0xFF,0x49,0x60,0x78}, {0xFF,0x34,0x4C,0x69}, {0xFF,0xF2,0xF6,0xFC}, {0xFF,0xAD,0xBF,0xD4}, {0xFF,0xFF,0xAD,0x9A}, {0xFF,0x33,0x4E,0x6A}}
-                : FangCunColors{{0xFF,0xE9,0xEF,0xF6}, {0xFF,0xF9,0xFC,0xFF}, {0xFF,0xBE,0xCB,0xDC}, {0xFF,0xD5,0xDF,0xEC}, {0xFF,0x22,0x3B,0x58}, {0xFF,0x5F,0x75,0x8E}, {0xFF,0xAD,0x49,0x38}, {0xFF,0xF7,0xE4,0xDF}};
+        case SkinPreset::SquareCream:
+            return dark ? FangCunColors{ColorArgb::fromHex(0xFF242723), ColorArgb::fromHex(0xFF383D34), ColorArgb::fromHex(0xFF5F6959), ColorArgb::fromHex(0xFF454B3F), ColorArgb::fromHex(0xFFF5F3EA), ColorArgb::fromHex(0xFFB8C0AD), ColorArgb::fromHex(0xFFB4D49B), ColorArgb::fromHex(0xFF4D5C44)}
+                : FangCunColors{ColorArgb::fromHex(0xFFF0EDE4), ColorArgb::fromHex(0xFFFFFEFA), ColorArgb::fromHex(0xFFD2CFC4), ColorArgb::fromHex(0xFFE7E4DB), ColorArgb::fromHex(0xFF292D29), ColorArgb::fromHex(0xFF62665D), ColorArgb::fromHex(0xFF315F37), ColorArgb::fromHex(0xFFE0E8D9)};
+        case SkinPreset::SquareAluminum:
+            return dark ? FangCunColors{ColorArgb::fromHex(0xFF232A32), ColorArgb::fromHex(0xFF3A4551), ColorArgb::fromHex(0xFF657588), ColorArgb::fromHex(0xFF465463), ColorArgb::fromHex(0xFFF2F6FA), ColorArgb::fromHex(0xFFB0BECE), ColorArgb::fromHex(0xFF9BC8FA), ColorArgb::fromHex(0xFF3D5D7C)}
+                : FangCunColors{ColorArgb::fromHex(0xFFCFD4DA), ColorArgb::fromHex(0xFFEFF2F5), ColorArgb::fromHex(0xFF929DA9), ColorArgb::fromHex(0xFFD4D9E0), ColorArgb::fromHex(0xFF232C36), ColorArgb::fromHex(0xFF4F5C69), ColorArgb::fromHex(0xFF075EAC), ColorArgb::fromHex(0xFFD1E4F3)};
+        case SkinPreset::SquareAmber:
+            return dark ? FangCunColors{ColorArgb::fromHex(0xFF20211F), ColorArgb::fromHex(0xFF383A35), ColorArgb::fromHex(0xFF68695E), ColorArgb::fromHex(0xFF45473F), ColorArgb::fromHex(0xFFF8F4E8), ColorArgb::fromHex(0xFFC0BDAD), ColorArgb::fromHex(0xFFF1AD3E), ColorArgb::fromHex(0xFF5C4B31)}
+                : FangCunColors{ColorArgb::fromHex(0xFFE5E0D7), ColorArgb::fromHex(0xFFF9F5EC), ColorArgb::fromHex(0xFFB7AA93), ColorArgb::fromHex(0xFFD8D0C0), ColorArgb::fromHex(0xFF302C24), ColorArgb::fromHex(0xFF695C48), ColorArgb::fromHex(0xFF955200), ColorArgb::fromHex(0xFFF1DFC1)};
+        case SkinPreset::SquareJade:
+            return dark ? FangCunColors{ColorArgb::fromHex(0xFF1D2D27), ColorArgb::fromHex(0xFF304D3E), ColorArgb::fromHex(0xFF607F6C), ColorArgb::fromHex(0xFF3D5B4A), ColorArgb::fromHex(0xFFF0F8EE), ColorArgb::fromHex(0xFFB4CCBA), ColorArgb::fromHex(0xFFA0D9B6), ColorArgb::fromHex(0xFF416850)}
+                : FangCunColors{ColorArgb::fromHex(0xFFDCECE4), ColorArgb::fromHex(0xFFF0F8F1), ColorArgb::fromHex(0xFFB0CBBE), ColorArgb::fromHex(0xFFDBEAE0), ColorArgb::fromHex(0xFF233E32), ColorArgb::fromHex(0xFF526C5D), ColorArgb::fromHex(0xFF156448), ColorArgb::fromHex(0xFFC7E4D4)};
     }
-    return skinColors(SkinPreset::NativeLight, false);
+    return skinColors(SkinPreset::SquareCream, false);
+}
+
+inline ColorArgb accentForeground(const FangCunColors& colors) {
+    const float luminance = colors.accent.relativeLuminance();
+    const float whiteContrast = 1.05f / (luminance + 0.05f);
+    const float blackContrast = (luminance + 0.05f) / 0.05f;
+    return whiteContrast >= blackContrast
+        ? ColorArgb::fromHex(0xFFFFFFFF) : ColorArgb::fromHex(0xFF000000);
 }
 
 inline SkinMetrics skinMetrics(SkinPreset skin) {
     switch (skin) {
-        case SkinPreset::NativeLight:
-            return SkinMetrics{
-                "native_light", "原生轻白", ThemeMode::Light,
-                4.0f, 1.8f, 2.1f,
-                {{
-                    {0xFF,0x6B,0x9F,0xF0},
-                    {0xFF,0x64,0xC9,0xDF},
-                    {0xFF,0xA3,0x94,0xEB},
-                    {0xFF,0x7A,0xB5,0xEF}
-                }}
-            };
-        case SkinPreset::WarmGrid:
-            return SkinMetrics{
-                "warm_grid", "米白田字格", ThemeMode::Light,
-                2.0f, 1.2f, 1.8f,
-                {{
-                    {0xFF,0xE9,0xAD,0x82},
-                    {0xFF,0x88,0xBD,0xA3},
-                    {0xFF,0xD4,0x9F,0xAD},
-                    {0xFF,0xE2,0xC6,0x8C}
-                }}
-            };
-        case SkinPreset::Mint:
-            return SkinMetrics{
-                "mint", "薄荷绿", ThemeMode::Light,
-                4.0f, 1.6f, 2.1f,
-                {{
-                    {0xFF,0x64,0xCB,0xB7},
-                    {0xFF,0x7D,0xD6,0xDF},
-                    {0xFF,0xAB,0xAC,0xE8},
-                    {0xFF,0x92,0xD1,0xA5}
-                }}
-            };
-        case SkinPreset::DeepBlue:
-            return SkinMetrics{
-                "deep_blue", "深蓝珊瑚", ThemeMode::Dark,
-                4.0f, 2.0f, 2.1f,
-                {{
-                    {0xFF,0x66,0x9B,0xEC},
-                    {0xFF,0xFF,0x9A,0x87},
-                    {0xFF,0x73,0xD9,0xC3},
-                    {0xFF,0xB4,0x9A,0xDF}
-                }}
-            };
+        case SkinPreset::SquareCream:
+            return SkinMetrics{"square_cream", "奶油方格", ThemeMode::Light,
+                0.0f, 1.4f, 2.2f,
+                {{ColorArgb::fromHex(0xFFACCAA2), ColorArgb::fromHex(0xFFD7C5A6), ColorArgb::fromHex(0xFFC0D3B2), ColorArgb::fromHex(0xFFD9CFB5)}}};
+        case SkinPreset::SquareAluminum:
+            return SkinMetrics{"square_aluminum", "铝银机械", ThemeMode::Light,
+                0.0f, 1.6f, 2.6f,
+                {{ColorArgb::fromHex(0xFF92B8DF), ColorArgb::fromHex(0xFF83C9D0), ColorArgb::fromHex(0xFFB7BCE2), ColorArgb::fromHex(0xFFA5BDCF)}}};
+        case SkinPreset::SquareAmber:
+            return SkinMetrics{"square_amber", "墨黑琥珀", ThemeMode::Dark,
+                0.0f, 1.6f, 2.6f,
+                {{ColorArgb::fromHex(0xFFDDAA51), ColorArgb::fromHex(0xFFCDBA85), ColorArgb::fromHex(0xFFE4C187), ColorArgb::fromHex(0xFFB1A488)}}};
+        case SkinPreset::SquareJade:
+            return SkinMetrics{"square_jade", "翡翠磨砂", ThemeMode::Light,
+                0.0f, 1.1f, 1.9f,
+                {{ColorArgb::fromHex(0xFF91CDB0), ColorArgb::fromHex(0xFFB9DDC7), ColorArgb::fromHex(0xFFA5CEBF), ColorArgb::fromHex(0xFFCADDB5)}}};
     }
-    return skinMetrics(SkinPreset::NativeLight);
+    return skinMetrics(SkinPreset::SquareCream);
 }
 
 inline bool resolveEffectiveDarkMode(ThemeMode mode, SkinPreset skin, bool systemIsDark) {
@@ -282,8 +271,8 @@ namespace HeaderMetricsSpec {
     inline constexpr float kCandidateIndexLineHeightSp = 12.0f;
     inline constexpr int kCodeSp = 11;
     inline constexpr float kCodeLineHeightSp = 14.0f;
-    inline constexpr float kFirstBackgroundAlpha = 0.035f;
-    inline constexpr float kFirstCornerDp = 4.0f;
+    inline constexpr float kFirstBackgroundAlpha = 1.0f;
+    inline constexpr float kFirstCornerDp = 0.0f;
     inline constexpr float kPendingAlpha = 0.5f;
     inline constexpr float kItemHorizontalPaddingDp = 10.0f;
     inline constexpr float kItemVerticalPaddingDp = 5.0f;

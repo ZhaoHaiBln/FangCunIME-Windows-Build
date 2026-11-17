@@ -97,10 +97,7 @@ AppSettings SettingsStore::load() {
         } else if (key == "chinese_punctuation") {
             s.chinesePunctuation = (val != "0");
         } else if (key == "skin") {
-            if (val == "warm_grid") s.skin = SkinPreset::WarmGrid;
-            else if (val == "mint") s.skin = SkinPreset::Mint;
-            else if (val == "deep_blue") s.skin = SkinPreset::DeepBlue;
-            else s.skin = SkinPreset::NativeLight;
+            s.skin = parseSkinPreset(val);
         } else if (key == "theme_mode") {
             hasThemeMode = true;
             if (val == "light") s.themeMode = ThemeMode::Light;
@@ -137,6 +134,8 @@ AppSettings SettingsStore::load() {
             } catch (...) {}
         } else if (key == "wheel_paging") {
             s.wheelPaging = (val != "0");
+        } else if (key == "clipboard_enabled") {
+            s.clipboardEnabled = (val != "0" && val != "false");
         }
     }
     s.darkMode = effectiveDarkMode(s);
@@ -151,10 +150,7 @@ void SettingsStore::save(const AppSettings& s) {
     const char* schemeStr =
         (s.scheme == InputScheme::Pinyin) ? "pinyin" :
         (s.scheme == InputScheme::NineKey) ? "ninekey" : "flypy";
-    const char* skinStr =
-        (s.skin == SkinPreset::WarmGrid) ? "warm_grid" :
-        (s.skin == SkinPreset::Mint) ? "mint" :
-        (s.skin == SkinPreset::DeepBlue) ? "deep_blue" : "native_light";
+    const char* skinStr = skinMetrics(s.skin).id;
     const char* modeStr =
         (s.themeMode == ThemeMode::Light) ? "light" :
         (s.themeMode == ThemeMode::Dark) ? "dark" : "system";
@@ -175,7 +171,8 @@ void SettingsStore::save(const AppSettings& s) {
         << "shift_toggle_english=" << (s.shiftToggleEnglish ? "1" : "0") << "\n"
         << "capslock_bypass=" << (s.capsLockBypass ? "1" : "0") << "\n"
         << "page_size=" << std::clamp(s.pageSize, 5, 9) << "\n"
-        << "wheel_paging=" << (s.wheelPaging ? "1" : "0") << "\n";
+        << "wheel_paging=" << (s.wheelPaging ? "1" : "0") << "\n"
+        << "clipboard_enabled=" << (s.clipboardEnabled ? "1" : "0") << "\n";
 }
 
 } // namespace fangcun::tsf

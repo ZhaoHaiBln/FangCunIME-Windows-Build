@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +48,7 @@ impl Default for AppSettings {
             caps_lock_bypass: true,
             page_size: 7,
             wheel_paging: true,
-            skin: "warm_grid".to_string(),
+            skin: "square_cream".to_string(),
             theme_mode: "system".to_string(),
             dark_mode: sys_dark,
             system_dark: sys_dark,
@@ -83,17 +83,25 @@ fn settings_path() -> PathBuf {
     data_dir().join("settings.ini")
 }
 
+// Keep legacy files readable while offering only the four current square skins.
+// This changes one visual identifier; language, privacy, sharing and typography
+// preferences continue to be read from the same existing settings file.
+fn canonical_skin(id: &str) -> &'static str {
+    match id {
+        "square_aluminum" | "native_light" => "square_aluminum",
+        "square_amber" | "deep_blue" => "square_amber",
+        "square_jade" | "mint" => "square_jade",
+        "square_cream" | "warm_grid" => "square_cream",
+        _ => "square_cream",
+    }
+}
+
 fn normalize(mut s: AppSettings) -> AppSettings {
     s.system_dark = is_windows_apps_dark();
     if !matches!(s.scheme.as_str(), "flypy" | "pinyin" | "ninekey") {
         s.scheme = "flypy".to_string();
     }
-    if !matches!(
-        s.skin.as_str(),
-        "native_light" | "warm_grid" | "mint" | "deep_blue"
-    ) {
-        s.skin = "warm_grid".to_string();
-    }
+    s.skin = canonical_skin(&s.skin).to_string();
     if !matches!(s.theme_mode.as_str(), "system" | "light" | "dark") {
         s.theme_mode = "system".to_string();
     }
@@ -110,9 +118,12 @@ fn normalize(mut s: AppSettings) -> AppSettings {
 }
 
 pub fn load_from_disk() -> AppSettings {
+    load_from_path(&settings_path())
+}
+
+fn load_from_path(path: &Path) -> AppSettings {
     let mut s = AppSettings::default();
-    let path = settings_path();
-    if let Ok(content) = fs::read_to_string(&path) {
+    if let Ok(content) = fs::read_to_string(path) {
         for raw_line in content.lines() {
             let line = raw_line.trim();
             if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
@@ -176,8 +187,13 @@ pub fn load_from_disk() -> AppSettings {
 }
 
 pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
+    let saved = save_to_path(&settings_path(), input)?;
+    notify_tsf_settings_changed();
+    Ok(saved)
+}
+
+fn save_to_path(path: &Path, input: AppSettings) -> Result<AppSettings, String> {
     let s = normalize(input);
-    let path = settings_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("create settings dir failed: {e}"))?;
     }
@@ -202,8 +218,7 @@ pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
         bool_int(s.key_letter_bold),
         bool_int(s.clipboard_enabled),
     );
-    fs::write(&path, body).map_err(|e| format!("write settings.ini failed: {e}"))?;
-    notify_tsf_settings_changed();
+    fs::write(path, body).map_err(|e| format!("write settings.ini failed: {e}"))?;
     Ok(s)
 }
 
@@ -297,4 +312,100 @@ pub fn is_windows_apps_dark() -> bool {
 #[cfg(not(target_os = "windows"))]
 pub fn is_windows_apps_dark() -> bool {
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_PATH: AtomicU64 = AtomicU64::new(0);
+
+    struct IniFixture(PathBuf);
+    impl IniFixture {
+        fn new() -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            Self(std::env::temp_dir().join(format!(
+                "fangcun-square-settings-{}-{nanos}-{}.ini",
+                std::process::id(),
+                NEXT_PATH.fetch_add(1, Ordering::Relaxed)
+            )))
+        }
+    }
+    impl Drop for IniFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.0);
+        }
+    }
+
+    #[test]
+    fn upgrading_legacy_skin_ini_preserves_typography_language_and_clipboard_preferences() {
+        for (legacy, current) in [
+            ("native_light", "square_aluminum"),
+            ("warm_grid", "square_cream"),
+            ("mint", "square_jade"),
+            ("deep_blue", "square_amber"),
+        ] {
+            let file = IniFixture::new();
+            fs::write(&file.0, format!(
+                "skin={legacy}\nscheme=ninekey\ntheme_mode=light\nmixed_input=0\nchinese_punctuation=0\n\
+                 shift_toggle_english=0\ncapslock_bypass=0\npage_size=9\nwheel_paging=0\n\
+                 first_candidate_size=28\nkey_opacity=0.47\ntyping_glow=0\nkey_letter_size=25\n\
+                 key_letter_bold=1\nclipboard_enabled=0\n"
+            )).unwrap();
+            let loaded = load_from_path(&file.0);
+            assert_eq!(loaded.skin, current);
+            assert_eq!(loaded.theme_mode, "light");
+            assert!(!loaded.dark_mode);
+            assert_eq!(loaded.scheme, "ninekey");
+            assert!(!loaded.mixed_input && !loaded.chinese_punctuation);
+            assert!(!loaded.shift_toggle_english && !loaded.caps_lock_bypass);
+            assert_eq!(loaded.page_size, 9);
+            assert!(!loaded.wheel_paging && !loaded.clipboard_enabled);
+            assert_eq!(loaded.first_candidate_size, 28);
+            assert_eq!(loaded.key_letter_size, 25);
+            assert!(loaded.key_letter_bold);
+            assert!(!loaded.typing_glow);
+            assert!((loaded.key_opacity - 0.47).abs() < f64::EPSILON);
+            let before = serde_json::to_value(&loaded).unwrap();
+            save_to_path(&file.0, loaded).unwrap();
+            let saved = fs::read_to_string(&file.0).unwrap();
+            assert!(saved.contains(&format!("skin={current}\n")));
+            assert_eq!(
+                serde_json::to_value(load_from_path(&file.0)).unwrap(),
+                before
+            );
+        }
+    }
+
+    #[test]
+    fn all_four_new_skins_round_trip_through_real_ini_without_resetting_explicit_theme() {
+        for skin in [
+            "square_cream",
+            "square_aluminum",
+            "square_amber",
+            "square_jade",
+        ] {
+            let file = IniFixture::new();
+            let mut selected = AppSettings::default();
+            selected.skin = skin.to_string();
+            selected.theme_mode = "dark".to_string();
+            selected.first_candidate_size = 23;
+            selected.clipboard_enabled = false;
+            let saved = save_to_path(&file.0, selected).unwrap();
+            let loaded = load_from_path(&file.0);
+            assert_eq!(loaded.skin, skin);
+            assert_eq!(loaded.theme_mode, "dark");
+            assert!(loaded.dark_mode);
+            assert_eq!(loaded.first_candidate_size, 23);
+            assert!(!loaded.clipboard_enabled);
+            assert_eq!(
+                serde_json::to_value(loaded).unwrap(),
+                serde_json::to_value(saved).unwrap()
+            );
+        }
+    }
 }

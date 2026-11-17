@@ -1,5 +1,6 @@
 #include "SettingsWindow.hpp"
 #include "DllMain.hpp"
+#include "SquareWindow.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -320,6 +321,7 @@ void SettingsWindow::showOrActivate(HWND owner) {
         this);
 
     if (hwnd_) {
+        preferSquareWindow(hwnd_);
         dpi_ = queryDpiForWindow(hwnd_);
         createTianzigeIcons();
         ShowWindow(hwnd_, SW_SHOW);
@@ -565,6 +567,10 @@ void SettingsWindow::applyAction(ActionId action) {
         default:
             return;
     }
+    if (action == ActionId::SkinNativeLight || action == ActionId::SkinWarmGrid ||
+        action == ActionId::SkinMint || action == ActionId::SkinDeepBlue) {
+        settings_.themeMode = skinMetrics(settings_.skin).defaultThemeMode;
+    }
     saveAndNotify();
 }
 
@@ -573,7 +579,7 @@ void SettingsWindow::drawTianzigeLogo(float x, float y, float size) {
     if (FAILED(renderTarget_->CreateSolidColorBrush(toD2DColor(BrandMark::CreamBackground), &brush)) || !brush) return;
 
     renderTarget_->FillRoundedRectangle(
-        D2D1::RoundedRect(D2D1::RectF(x, y, x + size, y + size), 2.0f, 2.0f), brush);
+        D2D1::RoundedRect(D2D1::RectF(x, y, x + size, y + size), 0.0f, 0.0f), brush);
 
     float pad = std::max(2.0f, size * 0.16f);
     float stroke = std::max(1.0f, size * 0.06f);
@@ -693,7 +699,7 @@ void SettingsWindow::drawGlassButton(
             fmt->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
             ColorArgb txtCol = emphasized
-                ? (colors.isDarkKeyboard() ? ColorArgb{0xFF, 0x18, 0x1C, 0x24} : ColorArgb{0xFF, 0xFF, 0xFF, 0xFF})
+                ? accentForeground(colors)
                 : (selected ? colors.accent : colors.text);
 
             ID2D1SolidColorBrush* txtBrush = nullptr;
@@ -760,7 +766,7 @@ void SettingsWindow::onPaint() {
 
     const float pad = 20.0f;
     const float fullW = wDip - pad * 2.0f;
-    const float cardRadius = metrics.cornerRadiusDp + 6.0f;
+    const float cardRadius = metrics.cornerRadiusDp;
     float y = 14.0f;
 
     auto addPill = [&](float x, float py, float w, float h, const std::wstring& label, ActionId act,
@@ -797,7 +803,7 @@ void SettingsWindow::onPaint() {
         addPill(rightX - 184.0f, y + 3.0f, 88.0f, 32.0f, L"恢复默认", ActionId::ResetDefaults, false, true, false, 12.0f);
 
         D2D1_RECT_F verRc = D2D1::RectF(rightX - 294.0f, y + 6.0f, rightX - 194.0f, y + 32.0f);
-        D2D1_ROUNDED_RECT verRR = D2D1::RoundedRect(verRc, 6.0f, 6.0f);
+        D2D1_ROUNDED_RECT verRR = D2D1::RoundedRect(verRc, 0.0f, 0.0f);
         brush->SetColor(toD2DColor(colors.key.withAlpha(0.65f)));
         renderTarget_->FillRoundedRectangle(verRR, brush);
         brush->SetColor(toD2DColor(colors.border.withAlpha(0.75f)));
@@ -805,7 +811,7 @@ void SettingsWindow::onPaint() {
         if (monoFormat_) {
             monoFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
             brush->SetColor(toD2DColor(colors.secondary));
-            std::wstring ver = L"v0.1.0 · x64";
+            std::wstring ver = L"v0.4.0 · x64";
             renderTarget_->DrawText(ver.c_str(), static_cast<UINT32>(ver.size()), monoFormat_, verRc, brush);
             monoFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         }
@@ -912,7 +918,7 @@ void SettingsWindow::onPaint() {
     // First candidate highlight
     D2D1_RECT_F firstCandRc = D2D1::RectF(previewRc.left + 12.0f, previewRc.top + 22.0f, previewRc.left + 98.0f, previewRc.top + 56.0f);
     brush->SetColor(toD2DColor(colors.accent.withAlpha(HeaderMetricsSpec::kFirstBackgroundAlpha)));
-    renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(firstCandRc, 4.0f, 4.0f), brush);
+    renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(firstCandRc, HeaderMetricsSpec::kFirstCornerDp, HeaderMetricsSpec::kFirstCornerDp), brush);
 
     if (dwriteFactory_) {
         IDWriteTextFormat* pFmt = nullptr;
@@ -920,7 +926,7 @@ void SettingsWindow::onPaint() {
                 kUiFontFamily, nullptr, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL, static_cast<float>(settings_.firstCandidateSize), L"", &pFmt)) && pFmt) {
             pFmt->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-            brush->SetColor(toD2DColor(colors.accent));
+            brush->SetColor(toD2DColor(accentForeground(colors)));
             renderTarget_->DrawText(L"1 晚上", 4, pFmt,
                                     D2D1::RectF(firstCandRc.left + 8.0f, firstCandRc.top, firstCandRc.right + 40.0f, firstCandRc.bottom),
                                     brush);
@@ -978,7 +984,7 @@ void SettingsWindow::onPaint() {
         float innerX = x + 14.0f;
         float headerY = cy + 12.0f;
         brush->SetColor(toD2DColor(colors.accent));
-        renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(innerX + 3.0f, headerY + 9.0f), 3.0f, 3.0f), brush);
+        renderTarget_->FillRectangle(D2D1::RectF(innerX, headerY + 6.0f, innerX + 6.0f, headerY + 12.0f), brush);
 
         if (monoFormat_) {
             brush->SetColor(toD2DColor(colors.accent));
@@ -1024,12 +1030,12 @@ void SettingsWindow::onPaint() {
         float iw = w - 28.0f;
         float ry = cy + 40.0f;
         float w2 = (iw - 6.0f) / 2.0f;
-        addPill(ix, ry, w2, 36.0f, L"原生轻白", ActionId::SkinNativeLight, settings_.skin == SkinPreset::NativeLight);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"米白田字格", ActionId::SkinWarmGrid, settings_.skin == SkinPreset::WarmGrid);
+        addPill(ix, ry, w2, 36.0f, L"奶油方格", ActionId::SkinWarmGrid, settings_.skin == SkinPreset::SquareCream);
+        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"铝银机械", ActionId::SkinNativeLight, settings_.skin == SkinPreset::SquareAluminum);
 
         ry += 42.0f;
-        addPill(ix, ry, w2, 36.0f, L"薄荷绿", ActionId::SkinMint, settings_.skin == SkinPreset::Mint);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"深蓝珊瑚", ActionId::SkinDeepBlue, settings_.skin == SkinPreset::DeepBlue);
+        addPill(ix, ry, w2, 36.0f, L"墨黑琥珀", ActionId::SkinDeepBlue, settings_.skin == SkinPreset::SquareAmber);
+        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"翡翠磨砂", ActionId::SkinMint, settings_.skin == SkinPreset::SquareJade);
 
         ry += 46.0f;
         float w3 = (iw - 12.0f) / 3.0f;

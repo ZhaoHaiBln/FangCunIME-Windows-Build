@@ -12,11 +12,10 @@
       <aside class="sidebar">
         <div class="brand-header">
           <svg class="brand-logo" viewBox="0 0 100 100" aria-hidden="true">
-            <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
-            <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="7.5" stroke-linejoin="round" />
-            <line x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="6.5" />
-            <line x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="6.5" />
-            <circle cx="77" cy="77" r="9.5" fill="#E66E33" />
+            <rect class="logo-paper" x="2" y="2" width="96" height="96" fill="none" />
+            <rect class="logo-frame" x="9" y="9" width="82" height="82" fill="none" stroke="currentColor" stroke-width="6" />
+            <path class="logo-grid" d="M50 12V88M12 50H88" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" />
+            <rect class="logo-dot" x="38" y="38" width="24" height="24" fill="#B4552D" />
           </svg>
           <div class="brand-titles">
             <h1>方寸输入法</h1>
@@ -43,7 +42,7 @@
 
           <button class="nav-item is-active" data-tab="input" type="button">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
-              <rect x="2.5" y="4.5" width="15" height="11" rx="2.2" stroke="currentColor" stroke-width="1.6" />
+              <rect x="2.5" y="4.5" width="15" height="11" rx="0" stroke="currentColor" stroke-width="1.6" />
               <path d="M5.5 8H7M9.2 8H10.8M13 8H14.5M5.5 11.8H14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
             </svg>
             <span>输入方案</span>
@@ -68,7 +67,7 @@
 
           <button class="nav-item" data-tab="clipboard" type="button">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
-              <rect x="4.5" y="4.5" width="11" height="12.5" rx="2" stroke="currentColor" stroke-width="1.6" />
+              <rect x="4.5" y="4.5" width="11" height="12.5" rx="0" stroke="currentColor" stroke-width="1.6" />
               <path d="M7.5 4.5V3.8C7.5 3.08 8.08 2.5 8.8 2.5H11.2C11.92 2.5 12.5 3.08 12.5 3.8V4.5M7.5 9H12.5M7.5 12.2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
             </svg>
             <span>剪贴板</span>
@@ -107,7 +106,7 @@
               <h2 class="pane-title">输入方案与行为</h2>
               <div class="preview-mode-pills">
                 <button id="btn-preview-light" class="mini-pill is-active" type="button" title="浅色候选窗预览">浅色候选</button>
-                <button id="btn-preview-dark" class="mini-pill" type="button" title="深色珊瑚候选窗预览">深色候选</button>
+                <button id="btn-preview-dark" class="mini-pill" type="button" title="当前皮肤的深色候选窗预览">深色候选</button>
                 <button id="btn-preview-shift" class="mini-pill" type="button" title="测试 Shift 光标旁中英切换小吐司">Shift 吐司</button>
                 <button id="btn-open-clip-popup" class="mini-pill" type="button" title="呼出紧凑型 Alt+V 剪贴板浮窗">Alt+V 浮窗</button>
               </div>
@@ -121,12 +120,11 @@
               <div id="cand-window-preview" class="cand-window">
                 <div class="cand-top-row">
                   <svg class="cand-mini-logo" viewBox="0 0 100 100" aria-hidden="true">
-                    <rect class="logo-tile" x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
-                    <rect class="logo-grid" x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
-                    <line class="logo-grid" x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
-                    <line class="logo-grid" x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
-                    <circle class="logo-dot" cx="77" cy="77" r="10" fill="#E66E33" />
-                  </svg>
+            <rect class="logo-paper" x="2" y="2" width="96" height="96" fill="none" />
+            <rect class="logo-frame" x="9" y="9" width="82" height="82" fill="none" stroke="currentColor" stroke-width="6" />
+            <path class="logo-grid" d="M50 12V88M12 50H88" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" />
+            <rect class="logo-dot" x="38" y="38" width="24" height="24" fill="#B4552D" />
+          </svg>
                   <span id="preview-composing" class="cand-composing">wanshang<span class="cand-caret">|</span></span>
                 </div>
                 <div class="cand-bottom-strip">
@@ -145,12 +143,11 @@
               <!-- Shift Mode-Switch Caret Toast (Mockup 2 #5) -->
               <div id="shift-caret-toast" class="shift-caret-toast" aria-live="polite">
                 <svg class="toast-mini-logo" viewBox="0 0 100 100" aria-hidden="true">
-                  <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
-                  <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
-                  <line x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
-                  <line x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
-                  <circle cx="77" cy="77" r="10" fill="#E66E33" />
-                </svg>
+            <rect class="logo-paper" x="2" y="2" width="96" height="96" fill="none" />
+            <rect class="logo-frame" x="9" y="9" width="82" height="82" fill="none" stroke="currentColor" stroke-width="6" />
+            <path class="logo-grid" d="M50 12V88M12 50H88" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" />
+            <rect class="logo-dot" x="38" y="38" width="24" height="24" fill="#B4552D" />
+          </svg>
                 <span id="shift-toast-label">中</span>
               </div>
 
@@ -279,20 +276,19 @@
 
           <!-- TAB: 皮肤外观 (Includes Light #1 & Dark #2 Candidate Window Showcase) -->
           <section class="tab-pane" data-pane="theme">
-            <h2 class="pane-title">皮肤外观与明暗变体</h2>
+            <h2 class="pane-title">皮肤外观</h2>
 
             <div class="dual-cand-showcase">
               <div class="showcase-box">
-                <span class="showcase-label">浅色温润米白 · 候选窗</span>
-                <div class="cand-window is-light-demo">
+                <span id="showcase-light-label" class="showcase-label">奶油方格 · 浅色候选窗</span>
+                <div class="cand-window is-light-demo" data-tone="light">
                   <div class="cand-top-row">
                     <svg class="cand-mini-logo" viewBox="0 0 100 100">
-                      <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
-                      <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
-                      <line x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
-                      <line x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
-                      <circle cx="77" cy="77" r="10" fill="#E66E33" />
-                    </svg>
+            <rect class="logo-paper" x="2" y="2" width="96" height="96" fill="none" />
+            <rect class="logo-frame" x="9" y="9" width="82" height="82" fill="none" stroke="currentColor" stroke-width="6" />
+            <path class="logo-grid" d="M50 12V88M12 50H88" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" />
+            <rect class="logo-dot" x="38" y="38" width="24" height="24" fill="#B4552D" />
+          </svg>
                     <span class="cand-composing">wanshang'hao<span class="cand-caret">|</span></span>
                   </div>
                   <div class="cand-bottom-strip">
@@ -305,16 +301,15 @@
               </div>
 
               <div class="showcase-box">
-                <span class="showcase-label">深色暗夜珊瑚 · 候选窗</span>
-                <div class="cand-window is-dark">
+                <span id="showcase-dark-label" class="showcase-label">奶油方格 · 深色候选窗</span>
+                <div class="cand-window is-dark" data-tone="dark">
                   <div class="cand-top-row">
                     <svg class="cand-mini-logo" viewBox="0 0 100 100">
-                      <rect x="2" y="2" width="96" height="96" rx="22" fill="#E07A5F" />
-                      <rect x="21" y="21" width="58" height="58" fill="none" stroke="#1F2633" stroke-width="8" />
-                      <line x1="50" y1="22" x2="50" y2="78" stroke="#1F2633" stroke-width="7" />
-                      <line x1="22" y1="50" x2="78" y2="50" stroke="#1F2633" stroke-width="7" />
-                      <circle cx="77" cy="77" r="10" fill="#FFF4E6" />
-                    </svg>
+            <rect class="logo-paper" x="2" y="2" width="96" height="96" fill="none" />
+            <rect class="logo-frame" x="9" y="9" width="82" height="82" fill="none" stroke="currentColor" stroke-width="6" />
+            <path class="logo-grid" d="M50 12V88M12 50H88" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" />
+            <rect class="logo-dot" x="38" y="38" width="24" height="24" fill="#B4552D" />
+          </svg>
                     <span class="cand-composing">fangcun<span class="cand-caret">|</span></span>
                   </div>
                   <div class="cand-bottom-strip">
@@ -328,23 +323,23 @@
             </div>
 
             <div class="section-card" style="margin-top: 14px">
-              <h3 class="sub-heading">主题色预设</h3>
-              <div id="skin-group" class="skin-grid">
-                <button class="skin-option" data-skin="warm_grid" type="button">
-                  <span class="skin-swatch" style="background: #2B5B3C"></span>
-                  <span>温润松绿 · 米白田字格</span>
+              <h3 class="sub-heading">四套直角皮肤</h3>
+              <div id="skin-group" class="skin-grid" aria-label="选择皮肤">
+                <button class="skin-option" data-skin="square_cream" type="button" aria-pressed="false">
+                  <span class="skin-swatch" data-swatch="square_cream" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                  <span>奶油方格</span>
                 </button>
-                <button class="skin-option" data-skin="native_light" type="button">
-                  <span class="skin-swatch" style="background: #3A6B4C"></span>
-                  <span>原生轻白</span>
+                <button class="skin-option" data-skin="square_aluminum" type="button" aria-pressed="false">
+                  <span class="skin-swatch" data-swatch="square_aluminum" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                  <span>铝银机械</span>
                 </button>
-                <button class="skin-option" data-skin="mint" type="button">
-                  <span class="skin-swatch" style="background: #1F8A68"></span>
-                  <span>薄荷清风</span>
+                <button class="skin-option" data-skin="square_amber" type="button" aria-pressed="false">
+                  <span class="skin-swatch" data-swatch="square_amber" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                  <span>墨黑琥珀</span>
                 </button>
-                <button class="skin-option" data-skin="deep_blue" type="button">
-                  <span class="skin-swatch" style="background: #E07A5F"></span>
-                  <span>深夜珊瑚</span>
+                <button class="skin-option" data-skin="square_jade" type="button" aria-pressed="false">
+                  <span class="skin-swatch" data-swatch="square_jade" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                  <span>翡翠磨砂</span>
                 </button>
               </div>
 
@@ -485,7 +480,7 @@
             <div class="settings-list-card">
               <div class="setting-row">
                 <span class="setting-label">当前版本</span>
-                <span class="setting-value-tag">v0.3.0 (Windows x64 · TSF + Tauri v2)</span>
+                <span class="setting-value-tag">v0.4.0 (Windows x64 · TSF + Tauri v2)</span>
               </div>
               <div class="setting-row">
                 <span class="setting-label">核心特性</span>
@@ -512,12 +507,11 @@
           <div class="altv-header" data-tauri-drag-region>
             <div class="altv-brand" data-tauri-drag-region>
               <svg class="altv-logo" viewBox="0 0 100 100" aria-hidden="true">
-                <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
-                <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
-                <line x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
-                <line x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
-                <circle cx="77" cy="77" r="10" fill="#E66E33" />
-              </svg>
+            <rect class="logo-paper" x="2" y="2" width="96" height="96" fill="none" />
+            <rect class="logo-frame" x="9" y="9" width="82" height="82" fill="none" stroke="currentColor" stroke-width="6" />
+            <path class="logo-grid" d="M50 12V88M12 50H88" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" />
+            <rect class="logo-dot" x="38" y="38" width="24" height="24" fill="#B4552D" />
+          </svg>
               <span>剪贴板</span>
             </div>
             <button id="altv-close" class="altv-close-btn" type="button" title="关闭 (Esc)">×</button>

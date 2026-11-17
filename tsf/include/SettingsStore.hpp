@@ -12,7 +12,7 @@ struct AppSettings {
     InputScheme scheme = InputScheme::Flypy;
     bool mixedInput = true;
     bool chinesePunctuation = true;
-    SkinPreset skin = SkinPreset::WarmGrid;
+    SkinPreset skin = SkinPreset::SquareCream;
     ThemeMode themeMode = ThemeMode::System;
     bool darkMode = false; // legacy / explicit override when themeMode != System
     int firstCandidateSize = 20;
@@ -24,6 +24,7 @@ struct AppSettings {
     bool capsLockBypass = true;
     int pageSize = 7;
     bool wheelPaging = true;
+    bool clipboardEnabled = true; // Preserve the companion listener preference on fallback edits.
 };
 
 class SettingsStore {
