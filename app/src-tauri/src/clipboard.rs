@@ -1,10 +1,13 @@
 use crate::settings::data_dir;
+use crate::sync_manager::ShareManager;
+use crate::sync_windows::{self, ClipboardSnapshot};
+#[cfg(not(target_os = "windows"))]
 use arboard::Clipboard;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
 const MAX_UNPINNED_ITEMS: usize = 200;
@@ -118,12 +121,39 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-pub fn start_watcher(app: AppHandle, state: Arc<Mutex<ClipboardState>>) {
+fn read_local_clipboard() -> Result<ClipboardSnapshot, &'static str> {
+    #[cfg(target_os = "windows")]
+    {
+        sync_windows::read_snapshot()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let text = Clipboard::new()
+            .and_then(|mut cb| cb.get_text())
+            .map_err(|_| "无法读取系统剪贴板")?;
+        Ok(ClipboardSnapshot {
+            sequence: 0,
+            text: if sync_windows::is_pairing_material(&text) {
+                None
+            } else {
+                Some(text)
+            },
+        })
+    }
+}
+
+pub fn start_watcher(app: AppHandle, state: Arc<Mutex<ClipboardState>>, share: Arc<ShareManager>) {
     std::thread::spawn(move || {
-        // Seed initial clipboard text without emitting duplicates if already persisted.
-        let mut clipboard = Clipboard::new().ok();
-        if let Some(cb) = clipboard.as_mut() {
-            if let Ok(initial) = cb.get_text() {
+        let mut last_sequence = sync_windows::sequence();
+        // Startup seeding stays local. Loading history or starting the app never uploads it.
+        let initially_enabled = state.lock().map(|guard| guard.enabled).unwrap_or(false);
+        if let Ok(snapshot) = if initially_enabled {
+            read_local_clipboard()
+        } else {
+            Err("监听已暂停")
+        } {
+            last_sequence = snapshot.sequence;
+            if let Some(initial) = snapshot.text {
                 let mut guard = state.lock().unwrap();
                 if guard.enabled && !initial.trim().is_empty() && guard.items.is_empty() {
                     if guard.record_text(initial, "windows") {
@@ -134,27 +164,47 @@ pub fn start_watcher(app: AppHandle, state: Arc<Mutex<ClipboardState>>) {
                 }
             }
         }
-
         loop {
             std::thread::sleep(Duration::from_millis(500));
+            let observed_at = Instant::now();
             let enabled = { state.lock().unwrap().enabled };
             if !enabled {
+                // Copies made while paused are not backfilled when monitoring resumes.
+                last_sequence = sync_windows::sequence();
                 continue;
             }
-            if clipboard.is_none() {
-                clipboard = Clipboard::new().ok();
+            #[cfg(target_os = "windows")]
+            if sync_windows::sequence() == last_sequence {
+                continue;
             }
-            let Some(cb) = clipboard.as_mut() else {
+            let Ok(snapshot) = read_local_clipboard() else {
                 continue;
             };
-            if let Ok(text) = cb.get_text() {
-                let mut guard = state.lock().unwrap();
-                if guard.record_text(text, "windows") {
-                    let ordered = guard.ordered_items();
-                    drop(guard);
-                    let _ = app.emit("clipboard://changed", ordered);
-                }
+            #[cfg(target_os = "windows")]
+            if snapshot.sequence == last_sequence {
+                continue;
             }
+            last_sequence = snapshot.sequence;
+            let Some(text) = snapshot.text else {
+                continue;
+            };
+            let ordered = {
+                let mut guard = state.lock().unwrap();
+                if guard.record_text(text.clone(), "windows") {
+                    Some(guard.ordered_items())
+                } else {
+                    None
+                }
+            };
+            if let Some(ordered) = ordered {
+                let _ = app.emit("clipboard://changed", ordered);
+            }
+            // A new OS copy is independent of list refresh/dedup/pin/delete. Session start time
+            // plus the activation sequence rejects startup/enable races and old clipboard text.
+            #[cfg(target_os = "windows")]
+            share.local_copy(&app, text, snapshot.sequence, observed_at);
+            #[cfg(not(target_os = "windows"))]
+            let _ = (&share, observed_at, last_sequence);
         }
     });
 }

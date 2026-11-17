@@ -29,6 +29,23 @@ export interface ClipboardItem {
   source: string;
 }
 
+interface SharedItem {
+  id: string; senderId: string; senderName: string; createdAt: number; receivedAt: number; expiresAt: number; text: string;
+}
+interface ShareSnapshot {
+  revision: string; viewRevision: string; server: string; topic: string; senderName: string;
+  enabled: boolean; autoSend: boolean; tokenSaved: boolean; keySaved: boolean; keyId: string;
+  status: string; error: string | null; gap: boolean; needsReset: boolean; items: SharedItem[];
+}
+let shareState: ShareSnapshot | null = null;
+let shareFormDirty = false;
+let shareBusy = false;
+let sharePausing = false;
+let lastShareViewRevision = 0n;
+let shareDraftOrigin = "";
+let shareUiError: string | null = null;
+let altvShared = false;
+
 const SCHEME_LABELS: Record<string, string> = {
   flypy: "小鹤双拼",
   pinyin: "全拼",
@@ -154,6 +171,21 @@ function buildClipboardRow(item: ClipboardItem): HTMLElement {
     renderClipboard();
   });
 
+  const sendBtn = document.createElement("button");
+  sendBtn.type = "button";
+  sendBtn.className = "clip-icon-btn share-local-send";
+  sendBtn.title = "发送到已配对设备";
+  sendBtn.setAttribute("aria-label", "发送到已配对设备");
+  sendBtn.textContent = "↗";
+  sendBtn.disabled = !shareState?.enabled || shareFormDirty || shareBusy;
+  sendBtn.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const revision = shareState?.revision;
+    if (!revision) return;
+    const ok = await shareAction(() => invoke("clipboard_share_send_item", { id: item.id, revision }));
+    if (ok) showToast("已加入发送队列");
+  });
+  actions.appendChild(sendBtn);
   actions.appendChild(pinBtn);
   actions.appendChild(delBtn);
 
@@ -187,15 +219,22 @@ function buildClipboardRow(item: ClipboardItem): HTMLElement {
 function renderListInto(container: HTMLElement | null, query: string): void {
   if (!container) return;
   const q = query.trim().toLowerCase();
+  const local = container.id === "altv-list" && altvShared ? [] : clipItems;
   const filtered = q
-    ? clipItems.filter((item) => item.text.toLowerCase().includes(q))
-    : clipItems;
+    ? local.filter((item) => item.text.toLowerCase().includes(q))
+    : local;
 
   container.innerHTML = "";
-  if (filtered.length === 0) {
+  const remote = container.id === "altv-list" && altvShared
+    ? (shareState?.items ?? []).filter((item) => !q || item.text.toLowerCase().includes(q) || item.senderName.toLowerCase().includes(q))
+    : [];
+  for (const item of remote) container.appendChild(buildSharedRow(item));
+  if (filtered.length === 0 && remote.length === 0) {
     const empty = document.createElement("div");
     empty.className = "clip-empty-state";
-    empty.textContent = q ? "没有匹配的剪贴板内容" : "暂无剪贴板记录 — 复制任意文本后自动收录";
+    empty.textContent = q ? "没有匹配的剪贴板内容"
+      : container.id === "altv-list" && altvShared ? "暂无共享内容，请从另一台已配对设备发送"
+      : "暂无剪贴板记录 — 复制任意文本后自动收录";
     container.appendChild(empty);
     return;
   }
@@ -629,3 +668,185 @@ async function init(): Promise<void> {
 }
 
 void init();
+
+function selectAltVView(shared: boolean): void {
+  altvShared = shared;
+  document.getElementById("altv-local-tab")!.setAttribute("aria-selected", String(!shared));
+  document.getElementById("altv-shared-tab")!.setAttribute("aria-selected", String(shared));
+  const localActions = document.getElementById("altv-clear")!.closest(".clip-footer-left") as HTMLElement | null;
+  if (localActions) localActions.hidden = shared;
+  renderClipboard();
+}
+function shareInput(id: string): HTMLInputElement { return document.getElementById(id) as HTMLInputElement; }
+function shareOrigin(value: string): string {
+  try { const url = new URL(value); return url.protocol === "https:" ? url.origin : ""; } catch { return ""; }
+}
+function selectClipboardView(shared: boolean): void {
+  document.getElementById("clip-local-panel")!.hidden = shared;
+  document.getElementById("clip-share-panel")!.hidden = !shared;
+  document.getElementById("clip-local-tab")!.setAttribute("aria-selected", String(!shared));
+  document.getElementById("clip-shared-tab")!.setAttribute("aria-selected", String(shared));
+}
+function shareError(message: string): void {
+  const element = document.getElementById("share-error")!;
+  element.textContent = message; element.hidden = !message;
+}
+function applyShareSnapshot(value: ShareSnapshot): void {
+  if (!/^\d+$/.test(value.viewRevision)) { shareError("共享组件版本不匹配，请更新桌面伴侣"); return; }
+  const revision = BigInt(value.viewRevision);
+  if (revision < lastShareViewRevision) return;
+  lastShareViewRevision = revision;
+  const initial = shareState === null;
+  shareState = value;
+  if (initial && (!value.keySaved || !value.tokenSaved || value.needsReset)) {
+    (document.getElementById("share-settings") as HTMLDetailsElement).open = true;
+  }
+  renderShare();
+  renderClipboard();
+}
+function renderShare(): void {
+  const status = document.getElementById("share-status");
+  if (!status) return;
+  status.textContent = shareState?.status ?? "共享组件尚未连接";
+  shareInput("share-enabled").checked = shareState?.enabled ?? false;
+  shareInput("share-auto").checked = shareState?.autoSend ?? false;
+  if (shareState && !shareFormDirty) {
+    shareInput("share-server").value = shareState.server;
+    shareInput("share-topic").value = shareState.topic;
+    shareInput("share-name").value = shareState.senderName;
+    shareDraftOrigin = shareOrigin(shareState.server);
+  }
+  const originMatches = !!shareState && shareOrigin(shareInput("share-server").value) === shareOrigin(shareState.server);
+  document.getElementById("share-token-state")!.textContent = shareState?.tokenSaved && originMatches
+    ? "已加密保存（不回显）" : originMatches ? "未保存" : "新站点需要本机独立 Token";
+  document.getElementById("share-key-state")!.textContent = shareState?.keySaved
+    ? `已加密保存 · ${shareState.keyId.slice(0, 8)}` : "未保存";
+  document.getElementById("share-gap")!.hidden = !shareState?.gap;
+  shareError(shareUiError ?? shareState?.error ?? "");
+  const enabled = !!shareState?.enabled && !shareFormDirty && !shareBusy;
+  shareInput("share-enabled").disabled = shareBusy || shareFormDirty || !shareState || !!shareState.needsReset;
+  shareInput("share-auto").disabled = shareBusy || shareFormDirty || !shareState || !!shareState.needsReset;
+  (document.getElementById("share-send-current") as HTMLButtonElement).disabled = !enabled;
+  for (const id of ["share-save", "share-import", "share-new-key", "share-export", "share-reset"]) {
+    (document.getElementById(id) as HTMLButtonElement).disabled = shareBusy || !shareState;
+  }
+  (document.getElementById("share-export") as HTMLButtonElement).disabled ||= !shareState?.keySaved || shareFormDirty;
+  (document.getElementById("share-new-key") as HTMLButtonElement).disabled ||= shareFormDirty || !!shareState?.needsReset;
+  const list = document.getElementById("share-list")!;
+  list.replaceChildren();
+  for (const item of shareState?.items ?? []) list.appendChild(buildSharedRow(item));
+  if (!list.childElementCount) {
+    const empty = document.createElement("div"); empty.className = "clip-empty-state";
+    empty.textContent = "暂无共享内容。配对并开启后，可从另一台设备发送文字。"; list.appendChild(empty);
+  }
+}
+function buildSharedRow(item: SharedItem): HTMLElement {
+  const card = document.createElement("div"); card.className = "clip-card-item";
+  const main = document.createElement("div"); main.className = "clip-card-main";
+  const text = document.createElement("div"); text.className = "clip-card-text"; text.textContent = item.text;
+  const source = document.createElement("div"); source.className = "share-source";
+  source.textContent = `${item.senderName} · 共享 · ${formatRelativeTime(item.createdAt)}`;
+  main.append(text, source);
+  const remove = document.createElement("button"); remove.type = "button"; remove.className = "clip-icon-btn";
+  remove.textContent = "×"; remove.title = "删除本机共享记录"; remove.setAttribute("aria-label", "删除本机共享记录");
+  remove.addEventListener("click", async (event) => {
+    event.stopPropagation(); await shareAction(() => invoke<ShareSnapshot>("clipboard_share_remove", { id: item.id }));
+  });
+  card.append(main, remove);
+  card.addEventListener("click", async () => {
+    if (await shareAction(() => invoke("clipboard_share_copy", { id: item.id }))) {
+      showToast("已复制共享内容");
+      if (appMode === "clipboard") void invoke("hide_clipboard_window").catch(() => {});
+    }
+  });
+  return card;
+}
+async function shareAction(operation: () => Promise<unknown>): Promise<boolean> {
+  if (shareBusy) return false;
+  shareBusy = true; shareUiError = null; renderShare(); renderClipboard();
+  try {
+    const result = await operation();
+    if (result && typeof result === "object" && "viewRevision" in result) applyShareSnapshot(result as ShareSnapshot);
+    return true;
+  } catch (error) {
+    // Rust returns allowlisted local errors only. Never render provider response bodies or inputs.
+    const message = typeof error === "string" ? error : "共享操作失败，请检查设置";
+    showToast(message);
+    try { applyShareSnapshot(await invoke<ShareSnapshot>("clipboard_share_snapshot")); } catch { /* Preserve visible state. */ }
+    shareUiError = message;
+    return false;
+  } finally { shareBusy = false; renderShare(); renderClipboard(); }
+}
+function clearShareSecrets(): void {
+  shareInput("share-token").value = ""; shareInput("share-key").value = "";
+}
+function dirtyShareForm(): void {
+  shareFormDirty = true;
+  const origin = shareOrigin(shareInput("share-server").value);
+  if (origin !== shareDraftOrigin) {
+    // An old origin's *draft* token is not authorization for a newly pasted server either.
+    shareInput("share-token").value = ""; shareDraftOrigin = origin;
+  }
+  if (shareState?.enabled && !sharePausing) {
+    sharePausing = true;
+    void invoke<ShareSnapshot>("clipboard_share_enabled", { enabled: false })
+      .then(applyShareSnapshot).catch(() => showToast("请先关闭共享再修改连接信息"))
+      .finally(() => { sharePausing = false; renderShare(); });
+  }
+  renderShare(); renderClipboard();
+}
+async function initClipboardShare(): Promise<void> {
+  document.getElementById("altv-local-tab")!.addEventListener("click", () => selectAltVView(false));
+  document.getElementById("altv-shared-tab")!.addEventListener("click", () => selectAltVView(true));
+  document.getElementById("clip-local-tab")!.addEventListener("click", () => selectClipboardView(false));
+  document.getElementById("clip-shared-tab")!.addEventListener("click", () => selectClipboardView(true));
+  document.getElementById("share-open-settings")!.addEventListener("click", () => { switchTab("clipboard"); selectClipboardView(true); });
+  for (const id of ["share-server", "share-topic", "share-name", "share-token", "share-key"]) {
+    shareInput(id).addEventListener("input", dirtyShareForm);
+  }
+  shareInput("share-enabled").addEventListener("change", async () => {
+    const enabled = shareInput("share-enabled").checked;
+    await shareAction(() => invoke<ShareSnapshot>("clipboard_share_enabled", { enabled }));
+  });
+  shareInput("share-auto").addEventListener("change", async () => {
+    const enabled = shareInput("share-auto").checked;
+    await shareAction(() => invoke<ShareSnapshot>("clipboard_share_auto_send", { enabled }));
+  });
+  document.getElementById("share-send-current")!.addEventListener("click", async () => {
+    if (!shareState) return;
+    if (await shareAction(() => invoke("clipboard_share_send_current", { revision: shareState!.revision }))) showToast("已加入发送队列");
+  });
+  document.getElementById("share-save")!.addEventListener("click", async () => {
+    const draft = { server: shareInput("share-server").value, topic: shareInput("share-topic").value,
+      senderName: shareInput("share-name").value, token: shareInput("share-token").value || null,
+      key: shareInput("share-key").value || null };
+    if (await shareAction(() => invoke<ShareSnapshot>("clipboard_share_save", { draft }))) {
+      shareFormDirty = false; clearShareSecrets(); renderShare(); showToast("已保存，开启共享后连接");
+    }
+  });
+  document.getElementById("share-new-key")!.addEventListener("click", async () => {
+    if (shareState?.keySaved && !window.confirm("生成新密钥后，其他设备需重新导入配对资料。继续吗？")) return;
+    if (await shareAction(() => invoke<ShareSnapshot>("clipboard_share_generate_key"))) { clearShareSecrets(); showToast("新密钥已加密保存"); }
+  });
+  document.getElementById("share-export")!.addEventListener("click", async () => {
+    if (await shareAction(() => invoke("clipboard_share_export"))) showToast("配对资料已复制，请只粘贴到自己的设备");
+  });
+  document.getElementById("share-import")!.addEventListener("click", async () => {
+    const field = document.getElementById("share-pairing") as HTMLInputElement;
+    if (await shareAction(() => invoke<ShareSnapshot>("clipboard_share_import", { pairing: field.value }))) {
+      field.value = ""; shareFormDirty = false; clearShareSecrets(); renderShare(); showToast("配对资料已保存，请检查本机 Token 后开启共享");
+    }
+  });
+  document.getElementById("share-reset")!.addEventListener("click", async () => {
+    if (!window.confirm("重置本机共享配置和共享记录？原本机剪贴板历史保留。")) return;
+    if (await shareAction(() => invoke<ShareSnapshot>("clipboard_share_reset"))) {
+      shareFormDirty = false; clearShareSecrets(); renderShare();
+    }
+  });
+  try {
+    await listen<ShareSnapshot>("clipboard-share://changed", (event) => applyShareSnapshot(event.payload));
+    applyShareSnapshot(await invoke<ShareSnapshot>("clipboard_share_snapshot"));
+  } catch { shareUiError = "共享组件不可用，请在最新方寸桌面伴侣内打开"; }
+  renderShare();
+}
+void initClipboardShare();

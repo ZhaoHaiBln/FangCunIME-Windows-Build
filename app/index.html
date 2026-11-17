@@ -389,8 +389,12 @@
               <h2 class="pane-title">剪贴板历史</h2>
               <span class="kbd-tag">Alt+V 快速呼出</span>
             </div>
+            <div class="clip-view-tabs" role="tablist" aria-label="剪贴板分类">
+              <button id="clip-local-tab" type="button" role="tab" aria-selected="true">本机历史</button>
+              <button id="clip-shared-tab" type="button" role="tab" aria-selected="false">跨设备共享</button>
+            </div>
 
-            <div class="clip-panel-card">
+            <div id="clip-local-panel" class="clip-panel-card">
               <div class="clip-panel-search">
                 <svg class="search-icon" viewBox="0 0 20 20" fill="none">
                   <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
@@ -413,6 +417,45 @@
                 <span class="clip-footer-hint">点击卡片即可复制</span>
               </div>
             </div>
+            <div id="clip-share-panel" class="share-panel" hidden>
+              <div class="settings-list-card">
+                <label class="setting-row">
+                  <div><span class="setting-label">跨设备共享</span><p id="share-status" class="muted-sub">共享已关闭</p></div>
+                  <input id="share-enabled" class="ui-switch" type="checkbox" aria-label="开启跨设备共享" />
+                </label>
+                <label class="setting-row">
+                  <div><span class="setting-label">自动发送新复制</span><p class="muted-sub">仅发送开启后的新内容，随本机监听一起暂停</p></div>
+                  <input id="share-auto" class="ui-switch" type="checkbox" />
+                </label>
+              </div>
+              <p id="share-error" class="share-error" role="alert" hidden></p>
+              <p id="share-gap" class="share-error" hidden>存在同步缺口，部分离线内容可能未恢复。</p>
+              <div class="share-toolbar">
+                <button id="share-send-current" class="mini-pill" type="button">发送当前剪贴板</button>
+                <span class="muted-sub">点击条目复制，再 Ctrl+V 粘贴 · 保留24小时</span>
+              </div>
+              <div id="share-list" class="clip-cards-list share-list"></div>
+              <details id="share-settings" class="section-card share-settings">
+                <summary>连接与配对设置</summary>
+                <p class="muted-sub">首台生成密钥并复制配对资料，另一台导入；两端各填本机 Token 并保存，再手动开启共享。自动发送单独开启。</p>
+                <div class="share-fields">
+                  <label>中转服务<input id="share-server" type="url" maxlength="2048" placeholder="https://clip.kivohub.site" spellcheck="false" autocomplete="off" /></label>
+                  <label>话题<input id="share-topic" type="text" maxlength="64" placeholder="fangcun-clipboard" spellcheck="false" autocomplete="off" /></label>
+                  <label>本机名称<input id="share-name" type="text" maxlength="64" placeholder="我的电脑" autocomplete="off" /></label>
+                  <label>本机独立 Token <span id="share-token-state" class="muted-sub">未保存</span><input id="share-token" type="password" maxlength="8192" placeholder="留空保留本机已保存的 Token" autocomplete="new-password" /></label>
+                  <label class="share-wide">共享密钥 <span id="share-key-state" class="muted-sub">未保存</span><input id="share-key" type="password" maxlength="43" placeholder="导入配对资料，或填写43位共享密钥" autocomplete="new-password" /></label>
+                </div>
+                <div class="share-toolbar">
+                  <button id="share-save" class="mini-pill" type="button">保存连接设置</button>
+                  <button id="share-new-key" class="mini-pill" type="button">生成新密钥</button>
+                  <button id="share-export" class="mini-pill" type="button">复制配对资料</button>
+                </div>
+                <label class="share-pairing-label">从另一台设备导入配对资料<input id="share-pairing" type="password" maxlength="8192" spellcheck="false" autocomplete="new-password" placeholder="粘贴 fangcun-clip-v1: 开头的配对资料" /></label>
+                <button id="share-import" class="mini-pill" type="button">导入并保存配对</button>
+                <p class="muted-sub">密钥和 Token 由 Windows 账户加密保护。配对资料包含密钥，请只交给自己的设备。</p>
+                <button id="share-reset" class="clip-link-btn share-reset" type="button">重置共享配置</button>
+              </details>
+            </div>
           </section>
 
           <!-- TAB: AI 助手 -->
@@ -421,10 +464,10 @@
             <div class="settings-list-card">
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">Android 局域网剪贴板同步</div>
-                  <div class="muted-sub">与方寸输入法 Android 端共享置顶剪贴板与常用语</div>
+                  <div class="setting-label">手机与电脑剪贴板共享</div>
+                  <div class="muted-sub">跨网络加密互传文字，在剪贴板中配对和管理</div>
                 </div>
-                <span class="setting-value-tag">即将推出</span>
+                <button id="share-open-settings" class="mini-pill" type="button">前往设置</button>
               </div>
               <div class="setting-row">
                 <div>
@@ -442,7 +485,7 @@
             <div class="settings-list-card">
               <div class="setting-row">
                 <span class="setting-label">当前版本</span>
-                <span class="setting-value-tag">v0.2.0 (Windows x64 · TSF + Tauri v2)</span>
+                <span class="setting-value-tag">v0.3.0 (Windows x64 · TSF + Tauri v2)</span>
               </div>
               <div class="setting-row">
                 <span class="setting-label">核心特性</span>
@@ -488,6 +531,10 @@
             <input id="altv-search" type="search" placeholder="搜索剪贴板" autocomplete="off" />
           </div>
 
+          <div class="clip-view-tabs altv-view-tabs" role="tablist" aria-label="快速剪贴板分类">
+            <button id="altv-local-tab" type="button" role="tab" aria-selected="true">本机</button>
+            <button id="altv-shared-tab" type="button" role="tab" aria-selected="false">共享</button>
+          </div>
           <div id="altv-list" class="altv-list"></div>
 
           <div class="altv-footer">

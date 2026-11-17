@@ -1,10 +1,15 @@
 mod clipboard;
 mod settings;
+mod sync_manager;
+mod sync_protocol;
+mod sync_transport;
+mod sync_windows;
 
 use arboard::Clipboard;
 use clipboard::{ClipboardItem, ClipboardState};
 use settings::AppSettings;
 use std::sync::{Arc, Mutex};
+use sync_manager::{ShareDraft, ShareManager, ShareSnapshot};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -13,6 +18,114 @@ use tauri::{
 
 struct AppState {
     clipboard: Arc<Mutex<ClipboardState>>,
+    share: Arc<ShareManager>,
+}
+
+#[tauri::command]
+async fn clipboard_share_snapshot(state: State<'_, AppState>) -> Result<ShareSnapshot, String> {
+    state.share.snapshot()
+}
+#[tauri::command]
+async fn clipboard_share_save(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    draft: ShareDraft,
+) -> Result<ShareSnapshot, String> {
+    state.share.save(&app, draft)
+}
+#[tauri::command]
+async fn clipboard_share_enabled(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<ShareSnapshot, String> {
+    state.share.set_enabled(&app, enabled)
+}
+#[tauri::command]
+async fn clipboard_share_auto_send(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<ShareSnapshot, String> {
+    state.share.set_auto_send(&app, enabled)
+}
+#[tauri::command]
+async fn clipboard_share_generate_key(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ShareSnapshot, String> {
+    state.share.generate_key(&app)
+}
+#[tauri::command]
+async fn clipboard_share_import(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    pairing: String,
+) -> Result<ShareSnapshot, String> {
+    state.share.import_pairing(&app, &pairing)
+}
+#[tauri::command]
+async fn clipboard_share_export(state: State<'_, AppState>) -> Result<(), String> {
+    let text = state.share.pairing_text()?;
+    sync_windows::write_excluded(&text).map_err(str::to_string)?;
+    if let Ok(mut clipboard) = state.clipboard.lock() {
+        clipboard.last_seen_text = text;
+    }
+    Ok(())
+}
+#[tauri::command]
+async fn clipboard_share_send_current(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    revision: String,
+) -> Result<(), String> {
+    let text = sync_windows::read_snapshot()
+        .map_err(str::to_string)?
+        .text
+        .ok_or("当前剪贴板为空或标记为敏感，未发送")?;
+    state.share.send_text(&app, text, &revision)
+}
+#[tauri::command]
+async fn clipboard_share_send_item(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    revision: String,
+) -> Result<(), String> {
+    let text = {
+        let clipboard = state.clipboard.lock().map_err(|_| "本机剪贴板状态不可用")?;
+        clipboard
+            .items
+            .iter()
+            .find(|item| item.id == id && item.source == "windows")
+            .map(|item| item.text.clone())
+            .ok_or("该本机条目不存在或不能再次转发")?
+    };
+    state.share.send_text(&app, text, &revision)
+}
+#[tauri::command]
+async fn clipboard_share_copy(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let text = state.share.shared_text(&id)?;
+    sync_windows::write_excluded(&text).map_err(str::to_string)?;
+    if let Ok(mut clipboard) = state.clipboard.lock() {
+        clipboard.last_seen_text = text;
+    }
+    Ok(())
+}
+#[tauri::command]
+async fn clipboard_share_remove(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<ShareSnapshot, String> {
+    state.share.remove_item(&app, &id)
+}
+#[tauri::command]
+async fn clipboard_share_reset(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ShareSnapshot, String> {
+    state.share.reset(&app)
 }
 
 #[tauri::command]
@@ -191,8 +304,7 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-static LAST_CLIPBOARD_SHOW_MS: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
+static LAST_CLIPBOARD_SHOW_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn now_epoch_ms() -> u64 {
     std::time::SystemTime::now()
@@ -209,8 +321,7 @@ fn toggle_clipboard_window(app: &AppHandle) {
         if visible && since_show > 350 {
             let _ = win.hide();
         } else {
-            LAST_CLIPBOARD_SHOW_MS
-                .store(now_epoch_ms(), std::sync::atomic::Ordering::Relaxed);
+            LAST_CLIPBOARD_SHOW_MS.store(now_epoch_ms(), std::sync::atomic::Ordering::Relaxed);
             let _ = win.show();
             let _ = win.unminimize();
             let _ = win.set_focus();
@@ -238,7 +349,9 @@ fn position_statusbar_near_taskbar(app: &AppHandle) {
             let margin_y = (12.0 * scale).round() as i32;
             let x = work.position.x + (work.size.width as i32) - bar_w - margin_x;
             let y = work.position.y + (work.size.height as i32) - bar_h - margin_y;
-            let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+            let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
+                x, y,
+            )));
         }
     }
 }
@@ -323,15 +436,23 @@ fn start_hotkey_listener(_app: AppHandle) {}
 pub fn run() {
     let clipboard_state = Arc::new(Mutex::new(ClipboardState::load()));
     let watcher_state = Arc::clone(&clipboard_state);
+    let share = ShareManager::load();
+    let share_watcher = Arc::clone(&share);
     let start_in_tray = std::env::args().any(|a| a == "--tray");
     let start_in_clipboard = std::env::args().any(|a| a == "--clipboard");
 
     tauri::Builder::default()
         .manage(AppState {
             clipboard: clipboard_state,
+            share,
         })
         .setup(move |app| {
-            clipboard::start_watcher(app.handle().clone(), watcher_state);
+            clipboard::start_watcher(
+                app.handle().clone(),
+                watcher_state,
+                Arc::clone(&share_watcher),
+            );
+            share_watcher.resume(app.handle());
             start_hotkey_listener(app.handle().clone());
 
             if start_in_clipboard {
@@ -340,8 +461,7 @@ pub fn run() {
                 show_main_window(app.handle());
             }
 
-            let open_item =
-                MenuItem::with_id(app, "open", "打开方寸设置", true, None::<&str>)?;
+            let open_item = MenuItem::with_id(app, "open", "打开方寸设置", true, None::<&str>)?;
             let clip_item =
                 MenuItem::with_id(app, "clipboard", "打开剪贴板 (Alt+V)", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出方寸伴侣", true, None::<&str>)?;
@@ -404,6 +524,18 @@ pub fn run() {
             get_clipboard_enabled,
             set_clipboard_enabled,
             set_english_mode,
+            clipboard_share_snapshot,
+            clipboard_share_save,
+            clipboard_share_enabled,
+            clipboard_share_auto_send,
+            clipboard_share_generate_key,
+            clipboard_share_import,
+            clipboard_share_export,
+            clipboard_share_send_current,
+            clipboard_share_send_item,
+            clipboard_share_copy,
+            clipboard_share_remove,
+            clipboard_share_reset,
         ])
         .run(tauri::generate_context!())
         .expect("error while running FangCunSettings");

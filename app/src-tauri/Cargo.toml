@@ -1,6 +1,6 @@
 [package]
 name = "fangcun-settings"
-version = "0.2.0"
+version = "0.3.0"
 description = "FangCun IME Settings & Clipboard Companion"
 authors = ["FangCunIME"]
 edition = "2021"
@@ -13,6 +13,16 @@ tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 arboard = "3"
+aes-gcm = "0.10"
+base64 = "0.22"
+sha2 = "0.10"
+rand = "0.8"
+zeroize = "1"
+fs2 = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "stream"] }
+tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
+futures-util = "0.3"
+httpdate = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
@@ -20,6 +30,9 @@ windows-sys = { version = "0.59", features = [
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
   "Win32_System_Registry",
+  "Win32_System_DataExchange",
+  "Win32_System_Memory",
+  "Win32_Security_Cryptography",
 ] }
 
 [profile.release]

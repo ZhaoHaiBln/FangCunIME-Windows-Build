@@ -270,8 +270,7 @@ pub fn is_windows_apps_dark() -> bool {
         RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ,
     };
     unsafe {
-        let subkey =
-            to_wide_null(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+        let subkey = to_wide_null(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
         let value_name = to_wide_null("AppsUseLightTheme");
         let mut hkey: HKEY = std::ptr::null_mut();
         if RegOpenKeyExW(HKEY_CURRENT_USER, subkey.as_ptr(), 0, KEY_READ, &mut hkey) != 0 {
