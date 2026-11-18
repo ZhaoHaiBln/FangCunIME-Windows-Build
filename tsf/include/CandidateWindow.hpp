@@ -95,6 +95,7 @@ private:
     std::string composing_;
     std::string lastGlowComposing_;
     std::vector<std::string> candidates_;
+    std::vector<float> horizontalCellWidths_;
     std::vector<RECT> candidateRects_;
     std::vector<size_t> candidateIndices_;
     RECT prevPageRect_{0, 0, 0, 0};

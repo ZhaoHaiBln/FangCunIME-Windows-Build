@@ -1032,7 +1032,7 @@ void SettingsWindow::onPaint() {
             ry += 42.0f;
         };
 
-        drawStepper(L"第一候选字号 (16–30)", std::to_wstring(settings_.firstCandidateSize) + L" pt",
+        drawStepper(L"第一候选字号 (16–30)", std::to_wstring(settings_.firstCandidateSize) + L" px",
                     ActionId::FirstSizeMinus, ActionId::FirstSizePlus);
         drawStepper(L"键帽字母字号 (14–30)", std::to_wstring(settings_.keyLetterSize) + L" pt",
                     ActionId::LetterSizeMinus, ActionId::LetterSizePlus);

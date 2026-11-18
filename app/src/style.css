@@ -1514,7 +1514,8 @@ input, textarea, code { user-select: text; }
 .sharp-icon[data-icon="chevron-right"] { --icon: url("/sharp-icons/chevron-right.svg"); }
 .cand-arrows { display: inline-flex; align-items: center; flex-shrink: 0; padding-left: 4px; }
 .cand-window .cand-bottom-strip { gap: 0; padding: 0; border-top: 0; overflow-x: auto; }
-.cand-window .cand-pill { border: 0; margin: 0; padding: 6px; white-space: nowrap; }
+.cand-window .cand-pill { border: 0; margin: 0; padding: 6px; align-items: center; white-space: nowrap; font-size: 17px; }
+.cand-window .cand-pill .cand-num { font-size: 9px; }
 .cand-window .cand-pill.is-selected {
   background: var(--ime-cand-active-bg); color: var(--ime-cand-active-text);
 }

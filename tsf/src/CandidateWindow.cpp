@@ -1,6 +1,7 @@
 #include "CandidateWindow.hpp"
 #include "DllMain.hpp"
 #include "SquareWindow.hpp"
+#include "fangcun/CandidateCellLayout.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -12,6 +13,17 @@ namespace {
 
 constexpr wchar_t kCandidateWndClass[] = L"FangCunCandidateWindowClass";
 constexpr wchar_t kUiFontFamily[] = L"Microsoft YaHei UI";
+constexpr float kCandidateTrailingPadding = 6.0f;
+constexpr float kAuxiliaryCodeWidth = 74.0f;
+constexpr float kPagerWidth = 40.0f;
+
+float candidateIndexInset(const SharpIme::WinMetrics& metrics) {
+    return metrics.collapseCandidateCells ? 11.0f : 6.0f;
+}
+
+float candidateIndexWidth(const SharpIme::WinMetrics& metrics) {
+    return metrics.useMonospaceCode ? 23.0f : 14.0f;
+}
 
 template <typename T>
 void safeRelease(T*& ptr) {
@@ -339,6 +351,15 @@ void CandidateWindow::recomputeHeaderBudget() {
     makeFormat(static_cast<float>(HeaderMetricsSpec::kOtherCandidateSp), DWRITE_FONT_WEIGHT_NORMAL, &secondaryFormat_);
     makeFormat(static_cast<float>(HeaderMetricsSpec::kCandidateIndexSp), DWRITE_FONT_WEIGHT_NORMAL, &indexFormat_, mono ? L"Consolas" : kUiFontFamily);
 
+    const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+    for (auto* format : {primaryFormat_, secondaryFormat_}) {
+        IDWriteInlineObject* ellipsis = nullptr;
+        if (format && SUCCEEDED(dwriteFactory_->CreateEllipsisTrimmingSign(format, &ellipsis))) {
+            format->SetTrimming(&trimming, ellipsis);
+            safeRelease(ellipsis);
+        }
+    }
+
     std::wstring probe = utf8ToWide(HeaderMetricsSpec::kMeasurementProbe);
     float hPrimary = measureTextHeightDip(dwriteFactory_, primaryFormat_, probe);
     float hSecondary = measureTextHeightDip(dwriteFactory_, secondaryFormat_, probe);
@@ -413,14 +434,20 @@ void CandidateWindow::recalculateSize() {
 
     const float codeWidth = measureTextWidthDip(dwriteFactory_, codeFormat_, utf8ToWide(composing_));
     singleCodeWidth_ = std::clamp(codeWidth + 25.0f, 82.0f, 190.0f);
-    const float pagerWidth = pages > 1 ? 40.0f : 0.0f;
+    const float pagerWidth = !vertical && pages > 1 ? kPagerWidth : 0.0f;
+    const float candidatePadding = candidateIndexInset(style) + candidateIndexWidth(style) + kCandidateTrailingPadding;
     float contentWidth = pagerWidth;
+    horizontalCellWidths_.clear();
+    if (!vertical) horizontalCellWidths_.reserve(end - start);
     for (size_t index = start; index < end; ++index) {
         const float wordWidth = measureTextWidthDip(dwriteFactory_, index == start ? primaryFormat_ : secondaryFormat_,
             utf8ToWide(candidates_[index]));
-        const float itemWidth = wordWidth + (style.useMonospaceCode ? 45.0f : 33.0f);
-        if (vertical) contentWidth = std::max(contentWidth, itemWidth + 64.0f);
-        else contentWidth += itemWidth;
+        const float itemWidth = std::ceil(wordWidth) + candidatePadding;
+        if (vertical) contentWidth = std::max(contentWidth, itemWidth + kAuxiliaryCodeWidth);
+        else {
+            horizontalCellWidths_.push_back(itemWidth);
+            contentWidth += itemWidth;
+        }
     }
     const float border = static_cast<float>(style.outerBorderWidthPx);
     const float shadow = static_cast<float>(style.hardShadowOffsetPx);
@@ -429,8 +456,12 @@ void CandidateWindow::recalculateSize() {
     if (single) contentWidth += singleCodeWidth_;
     else contentWidth = std::max(contentWidth, codeWidth + 64.0f);
     float totalHDp = totalHeight + border * 2.0f + shadow;
-    float clampedWDp = std::clamp(contentWidth, vertical ? 228.0f : 220.0f, vertical ? 440.0f : 760.0f)
-        + border * 2.0f + static_cast<float>(style.metroLeftBarWidthPx) + shadow;
+    const float fittedWidth = std::clamp(contentWidth, vertical ? 228.0f : 220.0f, vertical ? 440.0f : 760.0f);
+    if (single) singleCodeWidth_ = std::min(singleCodeWidth_, fittedWidth - pagerWidth - 70.0f);
+    if (!vertical) {
+        fitHorizontalCandidateWidths(horizontalCellWidths_, fittedWidth - pagerWidth - (single ? singleCodeWidth_ : 0.0f));
+    }
+    const float clampedWDp = fittedWidth + border * 2.0f + static_cast<float>(style.metroLeftBarWidthPx) + shadow;
 
     int newW = static_cast<int>(std::ceil(dpToPx(clampedWDp)));
     int newH = static_cast<int>(std::ceil(dpToPx(totalHDp)));
@@ -736,8 +767,8 @@ void CandidateWindow::onPaint() {
             if (alignRight) format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         };
         auto hitRect = [&](D2D1_RECT_F r) -> RECT {
-            return {static_cast<LONG>(std::floor(dpToPx(r.left))), static_cast<LONG>(std::floor(dpToPx(r.top))),
-                static_cast<LONG>(std::ceil(dpToPx(r.right))), static_cast<LONG>(std::ceil(dpToPx(r.bottom)))};
+            return {std::lround(dpToPx(r.left)), std::lround(dpToPx(r.top)),
+                std::lround(dpToPx(r.right)), std::lround(dpToPx(r.bottom))};
         };
 
         if (shadow > 0) fill(rect(shadow, shadow, w + shadow, h + shadow), palette.hardShadowColor);
@@ -752,7 +783,7 @@ void CandidateWindow::onPaint() {
             size_t start = 0, end = 0, page = 0, pages = 0;
             computePageBounds(start, end, page, pages);
             const std::wstring pageLabel = std::to_wstring(page + 1) + L"/" + std::to_wstring(std::max<size_t>(1, pages));
-            const float codeRight = single ? std::min(left + singleCodeWidth_, right - 70) : right;
+            const float codeRight = single ? left + singleCodeWidth_ : right;
             fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
             if (single) fill(rect(codeRight - 1.5f, edge, codeRight, bottom), palette.accent);
             else fill(rect(left, headerBottom - 1, right, headerBottom), palette.innerDivider);
@@ -773,16 +804,13 @@ void CandidateWindow::onPaint() {
             }
 
             const float footerTop = vertical ? bottom - 24 : (single ? edge : headerBottom);
-            const float pagerLeft = right - 40;
-            const float candidatesRight = !vertical && pages > 1 ? pagerLeft : right;
+            const float pagerLeft = right - kPagerWidth;
             float x = single ? codeRight : left;
             for (size_t index = start; index < end; ++index) {
                 const size_t local = index - start;
                 const std::wstring word = utf8ToWide(candidates_[index]);
                 auto* format = local == 0 ? primaryFormat_ : secondaryFormat_;
-                const float desired = measureTextWidthDip(dwriteFactory_, format, word)
-                    + (metrics.useMonospaceCode ? 45.0f : 33.0f);
-                const float width = vertical ? right - left : std::min(desired, (candidatesRight - x) / (end - index));
+                const float width = vertical ? right - left : horizontalCellWidths_[local];
                 const float y = vertical ? headerBottom + local * rowHeight : (single ? edge : headerBottom);
                 const auto cell = rect(vertical ? left : x, y, (vertical ? left : x) + width, std::min(bottom, y + rowHeight));
                 const bool active = !pending_ && static_cast<int>(index) == selectedIndex_;
@@ -793,10 +821,10 @@ void CandidateWindow::onPaint() {
                 if (badge) fill(rect(cell.left + 4, (y + cell.bottom) / 2 - 2, cell.left + 8, (y + cell.bottom) / 2 + 2), palette.accent);
                 std::wstring number = std::to_wstring(local + 1);
                 if (metrics.useMonospaceCode) number = L"[" + number + L"]";
-                const float indexX = cell.left + (badge ? 11 : 6);
-                const float wordX = indexX + (metrics.useMonospaceCode ? 23 : 14);
+                const float indexX = cell.left + candidateIndexInset(metrics);
+                const float wordX = indexX + candidateIndexWidth(metrics);
                 const bool hasCode = vertical && active && !preedit.empty();
-                const float wordRight = cell.right - (hasCode ? 74 : 3);
+                const float wordRight = cell.right - kCandidateTrailingPadding - (hasCode ? kAuxiliaryCodeWidth : 0.0f);
                 text(number, indexFormat_, rect(indexX, y, wordX, cell.bottom),
                     active ? palette.candidateActiveText : palette.textSecondary);
                 text(word, format, rect(wordX, y, wordRight, cell.bottom),

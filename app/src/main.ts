@@ -343,11 +343,11 @@ function render(): void {
   pageSelect.value = String(state.pageSize || 7);
 
   // Metrics
-  document.getElementById("first-val")!.textContent = `${state.firstCandidateSize} pt`;
+  document.getElementById("first-val")!.textContent = `${state.firstCandidateSize} px`;
 
   // The candidate preview shares the active native skin and its selected light/dark variant.
   const firstWord = document.getElementById("preview-first-word")!;
-  firstWord.style.fontSize = `${Math.max(14, state.firstCandidateSize - 4)}px`;
+  firstWord.style.fontSize = `${state.firstCandidateSize}px`;
 
   // Floating status bar
   const fbPunct = document.getElementById("fb-punct");

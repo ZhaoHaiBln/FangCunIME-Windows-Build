@@ -1,4 +1,5 @@
 #include "KeyHandler.hpp"
+#include "fangcun/CandidateCellLayout.hpp"
 #include "fangcun/ThemeConfig.hpp"
 
 #include <iostream>
@@ -17,6 +18,29 @@
 int runKeyHandlerTests() {
     using namespace fangcun;
     using namespace fangcun::tsf;
+
+    {
+        // Enlarged two-character first candidate, six normal candidates and a separate pager.
+        std::vector<float> widths{86, 60, 52, 60, 60, 60, 60};
+        const auto measured = widths;
+        fitHorizontalCandidateWidths(widths, 498.0f - 40.0f);
+        KH_ASSERT(widths == measured, "A wide first word must use its measured width when the page fits");
+
+        widths = {86, 200, 200, 60};
+        fitHorizontalCandidateWidths(widths, 300.0f);
+        KH_ASSERT((widths == std::vector<float>{86, 77, 77, 60}),
+                  "Constrained horizontal pages preserve short words and shrink long words");
+
+        widths = {400, 80, 130};
+        fitHorizontalCandidateWidths(widths, 300.0f);
+        KH_ASSERT((widths == std::vector<float>{120, 80, 100}),
+                  "An unusually long first word must leave room for later candidates");
+
+        widths = {300, 40};
+        fitHorizontalCandidateWidths(widths, 300.0f);
+        KH_ASSERT((widths == std::vector<float>{260, 40}),
+                  "Return unused width to the first word when the other words fit");
+    }
 
     uint64_t lastQuerySession = 0;
     std::string lastQueryInput;
