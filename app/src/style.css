@@ -1459,7 +1459,11 @@ input, textarea, code { user-select: text; }
 }
 [data-ime-theme="swiss"] .skin-swatch i + i { border-left: 0; }
 [data-ime-theme="brutal"] .skin-swatch:active i { transform: translate(2px,2px); box-shadow: none; }
-.skin-option.is-selected, .nav-item.is-active { color: var(--ime-cand-active-text); background: var(--ime-cand-active-bg); }
+.nav-item:hover:not(.is-active) { background: var(--surface-elevated); }
+.skin-option.is-selected, .nav-item.is-active, .mode-pill.is-selected, .scheme-card.is-selected,
+.clip-view-tabs button[aria-selected="true"], .nav-badge {
+  color: var(--ime-cand-active-text); background: var(--ime-cand-active-bg);
+}
 .cand-window {
   background: var(--ime-win-bg); color: var(--ime-text);
   border: var(--ime-win-border-w) solid var(--ime-win-outer-border);
@@ -1489,13 +1493,13 @@ input, textarea, code { user-select: text; }
 }
 
 .cand-window {
-  --cand-surface: var(--ime-win-header-bg);
-  --cand-surface-subtle: var(--ime-win-bg);
-  --cand-border: var(--ime-border);
+  --surface: var(--ime-win-header-bg);
+  --surface-subtle: var(--ime-win-bg);
+  --border: var(--ime-border);
+  --text: var(--ime-text);
+  --text-secondary: var(--ime-subtext);
   --cand-text: var(--ime-text);
-  --cand-text-secondary: var(--ime-subtext);
-  --cand-accent: var(--ime-cand-active-bg);
-  --cand-on-accent: var(--ime-cand-active-text);
+  --accent: var(--ime-accent);
 }
 
 .sharp-icon { display: inline-block; width: 16px; height: 16px; mask: var(--icon) center / contain no-repeat; background: currentColor; }
@@ -1508,8 +1512,9 @@ input, textarea, code { user-select: text; }
 
 .sharp-icon[data-icon="chevron-left"] { --icon: url("/sharp-icons/chevron-left.svg"); }
 .sharp-icon[data-icon="chevron-right"] { --icon: url("/sharp-icons/chevron-right.svg"); }
-.cand-arrows { display: inline-flex; align-items: center; }
-.cand-window .cand-pill { border: 0; margin: 0; border-radius: 0; }
+.cand-arrows { display: inline-flex; align-items: center; flex-shrink: 0; padding-left: 4px; }
+.cand-window .cand-bottom-strip { gap: 0; padding: 0; border-top: 0; overflow-x: auto; }
+.cand-window .cand-pill { border: 0; margin: 0; padding: 6px; white-space: nowrap; }
 .cand-window .cand-pill.is-selected {
   background: var(--ime-cand-active-bg); color: var(--ime-cand-active-text);
 }
@@ -1526,6 +1531,7 @@ input, textarea, code { user-select: text; }
 .cand-window[data-candidate-layout="vertical"] .cand-bottom-strip { display: flex; flex-direction: column; align-items: stretch; }
 .cand-window[data-candidate-layout="vertical"] .cand-pill { margin: 0; border-bottom: 1px solid var(--ime-border); min-height: 32px; }
 .cand-window[data-candidate-layout="vertical"] .cand-arrows { align-self: flex-end; }
+:root[data-ime-theme="eink"] .logo-dot, .cand-window[data-ime-theme="eink"] .logo-dot { fill: currentColor; }
 :root[data-ime-theme="eink"] { --glow-a: transparent; --glow-b: transparent; }
 :root[data-ime-theme="eink"] .brand-logo { filter: none; }
 :root[data-ime-theme="eink"] .section-card,
