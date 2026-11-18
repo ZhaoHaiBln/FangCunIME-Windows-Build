@@ -19,6 +19,9 @@ export interface AppSettings {
   keyLetterSize: number;
   keyLetterBold: boolean;
   clipboardEnabled?: boolean;
+  candidateLayout: "double" | "single" | "vertical";
+  fullWidth: boolean;
+  traditional: boolean;
 }
 
 export interface ClipboardItem {
@@ -60,7 +63,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   capsLockBypass: true,
   pageSize: 7,
   wheelPaging: true,
-  skin: "square_cream",
+  skin: "swiss",
   themeMode: "system",
   darkMode: false,
   systemDark: false,
@@ -70,63 +73,25 @@ const DEFAULT_SETTINGS: AppSettings = {
   keyLetterSize: 18,
   keyLetterBold: false,
   clipboardEnabled: true,
+  candidateLayout: "double",
+  fullWidth: false,
+  traditional: false,
 };
 
-type SkinId = "square_cream" | "square_aluminum" | "square_amber" | "square_jade";
-type SkinPalette = Record<string, string>;
-const SKIN_ORDER: SkinId[] = ["square_cream", "square_aluminum", "square_amber", "square_jade"];
+type SkinId = "swiss" | "metro" | "brutal" | "eink";
+const SKIN_ORDER: SkinId[] = ["swiss", "metro", "brutal", "eink"];
 const SKIN_LABELS: Record<SkinId, string> = {
-  square_cream: "奶油方格", square_aluminum: "铝银机械", square_amber: "墨黑琥珀", square_jade: "翡翠磨砂",
+  swiss: "瑞士网格", metro: "现代色块", brutal: "极客机械", eink: "纯粹线框",
 };
 function canonicalSkin(value: string): SkinId {
   if (SKIN_ORDER.includes(value as SkinId)) return value as SkinId;
-  return ({ warm_grid: "square_cream", native_light: "square_aluminum", deep_blue: "square_amber", mint: "square_jade" } as Record<string, SkinId>)[value] ?? "square_cream";
-}
-function accentForeground(hex: string): string {
-  const channels = [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255)
-    .map((value) => value <= .04045 ? value / 12.92 : Math.pow((value + .055) / 1.055, 2.4));
-  const luminance = .2126 * channels[0]! + .7152 * channels[1]! + .0722 * channels[2]!;
-  return 1.05 / (luminance + .05) >= (luminance + .05) / .05 ? "#FFFFFF" : "#000000";
-}
-function skinPalette(skin: SkinId, dark: boolean): SkinPalette {
-  // Eight shared tokens in native/Android order: base, cap, edge, function, ink, secondary, accent, pressed.
-  type Tokens = readonly [string, string, string, string, string, string, string, string];
-  const values: Record<SkinId, readonly [Tokens, Tokens]> = {
-    square_cream: [
-      ["#F0EDE4", "#FFFEFA", "#D2CFC4", "#E7E4DB", "#292D29", "#62665D", "#315F37", "#E0E8D9"],
-      ["#242723", "#383D34", "#5F6959", "#454B3F", "#F5F3EA", "#B8C0AD", "#B4D49B", "#4D5C44"],
-    ],
-    square_aluminum: [
-      ["#CFD4DA", "#EFF2F5", "#929DA9", "#D4D9E0", "#232C36", "#4F5C69", "#075EAC", "#D1E4F3"],
-      ["#232A32", "#3A4551", "#657588", "#465463", "#F2F6FA", "#B0BECE", "#9BC8FA", "#3D5D7C"],
-    ],
-    square_amber: [
-      ["#E5E0D7", "#F9F5EC", "#B7AA93", "#D8D0C0", "#302C24", "#695C48", "#955200", "#F1DFC1"],
-      ["#20211F", "#383A35", "#68695E", "#45473F", "#F8F4E8", "#C0BDAD", "#F1AD3E", "#5C4B31"],
-    ],
-    square_jade: [
-      ["#DCECE4", "#F0F8F1", "#B0CBBE", "#DBEAE0", "#233E32", "#526C5D", "#156448", "#C7E4D4"],
-      ["#1D2D27", "#304D3E", "#607F6C", "#3D5B4A", "#F0F8EE", "#B4CCBA", "#A0D9B6", "#416850"],
-    ],
+  const legacy: Record<string, SkinId> = {
+    warm_grid: "swiss", native_light: "metro", deep_blue: "brutal", mint: "eink",
+    square_cream: "swiss", square_aluminum: "metro", square_amber: "brutal", square_jade: "eink",
   };
-  const [base, cap, edge, functional, ink, secondary, accent, pressed] = values[skin][dark ? 1 : 0];
-  return {
-    "bg-main": base, "bg-sidebar": functional, surface: cap, "surface-elevated": cap,
-    "surface-subtle": functional, border: edge, "border-strong": edge, text: ink,
-    "text-secondary": secondary, "text-muted": secondary, accent,
-    "accent-hover": `color-mix(in srgb, ${accent} 86%, ${dark ? "white" : "black"})`,
-    "on-accent": accentForeground(accent), "accent-soft": pressed,
-    "glow-a": `color-mix(in srgb, ${accent} 22%, transparent)`,
-    "glow-b": `color-mix(in srgb, ${pressed} 32%, transparent)`,
-  };
+  return Object.prototype.hasOwnProperty.call(legacy, value) ? legacy[value]! : "swiss";
 }
-function mixHex(first: string, second: string, fraction: number): string {
-  return "#" + [1, 3, 5].map((offset) => {
-    const a = parseInt(first.slice(offset, offset + 2), 16);
-    const b = parseInt(second.slice(offset, offset + 2), 16);
-    return Math.round(a + (b - a) * fraction).toString(16).padStart(2, "0");
-  }).join("");
-}
+
 function effectiveDark(): boolean {
   return state.themeMode === "dark" || (state.themeMode === "system" && state.systemDark);
 }
@@ -137,19 +102,17 @@ function applySkinTheme(): void {
   document.body.dataset.skin = skin;
   document.body.dataset.theme = dark ? "dark" : "light";
   root.style.colorScheme = dark ? "dark" : "light";
-  for (const [name, value] of Object.entries(skinPalette(skin, dark))) root.style.setProperty(`--${name}`, value);
-  root.style.setProperty("--shadow-soft", dark ? "0 3px 12px rgba(0,0,0,.14)" : "0 3px 12px rgba(32,35,29,.055)");
-  root.style.setProperty("--shadow-float", dark ? "0 8px 24px rgba(0,0,0,.32)" : "0 8px 24px rgba(32,35,29,.13)");
+  root.dataset.imeTheme = skin;
+  root.dataset.imeMode = dark ? "dark" : "light";
   document.querySelectorAll<HTMLElement>(".cand-window").forEach((preview) => {
     const tone = preview.id === "cand-window-preview" ? (previewDarkCand ?? dark) : preview.dataset.tone === "dark";
-    const palette = skinPalette(skin, tone);
+    preview.dataset.imeTheme = skin;
+    preview.dataset.candidateLayout = state.candidateLayout;
+    preview.dataset.imeMode = tone ? "dark" : "light";
     preview.classList.toggle("is-dark", tone);
-    preview.dataset.skin = skin;
-    for (const name of ["surface", "surface-subtle", "border", "text", "text-secondary", "accent", "on-accent"]) {
-      preview.style.setProperty(`--cand-${name}`, palette[name]!);
-    }
-    preview.style.setProperty("--cand-surface", palette["bg-main"]!);
-    preview.style.setProperty("--cand-surface-subtle", mixHex(palette["bg-main"]!, palette["surface-subtle"]!, .28));
+    preview.querySelectorAll<HTMLElement>(".cand-num").forEach((node, index) => {
+      node.textContent = skin === "brutal" ? `[${index + 1}]` : String(index + 1);
+    });
   });
   for (const [id, selected] of [["btn-preview-light", !(previewDarkCand ?? dark)], ["btn-preview-dark", previewDarkCand ?? dark]] as const) {
     document.getElementById(id)?.classList.toggle("is-active", selected);
@@ -359,7 +322,7 @@ function render(): void {
   });
 
   // Skin & Mode buttons
-  document.querySelectorAll<HTMLButtonElement>("[data-skin]").forEach((btn) => {
+  document.querySelectorAll<HTMLButtonElement>("button[data-skin]").forEach((btn) => {
     btn.classList.toggle("is-selected", btn.dataset.skin === state.skin);
     btn.setAttribute("aria-pressed", String(btn.dataset.skin === state.skin));
   });
@@ -375,6 +338,7 @@ function render(): void {
   (document.getElementById("sw-wheel") as HTMLInputElement).checked = state.wheelPaging;
   (document.getElementById("sw-glow") as HTMLInputElement).checked = state.typingGlow;
 
+  (document.getElementById("sel-candidate-layout") as HTMLSelectElement).value = state.candidateLayout;
   const pageSelect = document.getElementById("sel-page-size") as HTMLSelectElement;
   pageSelect.value = String(state.pageSize || 7);
 
@@ -508,6 +472,13 @@ document.getElementById("sw-shift-toggle")!.addEventListener("change", (e) => {
 document.getElementById("sw-capslock")!.addEventListener("change", (e) => {
   void save({ capsLockBypass: (e.target as HTMLInputElement).checked });
 });
+document.getElementById("sel-candidate-layout")!.addEventListener("change", (event) => {
+  const candidateLayout = (event.target as HTMLSelectElement).value;
+  if (candidateLayout === "double" || candidateLayout === "single" || candidateLayout === "vertical") {
+    void save({ candidateLayout });
+  }
+});
+
 document.getElementById("sel-page-size")!.addEventListener("change", (e) => {
   const val = Number((e.target as HTMLSelectElement).value) || 7;
   void save({ pageSize: val });
@@ -555,7 +526,7 @@ document.getElementById("skin-group")!.addEventListener("click", (e) => {
   if (btn?.dataset.skin) {
     const skin = canonicalSkin(btn.dataset.skin);
     previewDarkCand = null;
-    void save({ skin, themeMode: skin === "square_amber" ? "dark" : "light" });
+    void save({ skin, themeMode: skin === "brutal" ? "dark" : "light" });
   }
 });
 document.getElementById("mode-group")!.addEventListener("click", (e) => {
@@ -651,16 +622,21 @@ window.addEventListener("keydown", (e) => {
 function renderFloatingStatusBar(): void {
   const sbLang = document.getElementById("sb-lang");
   const sbPunct = document.getElementById("sb-punct");
+  const widthIcon = document.querySelector<HTMLElement>("#sb-width .sharp-icon");
+  widthIcon?.setAttribute("data-icon", state.fullWidth ? "full-width" : "half-width");
+  document.getElementById("sb-width")?.setAttribute("aria-pressed", String(state.fullWidth));
+  const script = document.getElementById("sb-script");
+  if (script) script.textContent = state.traditional ? "繁" : "简";
   const fbLang = document.getElementById("fb-lang");
   if (sbLang) {
-    sbLang.textContent = previewLangEng ? "英" : "中";
+    sbLang.textContent = previewLangEng ? "EN" : "中";
     sbLang.classList.toggle("is-english", previewLangEng);
   }
   if (fbLang) {
     fbLang.textContent = previewLangEng ? "英" : "中";
   }
   if (sbPunct) {
-    sbPunct.textContent = state.chinesePunctuation ? "“。" : ".,";
+    sbPunct.textContent = state.chinesePunctuation ? "。，" : ".,";
     sbPunct.classList.toggle("is-muted", !state.chinesePunctuation);
   }
 }
@@ -675,11 +651,11 @@ document.getElementById("sb-punct")?.addEventListener("click", () => {
     renderFloatingStatusBar();
   });
 });
-document.getElementById("sb-skin")?.addEventListener("click", () => {
-  const idx = SKIN_ORDER.indexOf(canonicalSkin(state.skin));
-  const nextSkin = SKIN_ORDER[(idx + 1) % SKIN_ORDER.length];
-  previewDarkCand = null;
-  void save({ skin: nextSkin, themeMode: nextSkin === "square_amber" ? "dark" : "light" });
+document.getElementById("sb-width")?.addEventListener("click", () => {
+  void save({ fullWidth: !state.fullWidth }).then(renderFloatingStatusBar);
+});
+document.getElementById("sb-script")?.addEventListener("click", () => {
+  void save({ traditional: !state.traditional }).then(renderFloatingStatusBar);
 });
 document.getElementById("sb-settings")?.addEventListener("click", () => {
   void invoke("open_settings_tab", { tab: "input" }).catch(() => {});

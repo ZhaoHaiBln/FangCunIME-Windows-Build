@@ -13,6 +13,8 @@
 
 namespace fangcun::tsf {
 
+enum class CandidateLayout { DoubleRow, SingleRow, Vertical };
+
 /**
  * Caret-following, non-activating floating candidate window.
  * Rendered with Direct2D + DirectWrite matching Android 1.5.1 visual tokens:
@@ -57,6 +59,7 @@ public:
     void hide();
     bool isVisible() const;
     void setPageSize(size_t size) { pageSize_ = (size >= 5 && size <= 9) ? size : kPageSize; }
+    void setLayout(CandidateLayout layout) { layout_ = layout; }
     void setWheelPaging(bool enabled) { wheelPaging_ = enabled; }
     void showModeToast(bool englishMode, SkinPreset skin, bool darkMode);
 
@@ -106,6 +109,9 @@ private:
     bool typingGlow_ = true;
     size_t pageSize_ = kPageSize;
     bool wheelPaging_ = true;
+    CandidateLayout layout_ = CandidateLayout::DoubleRow;
+    bool lastBudgetMono_ = false;
+    float singleCodeWidth_ = 110.0f;
     bool toastActive_ = false;
     bool toastEnglish_ = false;
 

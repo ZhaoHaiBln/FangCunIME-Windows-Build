@@ -24,6 +24,9 @@ struct AppSettings {
     bool capsLockBypass = true;
     int pageSize = 7;
     bool wheelPaging = true;
+    std::string candidateLayout = "double";
+    bool fullWidth = false;
+    bool traditional = false;
     bool clipboardEnabled = true; // Preserve the companion listener preference on fallback edits.
 };
 

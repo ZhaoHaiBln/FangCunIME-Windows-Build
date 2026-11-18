@@ -178,6 +178,7 @@ fn toggle_statusbar(app: AppHandle) {
         if win.is_visible().unwrap_or(false) {
             let _ = win.hide();
         } else {
+            position_statusbar_near_taskbar(&app);
             let _ = win.show();
         }
     }
@@ -309,6 +310,16 @@ fn apply_window_appearance(app: &AppHandle, settings: &AppSettings) {
         let _ = window.set_theme(theme);
         if let Ok(hwnd) = window.hwnd() {
             apply_native_chrome(hwnd.0 as windows_sys::Win32::Foundation::HWND, settings);
+            if window.label() == "statusbar" {
+                use windows_sys::Win32::UI::WindowsAndMessaging::{
+                    GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
+                };
+                let handle = hwnd.0 as windows_sys::Win32::Foundation::HWND;
+                unsafe {
+                    let style = GetWindowLongPtrW(handle, GWL_EXSTYLE);
+                    SetWindowLongPtrW(handle, GWL_EXSTYLE, style | WS_EX_NOACTIVATE as isize);
+                }
+            }
         }
     }
     #[cfg(not(target_os = "windows"))]
@@ -320,22 +331,23 @@ fn apply_native_chrome(hwnd: windows_sys::Win32::Foundation::HWND, settings: &Ap
     use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
     // These Windows 11 attributes safely return E_INVALIDARG on older Windows.
     // They affect only FangCun's own HWNDs; editor windows are never touched.
-    let no_rounding: i32 = 1;
+    const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
+    const DWMWCP_DONOTROUND: i32 = 1;
     let (background, text): (u32, u32) = match (settings.skin.as_str(), settings.dark_mode) {
-        ("square_aluminum", false) => (0xCFD4DA, 0x232C36),
-        ("square_aluminum", true) => (0x232A32, 0xF2F6FA),
-        ("square_amber", false) => (0xE5E0D7, 0x302C24),
-        ("square_amber", true) => (0x20211F, 0xF8F4E8),
-        ("square_jade", false) => (0xDCECE4, 0x233E32),
-        ("square_jade", true) => (0x1D2D27, 0xF0F8EE),
-        (_, false) => (0xF0EDE4, 0x292D29),
-        (_, true) => (0x242723, 0xF5F3EA),
+        ("metro", false) => (0xF4F7FB, 0x0F1722),
+        ("metro", true) => (0x151921, 0xF2F6FC),
+        ("brutal", false) => (0xEFEAE0, 0x121212),
+        ("brutal", true) => (0x0F1412, 0xE6F4EC),
+        ("eink", false) => (0xFFFFFF, 0x000000),
+        ("eink", true) => (0x000000, 0xFFFFFF),
+        (_, false) => (0xF1F1ED, 0x141413),
+        (_, true) => (0x121212, 0xEFEFEC),
     };
     let color_ref = |rgb: u32| ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
     let caption = color_ref(background);
     let foreground = color_ref(text);
     unsafe {
-        let _ = DwmSetWindowAttribute(hwnd, 33, (&no_rounding as *const i32).cast(), 4);
+        let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, (&DWMWCP_DONOTROUND as *const i32).cast(), 4);
         let _ = DwmSetWindowAttribute(hwnd, 35, (&caption as *const u32).cast(), 4);
         let _ = DwmSetWindowAttribute(hwnd, 36, (&foreground as *const u32).cast(), 4);
     }
@@ -388,8 +400,8 @@ fn position_statusbar_near_taskbar(app: &AppHandle) {
         if let Ok(Some(monitor)) = win.primary_monitor() {
             let work = monitor.work_area();
             let scale = monitor.scale_factor();
-            let bar_w = (196.0 * scale).round() as i32;
-            let bar_h = (42.0 * scale).round() as i32;
+            let bar_w = (218.0 * scale).round() as i32;
+            let bar_h = (32.0 * scale).round() as i32;
             let margin_x = (18.0 * scale).round() as i32;
             let margin_y = (12.0 * scale).round() as i32;
             let x = work.position.x + (work.size.width as i32) - bar_w - margin_x;
@@ -510,8 +522,9 @@ pub fn run() {
             let open_item = MenuItem::with_id(app, "open", "打开方寸设置", true, None::<&str>)?;
             let clip_item =
                 MenuItem::with_id(app, "clipboard", "打开剪贴板 (Alt+V)", true, None::<&str>)?;
+            let status_item = MenuItem::with_id(app, "statusbar", "显示或隐藏状态栏", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出方寸伴侣", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open_item, &clip_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&open_item, &clip_item, &status_item, &quit_item])?;
 
             let mut tray_builder = TrayIconBuilder::new()
                 .menu(&menu)
@@ -519,6 +532,7 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => show_main_window(app),
                     "clipboard" => toggle_clipboard_window(app),
+                    "statusbar" => toggle_statusbar(app.clone()),
                     "quit" => app.exit(0),
                     _ => {}
                 })

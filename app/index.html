@@ -26,7 +26,7 @@
         <div class="sidebar-search">
           <svg class="search-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
-            <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" />
           </svg>
           <input id="settings-search" type="search" placeholder="搜索设置" autocomplete="off" />
         </div>
@@ -35,7 +35,7 @@
           <button class="nav-item" data-tab="general" type="button">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
               <circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.6" />
-              <path d="M10 3.2V5M10 15V16.8M3.2 10H5M15 10H16.8M5.2 5.2L6.5 6.5M13.5 13.5L14.8 14.8M14.8 5.2L13.5 6.5M6.5 13.5L5.2 14.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              <path d="M10 3.2V5M10 15V16.8M3.2 10H5M15 10H16.8M5.2 5.2L6.5 6.5M13.5 13.5L14.8 14.8M14.8 5.2L13.5 6.5M6.5 13.5L5.2 14.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" />
             </svg>
             <span>常规</span>
           </button>
@@ -43,7 +43,7 @@
           <button class="nav-item is-active" data-tab="input" type="button">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
               <rect x="2.5" y="4.5" width="15" height="11" rx="0" stroke="currentColor" stroke-width="1.6" />
-              <path d="M5.5 8H7M9.2 8H10.8M13 8H14.5M5.5 11.8H14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              <path d="M5.5 8H7M9.2 8H10.8M13 8H14.5M5.5 11.8H14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" />
             </svg>
             <span>输入方案</span>
           </button>
@@ -60,7 +60,7 @@
 
           <button class="nav-item" data-tab="effects" type="button">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
-              <path d="M4 15L8.2 5H9.8L14 15M5.6 11.5H12.4M14.5 4.5L15.2 6.3L17 7L15.2 7.7L14.5 9.5L13.8 7.7L12 7L13.8 6.3L14.5 4.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M4 15L8.2 5H9.8L14 15M5.6 11.5H12.4M14.5 4.5L15.2 6.3L17 7L15.2 7.7L14.5 9.5L13.8 7.7L12 7L13.8 6.3L14.5 4.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" />
             </svg>
             <span>字号与特效</span>
           </button>
@@ -68,7 +68,7 @@
           <button class="nav-item" data-tab="clipboard" type="button">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
               <rect x="4.5" y="4.5" width="11" height="12.5" rx="0" stroke="currentColor" stroke-width="1.6" />
-              <path d="M7.5 4.5V3.8C7.5 3.08 8.08 2.5 8.8 2.5H11.2C11.92 2.5 12.5 3.08 12.5 3.8V4.5M7.5 9H12.5M7.5 12.2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              <path d="M7.5 4.5V3.8C7.5 3.08 8.08 2.5 8.8 2.5H11.2C11.92 2.5 12.5 3.08 12.5 3.8V4.5M7.5 9H12.5M7.5 12.2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
             </svg>
             <span>剪贴板</span>
             <span id="clip-tab-count" class="nav-badge">0</span>
@@ -76,7 +76,7 @@
 
           <button class="nav-item" data-tab="ai" type="button">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
-              <path d="M10 3L11.6 7.4L16 9L11.6 10.6L10 15L8.4 10.6L4 9L8.4 7.4L10 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+              <path d="M10 3L11.6 7.4L16 9L11.6 10.6L10 15L8.4 10.6L4 9L8.4 7.4L10 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" />
               <path d="M15.2 13.2L15.8 14.8L17.4 15.4L15.8 16L15.2 17.6L14.6 16L13 15.4L14.6 14.8L15.2 13.2Z" fill="currentColor" />
             </svg>
             <span>AI 助手</span>
@@ -85,7 +85,7 @@
           <button class="nav-item" data-tab="about" type="button">
             <svg class="nav-icon" viewBox="0 0 20 20" fill="none">
               <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6" />
-              <path d="M10 9.2V13.5M10 6.7H10.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M10 9.2V13.5M10 6.7H10.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" />
             </svg>
             <span>关于</span>
           </button>
@@ -136,7 +136,7 @@
                   <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">晚上好</span></span>
                   <span class="cand-pill"><span class="cand-num">4</span><span class="cand-word">婉赏</span></span>
                   <span class="cand-pill"><span class="cand-num">5</span><span class="cand-word">碗</span></span>
-                  <span class="cand-arrows">‹ ›</span>
+                  <span class="cand-arrows"><span class="sharp-icon" data-icon="chevron-left"></span><span class="sharp-icon" data-icon="chevron-right"></span></span>
                 </div>
               </div>
 
@@ -215,6 +215,14 @@
                   </div>
                 </div>
 
+                <label class="setting-row" data-search="候选框布局">
+                  <span class="setting-label">候选框布局</span>
+                  <select id="sel-candidate-layout" class="ui-select">
+                    <option value="double">横排双行</option>
+                    <option value="single">横排单行</option>
+                    <option value="vertical">竖排列表</option>
+                  </select>
+                </label>
                 <label class="setting-row" data-search="滚轮翻页 wheel">
                   <span class="setting-label">滚轮翻页</span>
                   <input id="sw-wheel" class="ui-switch" type="checkbox" checked />
@@ -256,8 +264,8 @@
                 <div class="floating-status-bar" id="floating-status-bar">
                   <button id="fb-lang" class="fb-lang-badge" type="button" title="点击切换中/英模式 (Shift)">中</button>
                   <button id="fb-punct" class="fb-tool-btn" type="button" title="点击切换中英标点 (Ctrl+.)">“。</button>
-                  <button id="fb-skin" class="fb-tool-btn" type="button" title="切换皮肤外观">🖌️</button>
-                  <button id="fb-settings" class="fb-tool-btn" type="button" title="输入方案设置">⚙️</button>
+                  <button id="fb-skin" class="fb-tool-btn" type="button" title="切换皮肤外观"><span class="sharp-icon" data-icon="grid-menu"></span></button>
+                  <button id="fb-settings" class="fb-tool-btn" type="button" title="输入方案设置"><span class="sharp-icon" data-icon="settings"></span></button>
                 </div>
               </div>
             </div>
@@ -280,7 +288,7 @@
 
             <div class="dual-cand-showcase">
               <div class="showcase-box">
-                <span id="showcase-light-label" class="showcase-label">奶油方格 · 浅色候选窗</span>
+                <span id="showcase-light-label" class="showcase-label">瑞士网格 · 浅色候选窗</span>
                 <div class="cand-window is-light-demo" data-tone="light">
                   <div class="cand-top-row">
                     <svg class="cand-mini-logo" viewBox="0 0 100 100">
@@ -295,13 +303,13 @@
                     <span class="cand-pill is-selected"><span class="cand-num">1</span><span class="cand-word">晚上好</span></span>
                     <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">晚上</span></span>
                     <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">网上</span></span>
-                    <span class="cand-arrows">‹ ›</span>
+                    <span class="cand-arrows"><span class="sharp-icon" data-icon="chevron-left"></span><span class="sharp-icon" data-icon="chevron-right"></span></span>
                   </div>
                 </div>
               </div>
 
               <div class="showcase-box">
-                <span id="showcase-dark-label" class="showcase-label">奶油方格 · 深色候选窗</span>
+                <span id="showcase-dark-label" class="showcase-label">瑞士网格 · 深色候选窗</span>
                 <div class="cand-window is-dark" data-tone="dark">
                   <div class="cand-top-row">
                     <svg class="cand-mini-logo" viewBox="0 0 100 100">
@@ -316,7 +324,7 @@
                     <span class="cand-pill is-selected"><span class="cand-num">1</span><span class="cand-word">方寸</span></span>
                     <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">分寸</span></span>
                     <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">芳村</span></span>
-                    <span class="cand-arrows">‹ ›</span>
+                    <span class="cand-arrows"><span class="sharp-icon" data-icon="chevron-left"></span><span class="sharp-icon" data-icon="chevron-right"></span></span>
                   </div>
                 </div>
               </div>
@@ -325,21 +333,21 @@
             <div class="section-card" style="margin-top: 14px">
               <h3 class="sub-heading">四套直角皮肤</h3>
               <div id="skin-group" class="skin-grid" aria-label="选择皮肤">
-                <button class="skin-option" data-skin="square_cream" type="button" aria-pressed="false">
-                  <span class="skin-swatch" data-swatch="square_cream" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                  <span>奶油方格</span>
+                <button class="skin-option" data-skin="swiss" type="button" aria-pressed="false">
+                  <span class="skin-swatch" data-ime-theme="swiss" data-ime-mode="light" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                  <span>瑞士网格</span>
                 </button>
-                <button class="skin-option" data-skin="square_aluminum" type="button" aria-pressed="false">
-                  <span class="skin-swatch" data-swatch="square_aluminum" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                  <span>铝银机械</span>
+                <button class="skin-option" data-skin="metro" type="button" aria-pressed="false">
+                  <span class="skin-swatch" data-ime-theme="metro" data-ime-mode="light" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                  <span>现代色块</span>
                 </button>
-                <button class="skin-option" data-skin="square_amber" type="button" aria-pressed="false">
-                  <span class="skin-swatch" data-swatch="square_amber" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                  <span>墨黑琥珀</span>
+                <button class="skin-option" data-skin="brutal" type="button" aria-pressed="false">
+                  <span class="skin-swatch" data-ime-theme="brutal" data-ime-mode="dark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                  <span>极客机械</span>
                 </button>
-                <button class="skin-option" data-skin="square_jade" type="button" aria-pressed="false">
-                  <span class="skin-swatch" data-swatch="square_jade" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                  <span>翡翠磨砂</span>
+                <button class="skin-option" data-skin="eink" type="button" aria-pressed="false">
+                  <span class="skin-swatch" data-ime-theme="eink" data-ime-mode="light" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                  <span>纯粹线框</span>
                 </button>
               </div>
 
@@ -393,7 +401,7 @@
               <div class="clip-panel-search">
                 <svg class="search-icon" viewBox="0 0 20 20" fill="none">
                   <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
-                  <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" />
                 </svg>
                 <input id="clip-search" type="search" placeholder="搜索剪贴板" autocomplete="off" />
               </div>
@@ -480,7 +488,7 @@
             <div class="settings-list-card">
               <div class="setting-row">
                 <span class="setting-label">当前版本</span>
-                <span class="setting-value-tag">v0.4.0 (Windows x64 · TSF + Tauri v2)</span>
+                <span class="setting-value-tag">v0.5.0 (Windows x64 · TSF + Tauri v2)</span>
               </div>
               <div class="setting-row">
                 <span class="setting-label">核心特性</span>
@@ -520,7 +528,7 @@
           <div class="altv-search-wrap">
             <svg class="search-icon" viewBox="0 0 20 20" fill="none">
               <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
-              <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" />
             </svg>
             <input id="altv-search" type="search" placeholder="搜索剪贴板" autocomplete="off" />
           </div>
@@ -546,23 +554,13 @@
       </div>
     </div>
 
-    <!-- Compact Floating Status Bar near Taskbar (Mockup 2 #3) -->
-    <div id="floating-statusbar" class="floating-statusbar is-hidden" data-tauri-drag-region>
-      <button id="sb-lang" class="sb-btn sb-lang-btn" type="button" title="点击切换中/英文模式 (Shift)">中</button>
-      <button id="sb-punct" class="sb-btn" type="button" title="点击切换中/英文标点 (Ctrl+.)">“。</button>
-      <span class="sb-sep"></span>
-      <button id="sb-skin" class="sb-btn sb-icon-btn" type="button" title="切换皮肤外观">
-        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M13.8 3.2L16.8 6.2L8.4 14.6L4.6 15.4L5.4 11.6L13.8 3.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
-          <path d="M11.8 5.2L14.8 8.2" stroke="currentColor" stroke-width="1.6" />
-        </svg>
-      </button>
-      <button id="sb-settings" class="sb-btn sb-icon-btn" type="button" title="打开方寸设置">
-        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.6" />
-          <path d="M10 3.2V5M10 15V16.8M3.2 10H5M15 10H16.8M5.2 5.2L6.5 6.5M13.5 13.5L14.8 14.8M14.8 5.2L13.5 6.5M6.5 13.5L5.2 14.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-        </svg>
-      </button>
+    <div id="floating-statusbar" class="floating-statusbar is-hidden">
+      <span class="sb-brand" data-tauri-drag-region title="拖动状态栏">方</span>
+      <button id="sb-lang" class="sb-btn sb-lang-btn" type="button" title="切换中英文">中</button>
+      <button id="sb-width" class="sb-btn" type="button" title="切换全角半角" aria-label="切换全角半角"><span class="sharp-icon" data-icon="half-width"></span></button>
+      <button id="sb-punct" class="sb-btn" type="button" title="切换中英文标点">。，</button>
+      <button id="sb-script" class="sb-btn" type="button" title="切换简繁">简</button>
+      <button id="sb-settings" class="sb-btn" type="button" title="打开方寸设置" aria-label="打开方寸设置"><span class="sharp-icon" data-icon="settings"></span></button>
     </div>
 
     <div id="toast" class="toast"></div>

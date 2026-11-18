@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fangcun/WindowsThemeTokens.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -22,9 +24,9 @@ enum class SkinPreset {
 };
 
 inline SkinPreset parseSkinPreset(std::string_view id) {
-    if (id == "square_aluminum" || id == "native_light") return SkinPreset::SquareAluminum;
-    if (id == "square_amber" || id == "deep_blue") return SkinPreset::SquareAmber;
-    if (id == "square_jade" || id == "mint") return SkinPreset::SquareJade;
+    if (id == "metro" || id == "square_aluminum" || id == "native_light") return SkinPreset::SquareAluminum;
+    if (id == "brutal" || id == "square_amber" || id == "deep_blue") return SkinPreset::SquareAmber;
+    if (id == "eink" || id == "square_jade" || id == "mint") return SkinPreset::SquareJade;
     return SkinPreset::SquareCream;
 }
 
@@ -90,6 +92,9 @@ struct FangCunColors {
     ColorArgb secondary;
     ColorArgb accent;
     ColorArgb pressed;
+    ColorArgb onAccent;
+    ColorArgb onCandidate;
+    ColorArgb hardShadow;
 
     bool isDarkKeyboard() const {
         return keyboard.relativeLuminance() < 0.2f;
@@ -106,50 +111,55 @@ struct SkinMetrics {
     std::array<ColorArgb, 4> glowColors;
 };
 
-// Shared four-skin palettes, kept byte-for-byte with Android Theme.kt.
-inline FangCunColors skinColors(SkinPreset skin, bool dark) {
+// The supplied native palette also supplies the fallback settings window.
+inline const SharpIme::WinThemeSpec& sharpTheme(SkinPreset skin) {
     switch (skin) {
-        case SkinPreset::SquareCream:
-            return dark ? FangCunColors{ColorArgb::fromHex(0xFF242723), ColorArgb::fromHex(0xFF383D34), ColorArgb::fromHex(0xFF5F6959), ColorArgb::fromHex(0xFF454B3F), ColorArgb::fromHex(0xFFF5F3EA), ColorArgb::fromHex(0xFFB8C0AD), ColorArgb::fromHex(0xFFB4D49B), ColorArgb::fromHex(0xFF4D5C44)}
-                : FangCunColors{ColorArgb::fromHex(0xFFF0EDE4), ColorArgb::fromHex(0xFFFFFEFA), ColorArgb::fromHex(0xFFD2CFC4), ColorArgb::fromHex(0xFFE7E4DB), ColorArgb::fromHex(0xFF292D29), ColorArgb::fromHex(0xFF62665D), ColorArgb::fromHex(0xFF315F37), ColorArgb::fromHex(0xFFE0E8D9)};
-        case SkinPreset::SquareAluminum:
-            return dark ? FangCunColors{ColorArgb::fromHex(0xFF232A32), ColorArgb::fromHex(0xFF3A4551), ColorArgb::fromHex(0xFF657588), ColorArgb::fromHex(0xFF465463), ColorArgb::fromHex(0xFFF2F6FA), ColorArgb::fromHex(0xFFB0BECE), ColorArgb::fromHex(0xFF9BC8FA), ColorArgb::fromHex(0xFF3D5D7C)}
-                : FangCunColors{ColorArgb::fromHex(0xFFCFD4DA), ColorArgb::fromHex(0xFFEFF2F5), ColorArgb::fromHex(0xFF929DA9), ColorArgb::fromHex(0xFFD4D9E0), ColorArgb::fromHex(0xFF232C36), ColorArgb::fromHex(0xFF4F5C69), ColorArgb::fromHex(0xFF075EAC), ColorArgb::fromHex(0xFFD1E4F3)};
-        case SkinPreset::SquareAmber:
-            return dark ? FangCunColors{ColorArgb::fromHex(0xFF20211F), ColorArgb::fromHex(0xFF383A35), ColorArgb::fromHex(0xFF68695E), ColorArgb::fromHex(0xFF45473F), ColorArgb::fromHex(0xFFF8F4E8), ColorArgb::fromHex(0xFFC0BDAD), ColorArgb::fromHex(0xFFF1AD3E), ColorArgb::fromHex(0xFF5C4B31)}
-                : FangCunColors{ColorArgb::fromHex(0xFFE5E0D7), ColorArgb::fromHex(0xFFF9F5EC), ColorArgb::fromHex(0xFFB7AA93), ColorArgb::fromHex(0xFFD8D0C0), ColorArgb::fromHex(0xFF302C24), ColorArgb::fromHex(0xFF695C48), ColorArgb::fromHex(0xFF955200), ColorArgb::fromHex(0xFFF1DFC1)};
-        case SkinPreset::SquareJade:
-            return dark ? FangCunColors{ColorArgb::fromHex(0xFF1D2D27), ColorArgb::fromHex(0xFF304D3E), ColorArgb::fromHex(0xFF607F6C), ColorArgb::fromHex(0xFF3D5B4A), ColorArgb::fromHex(0xFFF0F8EE), ColorArgb::fromHex(0xFFB4CCBA), ColorArgb::fromHex(0xFFA0D9B6), ColorArgb::fromHex(0xFF416850)}
-                : FangCunColors{ColorArgb::fromHex(0xFFDCECE4), ColorArgb::fromHex(0xFFF0F8F1), ColorArgb::fromHex(0xFFB0CBBE), ColorArgb::fromHex(0xFFDBEAE0), ColorArgb::fromHex(0xFF233E32), ColorArgb::fromHex(0xFF526C5D), ColorArgb::fromHex(0xFF156448), ColorArgb::fromHex(0xFFC7E4D4)};
+        case SkinPreset::SquareAluminum: return SharpIme::THEME_METRO;
+        case SkinPreset::SquareAmber: return SharpIme::THEME_BRUTAL;
+        case SkinPreset::SquareJade: return SharpIme::THEME_EINK;
+        default: return SharpIme::THEME_SWISS;
     }
-    return skinColors(SkinPreset::SquareCream, false);
+}
+
+inline const SharpIme::WinPalette& sharpPalette(SkinPreset skin, bool dark) {
+    const auto& spec = sharpTheme(skin);
+    return dark ? spec.dark : spec.light;
+}
+
+inline FangCunColors skinColors(SkinPreset skin, bool dark) {
+    const auto& palette = sharpPalette(skin, dark);
+    const auto color = ColorArgb::fromHex;
+    constexpr uint32_t board[4][2] = {
+        {0xFFD4D4CE, 0xFF2A2A2A}, {0xFFE3E7ED, 0xFF151920},
+        {0xFFE6E1D6, 0xFF101412}, {0xFFFFFFFF, 0xFF000000}
+    };
+    return {color(board[static_cast<int>(skin)][dark]), color(palette.windowBg),
+        color(palette.innerDivider), color(palette.windowHeaderBg), color(palette.textPrimary),
+        color(palette.textSecondary), color(palette.accent), color(palette.candidateActiveBg),
+        color(palette.accentText), color(palette.candidateActiveText), color(palette.hardShadowColor)};
 }
 
 inline ColorArgb accentForeground(const FangCunColors& colors) {
-    const float luminance = colors.accent.relativeLuminance();
-    const float whiteContrast = 1.05f / (luminance + 0.05f);
-    const float blackContrast = (luminance + 0.05f) / 0.05f;
-    return whiteContrast >= blackContrast
-        ? ColorArgb::fromHex(0xFFFFFFFF) : ColorArgb::fromHex(0xFF000000);
+    return colors.onAccent;
 }
 
 inline SkinMetrics skinMetrics(SkinPreset skin) {
     switch (skin) {
         case SkinPreset::SquareCream:
-            return SkinMetrics{"square_cream", "奶油方格", ThemeMode::Light,
-                0.0f, 1.4f, 2.2f,
+            return SkinMetrics{"swiss", "瑞士网格", ThemeMode::Light,
+                0.0f, 0.0f, 0.0f,
                 {{ColorArgb::fromHex(0xFFACCAA2), ColorArgb::fromHex(0xFFD7C5A6), ColorArgb::fromHex(0xFFC0D3B2), ColorArgb::fromHex(0xFFD9CFB5)}}};
         case SkinPreset::SquareAluminum:
-            return SkinMetrics{"square_aluminum", "铝银机械", ThemeMode::Light,
-                0.0f, 1.6f, 2.6f,
+            return SkinMetrics{"metro", "现代色块", ThemeMode::Light,
+                0.0f, 0.0f, 0.0f,
                 {{ColorArgb::fromHex(0xFF92B8DF), ColorArgb::fromHex(0xFF83C9D0), ColorArgb::fromHex(0xFFB7BCE2), ColorArgb::fromHex(0xFFA5BDCF)}}};
         case SkinPreset::SquareAmber:
-            return SkinMetrics{"square_amber", "墨黑琥珀", ThemeMode::Dark,
-                0.0f, 1.6f, 2.6f,
+            return SkinMetrics{"brutal", "极客机械", ThemeMode::Dark,
+                0.0f, 0.0f, 2.0f,
                 {{ColorArgb::fromHex(0xFFDDAA51), ColorArgb::fromHex(0xFFCDBA85), ColorArgb::fromHex(0xFFE4C187), ColorArgb::fromHex(0xFFB1A488)}}};
         case SkinPreset::SquareJade:
-            return SkinMetrics{"square_jade", "翡翠磨砂", ThemeMode::Light,
-                0.0f, 1.1f, 1.9f,
+            return SkinMetrics{"eink", "纯粹线框", ThemeMode::Light,
+                0.0f, 0.0f, 0.0f,
                 {{ColorArgb::fromHex(0xFF91CDB0), ColorArgb::fromHex(0xFFB9DDC7), ColorArgb::fromHex(0xFFA5CEBF), ColorArgb::fromHex(0xFFCADDB5)}}};
     }
     return skinMetrics(SkinPreset::SquareCream);
@@ -180,62 +190,17 @@ struct GlassKeyColors {
     float lowerEdgeWidthDp;
 };
 
-// Exact port of GlassSurface.kt glassKeySurface()
 inline GlassKeyColors computeGlassKeyColors(
-    SkinPreset skin,
-    const FangCunColors& colors,
-    float keyOpacity = 0.82f,
-    bool pressed = false,
-    bool functional = false,
-    bool emphasized = false,
-    bool selected = false) {
-    const SkinMetrics metrics = skinMetrics(skin);
-    const bool warmGrid = (skin == SkinPreset::WarmGrid);
-    const bool dark = colors.isDarkKeyboard();
-
-    const ColorArgb white{0xFF, 0xFF, 0xFF, 0xFF};
-    const ColorArgb black{0xFF, 0x00, 0x00, 0x00};
-
-    ColorArgb fill = colors.key;
-    if (emphasized) fill = colors.accent;
-    else if (pressed || selected) fill = colors.pressed;
-    else if (functional) fill = colors.functionKey;
-
-    float clampedOpacity = std::clamp(keyOpacity, 0.4f, 1.0f);
-    float alpha = (emphasized || selected) ? 1.0f : clampedOpacity;
-
-    ColorArgb top = emphasized
-        ? fill
-        : ColorArgb::lerp(fill, white, dark ? 0.055f : 0.045f).withAlpha(alpha);
-    ColorArgb bottom = emphasized
-        ? ColorArgb::lerp(fill, black, 0.045f)
-        : ColorArgb::lerp(fill, colors.keyboard, dark ? 0.055f : 0.065f).withAlpha(alpha);
-    ColorArgb ledge = ColorArgb::lerp(fill, black, dark ? 0.26f : (warmGrid ? 0.13f : 0.16f)).withAlpha(alpha);
-
-    ColorArgb edge = emphasized
-        ? colors.accent.withAlpha(0.7f)
-        : ((pressed || selected)
-            ? colors.accent.withAlpha(dark ? 0.65f : 0.5f)
-            : colors.border.withAlpha(warmGrid ? 0.8f : (dark ? 0.7f : 0.55f)));
-
-    ColorArgb highlight = white.withAlpha(emphasized ? 0.22f : (dark ? 0.19f : 0.72f));
-    ColorArgb lowerEdge = black.withAlpha(dark ? 0.36f : (warmGrid ? 0.2f : 0.24f));
-
-    return GlassKeyColors{
-        top,
-        bottom,
-        ledge,
-        edge,
-        highlight,
-        lowerEdge,
-        metrics.cornerRadiusDp,
-        metrics.ledgeDepthDp,
-        pressed ? 0.8f : 0.0f,
-        pressed ? 0.25f : metrics.restingShadowElevationDp,
-        0.6f,
-        0.7f,
-        pressed ? 0.45f : 0.85f
-    };
+    SkinPreset skin, const FangCunColors& colors, float keyOpacity = 0.82f,
+    bool pressed = false, bool functional = false, bool emphasized = false, bool selected = false) {
+    const bool brutal = skin == SkinPreset::SquareAmber;
+    const bool eink = skin == SkinPreset::SquareJade;
+    auto fill = emphasized ? colors.accent : (selected || (eink && pressed) ? colors.pressed :
+        (functional ? colors.functionKey : colors.key));
+    if (!eink && !emphasized && !selected) fill = fill.withAlpha(std::clamp(keyOpacity, 0.4f, 1.0f));
+    const float border = skin == SkinPreset::SquareAluminum ? 0.0f : brutal ? 1.5f : 1.0f;
+    return {fill, fill, colors.hardShadow, colors.border, {}, {},
+        0.0f, brutal ? 2.0f : 0.0f, pressed && brutal ? 2.0f : 0.0f, 0.0f, border, 0.0f, 0.0f};
 }
 
 struct BackdropGradientColors {
@@ -245,18 +210,8 @@ struct BackdropGradientColors {
     ColorArgb bottom;
 };
 
-// Exact port of GlassSurface.kt glassKeyboardBackground()
-inline BackdropGradientColors computeBackdropGradient(SkinPreset skin, const FangCunColors& colors) {
-    if (skin == SkinPreset::WarmGrid) {
-        return BackdropGradientColors{true, colors.keyboard, colors.keyboard, colors.keyboard};
-    }
-    const bool dark = colors.isDarkKeyboard();
-    const ColorArgb white{0xFF, 0xFF, 0xFF, 0xFF};
-    const ColorArgb black{0xFF, 0x00, 0x00, 0x00};
-
-    ColorArgb upper = ColorArgb::lerp(colors.keyboard, dark ? colors.key : white, dark ? 0.12f : 0.16f);
-    ColorArgb lower = ColorArgb::lerp(colors.keyboard, dark ? black : colors.functionKey, dark ? 0.04f : 0.08f);
-    return BackdropGradientColors{false, upper, colors.keyboard, lower};
+inline BackdropGradientColors computeBackdropGradient(SkinPreset, const FangCunColors& colors) {
+    return {true, colors.keyboard, colors.keyboard, colors.keyboard};
 }
 
 // Header & Candidate layout constants from KeyboardHeaderLayout.kt & theme-tokens.json

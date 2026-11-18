@@ -134,6 +134,12 @@ AppSettings SettingsStore::load() {
             } catch (...) {}
         } else if (key == "wheel_paging") {
             s.wheelPaging = (val != "0");
+        } else if (key == "candidate_layout") {
+            if (val == "single" || val == "vertical") s.candidateLayout = val;
+        } else if (key == "full_width") {
+            s.fullWidth = val == "1";
+        } else if (key == "traditional") {
+            s.traditional = val == "1";
         } else if (key == "clipboard_enabled") {
             s.clipboardEnabled = (val != "0" && val != "false");
         }
@@ -172,6 +178,9 @@ void SettingsStore::save(const AppSettings& s) {
         << "capslock_bypass=" << (s.capsLockBypass ? "1" : "0") << "\n"
         << "page_size=" << std::clamp(s.pageSize, 5, 9) << "\n"
         << "wheel_paging=" << (s.wheelPaging ? "1" : "0") << "\n"
+        << "candidate_layout=" << s.candidateLayout << "\n"
+        << "full_width=" << (s.fullWidth ? "1" : "0") << "\n"
+        << "traditional=" << (s.traditional ? "1" : "0") << "\n"
         << "clipboard_enabled=" << (s.clipboardEnabled ? "1" : "0") << "\n";
 }
 

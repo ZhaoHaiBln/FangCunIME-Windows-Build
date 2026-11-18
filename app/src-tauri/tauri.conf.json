@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "FangCunSettings",
   "mainBinaryName": "FangCunSettings",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "identifier": "com.fangcun.ime.settings",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -35,6 +35,20 @@
         "skipTaskbar": true,
         "visible": false,
         "center": true
+      },
+      {
+        "label": "statusbar",
+        "url": "index.html?mode=statusbar",
+        "title": "方寸状态栏",
+        "width": 218,
+        "height": 32,
+        "decorations": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "shadow": false
       }
     ],
     "security": {

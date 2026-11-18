@@ -35,6 +35,37 @@ void broadcastEnglishToTsf(bool english) {
     }
 }
 
+CandidateLayout parseCandidateLayout(const std::string& id) {
+    if (id == "single") return CandidateLayout::SingleRow;
+    if (id == "vertical") return CandidateLayout::Vertical;
+    return CandidateLayout::DoubleRow;
+}
+
+std::wstring applyOutputStyle(std::wstring text, const AppSettings& settings) {
+    if (settings.traditional && !text.empty()) {
+        const auto length = static_cast<int>(text.size());
+        int size = LCMapStringEx(L"zh-CN", LCMAP_TRADITIONAL_CHINESE, text.data(), length,
+            nullptr, 0, nullptr, nullptr, 0);
+        if (size > 0) {
+            std::wstring converted(size, L'\0');
+            if (LCMapStringEx(L"zh-CN", LCMAP_TRADITIONAL_CHINESE, text.data(), length,
+                    converted.data(), size, nullptr, nullptr, 0) > 0) text = std::move(converted);
+        }
+    }
+    if (settings.fullWidth) {
+        for (wchar_t& c : text) {
+            if (c == L' ') c = L'\x3000';
+            else if (c >= L'!' && c <= L'~') c = static_cast<wchar_t>(c + 0xFEE0);
+        }
+    }
+    return text;
+}
+
+bool fullWidthDirectKey(const KeyInput& key, const AppSettings& settings) {
+    return settings.fullWidth && !key.ctrl && !key.alt && !key.win &&
+        key.ascii >= ' ' && key.ascii <= '~';
+}
+
 class FangCunDisplayAttributeInfo : public ITfDisplayAttributeInfo {
 public:
     FangCunDisplayAttributeInfo() { DllAddRef(); }
@@ -223,6 +254,7 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD) 
         [this](int delta) { onPageChange(delta); });
     candidateWindow_->setPageSize(static_cast<size_t>(settings_.pageSize));
     candidateWindow_->setWheelPaging(settings_.wheelPaging);
+    candidateWindow_->setLayout(parseCandidateLayout(settings_.candidateLayout));
     candidateWindow_->create(nullptr);
 
     keyHandler_ = std::make_unique<KeyHandler>(
@@ -480,6 +512,7 @@ void TextService::applySettings(const AppSettings& newSettings) {
     if (candidateWindow_) {
         candidateWindow_->setPageSize(static_cast<size_t>(settings_.pageSize));
         candidateWindow_->setWheelPaging(settings_.wheelPaging);
+        candidateWindow_->setLayout(parseCandidateLayout(settings_.candidateLayout));
         if (candidateWindow_->isVisible() && keyHandler_) {
             candidateWindow_->update(
                 keyHandler_->composing(),
@@ -538,7 +571,7 @@ void TextService::applyKeyAction(ITfContext* context, const KeyAction& action) {
         }
         if (action.commitText) {
             auto* session = new (std::nothrow) UpdateCompositionEditSession(
-                this, context, utf8ToWide(action.textToCommit), true, false);
+                this, context, applyOutputStyle(utf8ToWide(action.textToCommit), settings_), true, false);
             if (session) {
                 HRESULT hrSession = S_OK;
                 context->RequestEditSession(clientId_, session, TF_ES_SYNC | TF_ES_READWRITE, &hrSession);
@@ -682,7 +715,7 @@ STDMETHODIMP TextService::OnTestKeyDown(ITfContext* pic, WPARAM wParam, LPARAM l
         *pfEaten = TRUE;
         return S_OK;
     }
-    *pfEaten = keyHandler_->shouldEatKey(ki) ? TRUE : FALSE;
+    *pfEaten = (keyHandler_->shouldEatKey(ki) || fullWidthDirectKey(ki, settings_)) ? TRUE : FALSE;
     return S_OK;
 }
 
@@ -723,6 +756,13 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* pic, WPARAM wParam, LPARAM lPara
         return S_OK;
     }
     if (!keyHandler_->shouldEatKey(ki)) {
+        if (fullWidthDirectKey(ki, settings_)) {
+            KeyAction direct;
+            direct.commitText = true;
+            direct.textToCommit = std::string(1, ki.ascii);
+            applyKeyAction(pic, direct);
+            *pfEaten = TRUE;
+        }
         return S_OK;
     }
     KeyAction act = keyHandler_->onKeyDown(ki);

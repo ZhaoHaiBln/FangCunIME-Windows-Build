@@ -266,7 +266,7 @@ float SettingsWindow::dpToPx(float dp) const {
 
 void SettingsWindow::showOrActivate(HWND owner) {
     settings_ = SettingsStore::load();
-    glowEngine_.setEnabled(settings_.typingGlow);
+    glowEngine_.setEnabled(settings_.typingGlow && settings_.skin != SkinPreset::SquareJade);
     glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
 
     if (hwnd_ && IsWindow(hwnd_)) {
@@ -474,7 +474,7 @@ void SettingsWindow::onLButtonDown(int x, int y) {
         if (xDip >= hc.rectDip.left && xDip <= hc.rectDip.right &&
             yDip >= hc.rectDip.top && yDip <= hc.rectDip.bottom) {
             if (hc.action == ActionId::PreviewGlowTrigger) {
-                glowEngine_.setEnabled(settings_.typingGlow);
+                glowEngine_.setEnabled(settings_.typingGlow && settings_.skin != SkinPreset::SquareJade);
                 glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
                 glowEngine_.trigger(true, xDip - hc.rectDip.left, yDip - hc.rectDip.top);
                 glowEngine_.advanceFrame(monotonicNowNanos());
@@ -530,7 +530,7 @@ void SettingsWindow::applyAction(ActionId action) {
         case ActionId::ModeDark: settings_.themeMode = ThemeMode::Dark; break;
         case ActionId::ToggleTypingGlow:
             settings_.typingGlow = !settings_.typingGlow;
-            glowEngine_.setEnabled(settings_.typingGlow);
+            glowEngine_.setEnabled(settings_.typingGlow && settings_.skin != SkinPreset::SquareJade);
             if (settings_.typingGlow) {
                 glowEngine_.trigger(false, 0.0f, 0.0f);
                 glowEngine_.advanceFrame(monotonicNowNanos());
@@ -558,7 +558,7 @@ void SettingsWindow::applyAction(ActionId action) {
             break;
         case ActionId::ResetDefaults:
             settings_ = AppSettings{};
-            glowEngine_.setEnabled(settings_.typingGlow);
+            glowEngine_.setEnabled(settings_.typingGlow && settings_.skin != SkinPreset::SquareJade);
             syncGlowTimer();
             break;
         case ActionId::CloseWindow:
@@ -610,80 +610,24 @@ void SettingsWindow::drawGlassButton(
     float fontSizeDip,
     bool bold) {
     GlassKeyColors gc = computeGlassKeyColors(
-        skin, colors, settings_.keyOpacity, hovered && !selected, functional, emphasized, selected);
+        skin, colors, settings_.keyOpacity, false, functional, emphasized, selected);
 
-    float h = rect.bottom - rect.top;
-    float r = gc.cornerRadiusDp;
-    float depth = std::min(gc.ledgeDepthDp, h / 5.0f);
-    float dep = (hovered && !selected) ? std::min(gc.depressionDp, depth * 0.5f) : 0.0f;
-    float faceBottom = rect.bottom - depth + dep;
-
-    D2D1_ROUNDED_RECT outerRR = D2D1::RoundedRect(rect, r, r);
-    ID2D1RoundedRectangleGeometry* clipGeo = nullptr;
-    if (SUCCEEDED(d2dFactory_->CreateRoundedRectangleGeometry(outerRR, &clipGeo)) && clipGeo) {
-        renderTarget_->PushLayer(D2D1::LayerParameters(rect, clipGeo), nullptr);
-
-        ID2D1SolidColorBrush* solid = nullptr;
-        renderTarget_->CreateSolidColorBrush(toD2DColor(gc.ledge), &solid);
-
-        if (dep > 0.0f && solid) {
-            renderTarget_->FillRectangle(D2D1::RectF(rect.left, rect.top, rect.right, rect.top + dep), solid);
-        }
-
-        // Face vertical gradient
-        D2D1_GRADIENT_STOP stops[2] = {
-            {0.0f, toD2DColor(gc.top)},
-            {1.0f, toD2DColor(gc.bottom)},
-        };
-        ID2D1GradientStopCollection* stopCol = nullptr;
-        if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(stops, 2, &stopCol)) && stopCol) {
-            ID2D1LinearGradientBrush* grad = nullptr;
-            if (SUCCEEDED(renderTarget_->CreateLinearGradientBrush(
-                    D2D1::LinearGradientBrushProperties(
-                        D2D1::Point2F(0.0f, rect.top + dep),
-                        D2D1::Point2F(0.0f, faceBottom)),
-                    stopCol, &grad)) && grad) {
-                renderTarget_->FillRectangle(
-                    D2D1::RectF(rect.left, rect.top + dep, rect.right, std::max(rect.top + dep, faceBottom)),
-                    grad);
-                grad->Release();
-            }
-            stopCol->Release();
-        }
-
-        // Ledge band
-        if (solid) {
+    const auto face = D2D1::RectF(rect.left, rect.top, rect.right - gc.ledgeDepthDp, rect.bottom - gc.ledgeDepthDp);
+    ID2D1SolidColorBrush* solid = nullptr;
+    if (SUCCEEDED(renderTarget_->CreateSolidColorBrush(toD2DColor(gc.top), &solid)) && solid) {
+        if (gc.ledgeDepthDp > 0.0f) {
+            const float offset = gc.ledgeDepthDp;
             solid->SetColor(toD2DColor(gc.ledge));
-            renderTarget_->FillRectangle(
-                D2D1::RectF(rect.left, faceBottom, rect.right, std::max(faceBottom, rect.bottom)), solid);
-
-            // Top highlight
-            solid->SetColor(toD2DColor(gc.highlight));
-            renderTarget_->DrawLine(
-                D2D1::Point2F(rect.left + r, rect.top + dep + gc.borderWidthDp),
-                D2D1::Point2F(std::max(rect.left + r, rect.right - r), rect.top + dep + gc.borderWidthDp),
-                solid, gc.topHighlightWidthDp);
-
-            // Lower edge
-            solid->SetColor(toD2DColor(gc.lowerEdge));
-            renderTarget_->DrawLine(
-                D2D1::Point2F(rect.left + r, rect.bottom - gc.borderWidthDp),
-                D2D1::Point2F(std::max(rect.left + r, rect.right - r), rect.bottom - gc.borderWidthDp),
-                solid, gc.lowerEdgeWidthDp);
-
-            // Border
-            solid->SetColor(toD2DColor(gc.edge));
-            renderTarget_->DrawRoundedRectangle(
-                D2D1::RoundedRect(
-                    D2D1::RectF(rect.left + 0.3f, rect.top + 0.3f, rect.right - 0.3f, rect.bottom - 0.3f),
-                    r, r),
-                solid, gc.borderWidthDp);
-
-            solid->Release();
+            renderTarget_->FillRectangle(D2D1::RectF(face.left + offset, face.top + offset,
+                face.right + offset, face.bottom + offset), solid);
         }
-
-        renderTarget_->PopLayer();
-        clipGeo->Release();
+        solid->SetColor(toD2DColor(gc.top));
+        renderTarget_->FillRectangle(face, solid);
+        if (gc.borderWidthDp > 0) {
+            solid->SetColor(toD2DColor(gc.edge));
+            renderTarget_->DrawRectangle(face, solid, gc.borderWidthDp);
+        }
+        solid->Release();
     }
 
     // Label
@@ -700,7 +644,7 @@ void SettingsWindow::drawGlassButton(
 
             ColorArgb txtCol = emphasized
                 ? accentForeground(colors)
-                : (selected ? colors.accent : colors.text);
+                : (selected ? colors.onCandidate : colors.text);
 
             ID2D1SolidColorBrush* txtBrush = nullptr;
             if (SUCCEEDED(renderTarget_->CreateSolidColorBrush(toD2DColor(txtCol), &txtBrush)) && txtBrush) {
@@ -917,7 +861,7 @@ void SettingsWindow::onPaint() {
 
     // First candidate highlight
     D2D1_RECT_F firstCandRc = D2D1::RectF(previewRc.left + 12.0f, previewRc.top + 22.0f, previewRc.left + 98.0f, previewRc.top + 56.0f);
-    brush->SetColor(toD2DColor(colors.accent.withAlpha(HeaderMetricsSpec::kFirstBackgroundAlpha)));
+    brush->SetColor(toD2DColor(colors.pressed));
     renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(firstCandRc, HeaderMetricsSpec::kFirstCornerDp, HeaderMetricsSpec::kFirstCornerDp), brush);
 
     if (dwriteFactory_) {
@@ -926,7 +870,7 @@ void SettingsWindow::onPaint() {
                 kUiFontFamily, nullptr, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL, static_cast<float>(settings_.firstCandidateSize), L"", &pFmt)) && pFmt) {
             pFmt->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-            brush->SetColor(toD2DColor(accentForeground(colors)));
+            brush->SetColor(toD2DColor(colors.onCandidate));
             renderTarget_->DrawText(L"1 晚上", 4, pFmt,
                                     D2D1::RectF(firstCandRc.left + 8.0f, firstCandRc.top, firstCandRc.right + 40.0f, firstCandRc.bottom),
                                     brush);
@@ -1030,12 +974,12 @@ void SettingsWindow::onPaint() {
         float iw = w - 28.0f;
         float ry = cy + 40.0f;
         float w2 = (iw - 6.0f) / 2.0f;
-        addPill(ix, ry, w2, 36.0f, L"奶油方格", ActionId::SkinWarmGrid, settings_.skin == SkinPreset::SquareCream);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"铝银机械", ActionId::SkinNativeLight, settings_.skin == SkinPreset::SquareAluminum);
+        addPill(ix, ry, w2, 36.0f, L"瑞士网格", ActionId::SkinWarmGrid, settings_.skin == SkinPreset::SquareCream);
+        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"现代色块", ActionId::SkinNativeLight, settings_.skin == SkinPreset::SquareAluminum);
 
         ry += 42.0f;
-        addPill(ix, ry, w2, 36.0f, L"墨黑琥珀", ActionId::SkinDeepBlue, settings_.skin == SkinPreset::SquareAmber);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"翡翠磨砂", ActionId::SkinMint, settings_.skin == SkinPreset::SquareJade);
+        addPill(ix, ry, w2, 36.0f, L"极客机械", ActionId::SkinDeepBlue, settings_.skin == SkinPreset::SquareAmber);
+        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"纯粹线框", ActionId::SkinMint, settings_.skin == SkinPreset::SquareJade);
 
         ry += 46.0f;
         float w3 = (iw - 12.0f) / 3.0f;

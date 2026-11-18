@@ -1,0 +1,207 @@
+/* 01. Swiss Grid - Light */
+[data-ime-theme="swiss"][data-ime-mode="light"] {
+  --ime-radius: 0px;
+  --ime-key-gap: 0px;
+  --ime-board-pad: 0px;
+  --ime-key-border-w: 1px;
+  --ime-win-border-w: 1px;
+  --ime-board-bg: #D4D4CE;
+  --ime-toolbar-bg: #F4F4F1;
+  --ime-key-bg: #FAFAF8;
+  --ime-key-pressed-bg: #F0F0EC;
+  --ime-fn-key-bg: #ECECE8;
+  --ime-border: #C8C8C2;
+  --ime-win-outer-border: #181817;
+  --ime-text: #141413;
+  --ime-subtext: #767670;
+  --ime-accent: #EA3800;
+  --ime-accent-text: #FFFFFF;
+  --ime-cand-active-bg: #141413;
+  --ime-cand-active-text: #FAFAF8;
+  --ime-win-bg: #FAFAF8;
+  --ime-win-header-bg: #F1F1ED;
+  --ime-key-shadow: none;
+  --ime-win-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* 01. Swiss Grid - Dark */
+[data-ime-theme="swiss"][data-ime-mode="dark"] {
+  --ime-radius: 0px;
+  --ime-key-gap: 0px;
+  --ime-board-pad: 0px;
+  --ime-key-border-w: 1px;
+  --ime-win-border-w: 1px;
+  --ime-board-bg: #2A2A2A;
+  --ime-toolbar-bg: #151515;
+  --ime-key-bg: #1C1C1C;
+  --ime-key-pressed-bg: #252525;
+  --ime-fn-key-bg: #141414;
+  --ime-border: #2E2E2E;
+  --ime-win-outer-border: #454545;
+  --ime-text: #EFEFEC;
+  --ime-subtext: #787873;
+  --ime-accent: #FF4D15;
+  --ime-accent-text: #FFFFFF;
+  --ime-cand-active-bg: #EFEFEC;
+  --ime-cand-active-text: #121212;
+  --ime-win-bg: #181818;
+  --ime-win-header-bg: #121212;
+  --ime-key-shadow: none;
+  --ime-win-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+}
+
+/* 02. Metro Tile - Light */
+[data-ime-theme="metro"][data-ime-mode="light"] {
+  --ime-radius: 0px;
+  --ime-key-gap: 5px;
+  --ime-board-pad: 6px;
+  --ime-key-border-w: 0px;
+  --ime-win-border-w: 1px;
+  --ime-board-bg: #E3E7ED;
+  --ime-toolbar-bg: #ECEFF4;
+  --ime-key-bg: #FFFFFF;
+  --ime-key-pressed-bg: #F2F6FC;
+  --ime-fn-key-bg: #CFD6E0;
+  --ime-border: #BFC8D4;
+  --ime-win-outer-border: #0067C0;
+  --ime-text: #0F1722;
+  --ime-subtext: #5C6B7E;
+  --ime-accent: #0067C0;
+  --ime-accent-text: #FFFFFF;
+  --ime-cand-active-bg: #E5F1FB;
+  --ime-cand-active-text: #004E92;
+  --ime-win-bg: #FFFFFF;
+  --ime-win-header-bg: #F4F7FB;
+  --ime-key-shadow: none;
+  --ime-win-shadow: 0 10px 28px rgba(10, 22, 38, 0.16);
+}
+
+/* 02. Metro Tile - Dark */
+[data-ime-theme="metro"][data-ime-mode="dark"] {
+  --ime-radius: 0px;
+  --ime-key-gap: 5px;
+  --ime-board-pad: 6px;
+  --ime-key-border-w: 0px;
+  --ime-win-border-w: 1px;
+  --ime-board-bg: #151920;
+  --ime-toolbar-bg: #1B2029;
+  --ime-key-bg: #252B36;
+  --ime-key-pressed-bg: #2F3744;
+  --ime-fn-key-bg: #1C212A;
+  --ime-border: #2F3745;
+  --ime-win-outer-border: #3AA0FF;
+  --ime-text: #F2F6FC;
+  --ime-subtext: #8492A6;
+  --ime-accent: #3AA0FF;
+  --ime-accent-text: #09111A;
+  --ime-cand-active-bg: #192E44;
+  --ime-cand-active-text: #70BFFF;
+  --ime-win-bg: #1B2029;
+  --ime-win-header-bg: #151921;
+  --ime-key-shadow: none;
+  --ime-win-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+}
+
+/* 03. Brutal Terminal - Light */
+[data-ime-theme="brutal"][data-ime-mode="light"] {
+  --ime-radius: 0px;
+  --ime-key-gap: 6px;
+  --ime-board-pad: 7px;
+  --ime-key-border-w: 1.5px;
+  --ime-win-border-w: 2px;
+  --ime-board-bg: #E6E1D6;
+  --ime-toolbar-bg: #F6F3EC;
+  --ime-key-bg: #FFFDF8;
+  --ime-key-pressed-bg: #F3EFE4;
+  --ime-fn-key-bg: #D7D0C3;
+  --ime-border: #121212;
+  --ime-win-outer-border: #121212;
+  --ime-text: #121212;
+  --ime-subtext: #5E5950;
+  --ime-accent: #B8F500;
+  --ime-accent-text: #121212;
+  --ime-cand-active-bg: #B8F500;
+  --ime-cand-active-text: #121212;
+  --ime-win-bg: #FFFDF8;
+  --ime-win-header-bg: #EFEAE0;
+  --ime-key-shadow: 2px 2px 0px #121212;
+  --ime-win-shadow: 4px 4px 0px #121212;
+}
+
+/* 03. Brutal Terminal - Dark */
+[data-ime-theme="brutal"][data-ime-mode="dark"] {
+  --ime-radius: 0px;
+  --ime-key-gap: 6px;
+  --ime-board-pad: 7px;
+  --ime-key-border-w: 1.5px;
+  --ime-win-border-w: 2px;
+  --ime-board-bg: #101412;
+  --ime-toolbar-bg: #151B18;
+  --ime-key-bg: #1A211E;
+  --ime-key-pressed-bg: #222B27;
+  --ime-fn-key-bg: #121715;
+  --ime-border: #46574F;
+  --ime-win-outer-border: #00F078;
+  --ime-text: #E6F4EC;
+  --ime-subtext: #6F877B;
+  --ime-accent: #00F078;
+  --ime-accent-text: #08120C;
+  --ime-cand-active-bg: #00F078;
+  --ime-cand-active-text: #08120C;
+  --ime-win-bg: #141A17;
+  --ime-win-header-bg: #0F1412;
+  --ime-key-shadow: 2px 2px 0px #000000;
+  --ime-win-shadow: 4px 4px 0px #000000;
+}
+
+/* 04. Pure E-Ink - Light */
+[data-ime-theme="eink"][data-ime-mode="light"] {
+  --ime-radius: 0px;
+  --ime-key-gap: 4px;
+  --ime-board-pad: 6px;
+  --ime-key-border-w: 1px;
+  --ime-win-border-w: 1.5px;
+  --ime-board-bg: #FFFFFF;
+  --ime-toolbar-bg: #FFFFFF;
+  --ime-key-bg: #FFFFFF;
+  --ime-key-pressed-bg: #000000;
+  --ime-fn-key-bg: #FFFFFF;
+  --ime-border: #000000;
+  --ime-win-outer-border: #000000;
+  --ime-text: #000000;
+  --ime-subtext: #000000;
+  --ime-accent: #000000;
+  --ime-accent-text: #FFFFFF;
+  --ime-cand-active-bg: #000000;
+  --ime-cand-active-text: #FFFFFF;
+  --ime-win-bg: #FFFFFF;
+  --ime-win-header-bg: #FFFFFF;
+  --ime-key-shadow: none;
+  --ime-win-shadow: none;
+}
+
+/* 04. Pure E-Ink - Dark (OLED Pure Wireframe) */
+[data-ime-theme="eink"][data-ime-mode="dark"] {
+  --ime-radius: 0px;
+  --ime-key-gap: 4px;
+  --ime-board-pad: 6px;
+  --ime-key-border-w: 1px;
+  --ime-win-border-w: 1.5px;
+  --ime-board-bg: #000000;
+  --ime-toolbar-bg: #000000;
+  --ime-key-bg: #000000;
+  --ime-key-pressed-bg: #FFFFFF;
+  --ime-fn-key-bg: #000000;
+  --ime-border: #FFFFFF;
+  --ime-win-outer-border: #FFFFFF;
+  --ime-text: #FFFFFF;
+  --ime-subtext: #FFFFFF;
+  --ime-accent: #FFFFFF;
+  --ime-accent-text: #000000;
+  --ime-cand-active-bg: #FFFFFF;
+  --ime-cand-active-text: #000000;
+  --ime-win-bg: #000000;
+  --ime-win-header-bg: #000000;
+  --ime-key-shadow: none;
+  --ime-win-shadow: none;
+}

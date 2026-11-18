@@ -181,7 +181,7 @@ bool CandidateWindow::create(HWND parentOwner) {
 
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc);
-    wc.style = CS_HREDRAW | CS_VREDRAW | CS_DROPSHADOW;
+    wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc = &CandidateWindow::wndProc;
     wc.hInstance = g_hInstance;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
@@ -257,7 +257,7 @@ void CandidateWindow::update(
     firstCandidateSize_ = std::clamp(firstCandidateSize, HeaderMetricsSpec::kFirstCandidateMinSp, HeaderMetricsSpec::kFirstCandidateMaxSp);
     typingGlow_ = typingGlow;
 
-    glowEngine_.setEnabled(typingGlow_);
+    glowEngine_.setEnabled(typingGlow_ && skin_ != SkinPreset::SquareJade);
     glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
 
     if (!hwnd_) return;
@@ -309,7 +309,8 @@ void CandidateWindow::showModeToast(bool englishMode, SkinPreset skin, bool dark
 
 void CandidateWindow::recomputeHeaderBudget() {
     if (!ensureFactories()) return;
-    if (lastBudgetFirstSize_ == firstCandidateSize_ && lastBudgetDpi_ == dpi_ && primaryFormat_) {
+    const bool mono = sharpTheme(skin_).metrics.useMonospaceCode;
+    if (lastBudgetMono_ == mono && lastBudgetFirstSize_ == firstCandidateSize_ && lastBudgetDpi_ == dpi_ && primaryFormat_) {
         return;
     }
 
@@ -318,9 +319,9 @@ void CandidateWindow::recomputeHeaderBudget() {
     safeRelease(secondaryFormat_);
     safeRelease(indexFormat_);
 
-    auto makeFormat = [this](float sizeDip, DWRITE_FONT_WEIGHT weight, IDWriteTextFormat** out) {
+    auto makeFormat = [this](float sizeDip, DWRITE_FONT_WEIGHT weight, IDWriteTextFormat** out, const wchar_t* family = kUiFontFamily) {
         if (SUCCEEDED(dwriteFactory_->CreateTextFormat(
-                kUiFontFamily,
+                family,
                 nullptr,
                 weight,
                 DWRITE_FONT_STYLE_NORMAL,
@@ -333,10 +334,10 @@ void CandidateWindow::recomputeHeaderBudget() {
         }
     };
 
-    makeFormat(static_cast<float>(HeaderMetricsSpec::kCodeSp + 1), DWRITE_FONT_WEIGHT_MEDIUM, &codeFormat_);
+    makeFormat(static_cast<float>(HeaderMetricsSpec::kCodeSp + 1), DWRITE_FONT_WEIGHT_MEDIUM, &codeFormat_, mono ? L"Consolas" : kUiFontFamily);
     makeFormat(static_cast<float>(firstCandidateSize_), DWRITE_FONT_WEIGHT_MEDIUM, &primaryFormat_);
     makeFormat(static_cast<float>(HeaderMetricsSpec::kOtherCandidateSp), DWRITE_FONT_WEIGHT_NORMAL, &secondaryFormat_);
-    makeFormat(static_cast<float>(HeaderMetricsSpec::kCandidateIndexSp), DWRITE_FONT_WEIGHT_NORMAL, &indexFormat_);
+    makeFormat(static_cast<float>(HeaderMetricsSpec::kCandidateIndexSp), DWRITE_FONT_WEIGHT_NORMAL, &indexFormat_, mono ? L"Consolas" : kUiFontFamily);
 
     std::wstring probe = utf8ToWide(HeaderMetricsSpec::kMeasurementProbe);
     float hPrimary = measureTextHeightDip(dwriteFactory_, primaryFormat_, probe);
@@ -345,13 +346,14 @@ void CandidateWindow::recomputeHeaderBudget() {
     float hCode = measureTextHeightDip(dwriteFactory_, codeFormat_, L"Agjy0123456789'");
 
     candidateHeightDp_ = std::max(
-        HeaderMetricsSpec::kCandidateSlotMinimumDp,
-        std::max({hPrimary, hSecondary, hIndex}) + 12.0f);
-    codeHeightDp_ = std::max(20.0f, hCode + 6.0f);
+        32.0f,
+        std::max({hPrimary, hSecondary, hIndex}) + 4.0f);
+    codeHeightDp_ = std::max(28.0f, hCode + 6.0f);
     headerHeightDp_ = std::max(
         HeaderMetricsSpec::kHeaderMinimumDp,
         codeHeightDp_ + candidateHeightDp_ + 8.0f);
 
+    lastBudgetMono_ = mono;
     lastBudgetFirstSize_ = firstCandidateSize_;
     lastBudgetDpi_ = dpi_;
 }
@@ -397,51 +399,38 @@ void CandidateWindow::recalculateSize() {
                     static_cast<UINT32>(std::max(1, width_)),
                     static_cast<UINT32>(std::max(1, height_))));
             }
-            updateWindowRegion();
         }
+        updateWindowRegion();
         return;
     }
 
-    const float padXDp = 12.0f;
-    const float padYDp = 5.0f;
-    const float itemGapDp = 6.0f;
+    const auto& style = sharpTheme(skin_).metrics;
+    const bool vertical = layout_ == CandidateLayout::Vertical;
+    const bool single = layout_ == CandidateLayout::SingleRow;
+    const float rowHeight = std::max(layout_ == CandidateLayout::DoubleRow ? 36.0f : 32.0f, candidateHeightDp_);
+    size_t start = 0, end = 0, page = 0, pages = 0;
+    computePageBounds(start, end, page, pages);
 
-    size_t pageStart = 0;
-    size_t pageEnd = 0;
-    size_t currentPage = 0;
-    size_t totalPages = 0;
-    computePageBounds(pageStart, pageEnd, currentPage, totalPages);
-
-    float codeW = measureTextWidthDip(dwriteFactory_, codeFormat_, utf8ToWide(composing_));
-    float topRowWDp = padXDp * 2.0f + 24.0f + codeW + 96.0f;
-
-    float contentWDp = padXDp * 2.0f;
-    if (pageEnd <= pageStart) {
-        contentWDp = std::max(220.0f, topRowWDp);
-    } else {
-        for (size_t idx = pageStart; idx < pageEnd; ++idx) {
-            size_t localIdx = idx - pageStart;
-            std::wstring idxStr = std::to_wstring(localIdx + 1);
-            std::wstring candStr = utf8ToWide(candidates_[idx]);
-            float idxW = measureTextWidthDip(dwriteFactory_, indexFormat_, idxStr);
-            float txtW = measureTextWidthDip(
-                dwriteFactory_,
-                (localIdx == 0) ? primaryFormat_ : secondaryFormat_,
-                candStr);
-            float itemW = HeaderMetricsSpec::kItemHorizontalPaddingDp * 2.0f + idxW + 5.0f + txtW;
-            contentWDp += itemW + (idx + 1 < pageEnd ? itemGapDp : 0.0f);
-        }
-        if (totalPages > 1) {
-            std::wstring pageLabel = std::to_wstring(currentPage + 1) + L"/" + std::to_wstring(totalPages);
-            float labelW = measureTextWidthDip(dwriteFactory_, indexFormat_, pageLabel);
-            float pagerW = 8.0f + 16.0f + 2.0f + labelW + 2.0f + 16.0f;
-            contentWDp += pagerW;
-        }
-        contentWDp = std::max(contentWDp, topRowWDp);
+    const float codeWidth = measureTextWidthDip(dwriteFactory_, codeFormat_, utf8ToWide(composing_));
+    singleCodeWidth_ = std::clamp(codeWidth + 25.0f, 82.0f, 190.0f);
+    const float pagerWidth = pages > 1 ? 40.0f : 0.0f;
+    float contentWidth = pagerWidth;
+    for (size_t index = start; index < end; ++index) {
+        const float wordWidth = measureTextWidthDip(dwriteFactory_, index == start ? primaryFormat_ : secondaryFormat_,
+            utf8ToWide(candidates_[index]));
+        const float itemWidth = wordWidth + (style.useMonospaceCode ? 45.0f : 33.0f);
+        if (vertical) contentWidth = std::max(contentWidth, itemWidth + 64.0f);
+        else contentWidth += itemWidth;
     }
-
-    float totalHDp = headerHeightDp_ + padYDp * 2.0f;
-    float clampedWDp = std::clamp(contentWDp, 220.0f, 760.0f);
+    const float border = static_cast<float>(style.outerBorderWidthPx);
+    const float shadow = static_cast<float>(style.hardShadowOffsetPx);
+    float totalHeight = single ? rowHeight : codeHeightDp_ + rowHeight;
+    if (vertical) totalHeight = codeHeightDp_ + rowHeight * std::max<size_t>(1, end - start) + 24.0f;
+    if (single) contentWidth += singleCodeWidth_;
+    else contentWidth = std::max(contentWidth, codeWidth + 64.0f);
+    float totalHDp = totalHeight + border * 2.0f + shadow;
+    float clampedWDp = std::clamp(contentWidth, vertical ? 228.0f : 220.0f, vertical ? 440.0f : 760.0f)
+        + border * 2.0f + static_cast<float>(style.metroLeftBarWidthPx) + shadow;
 
     int newW = static_cast<int>(std::ceil(dpToPx(clampedWDp)));
     int newH = static_cast<int>(std::ceil(dpToPx(totalHDp)));
@@ -457,14 +446,25 @@ void CandidateWindow::recalculateSize() {
                 static_cast<UINT32>(std::max(1, width_)),
                 static_cast<UINT32>(std::max(1, height_))));
         }
-        updateWindowRegion();
     }
+    updateWindowRegion();
 }
 
 void CandidateWindow::updateWindowRegion() {
     if (!hwnd_) return;
-    // Remove the legacy rounded clipping region as well as the compositor's corners.
-    SetWindowRgn(hwnd_, nullptr, TRUE);
+    const int shadow = toastActive_ ? 0 : scaleForDpi(sharpTheme(skin_).metrics.hardShadowOffsetPx);
+    if (shadow > 0 && width_ > shadow && height_ > shadow) {
+        HRGN face = CreateRectRgn(0, 0, width_ - shadow, height_ - shadow);
+        HRGN offset = CreateRectRgn(shadow, shadow, width_, height_);
+        if (face && offset && CombineRgn(face, face, offset, RGN_OR) != ERROR &&
+            SetWindowRgn(hwnd_, face, TRUE)) {
+            face = nullptr; // Windows owns the region after a successful call.
+        }
+        if (face) DeleteObject(face);
+        if (offset) DeleteObject(offset);
+    } else {
+        SetWindowRgn(hwnd_, nullptr, TRUE);
+    }
     preferSquareWindow(hwnd_);
 }
 
@@ -689,292 +689,148 @@ void CandidateWindow::drawTianzigeLogoD2D(float x, float y, float size) {
 }
 
 void CandidateWindow::onPaint() {
-    PAINTSTRUCT ps = {};
+    PAINTSTRUCT ps{};
     BeginPaint(hwnd_, &ps);
-
     if (!ensureDeviceResources()) {
         EndPaint(hwnd_, &ps);
         return;
     }
 
-    const SkinMetrics metrics = skinMetrics(skin_);
+    const auto& metrics = sharpTheme(skin_).metrics;
+    const auto& palette = sharpPalette(skin_, darkMode_);
+    const bool vertical = layout_ == CandidateLayout::Vertical;
+    const bool single = layout_ == CandidateLayout::SingleRow;
+    const float shadow = toastActive_ ? 0.0f : static_cast<float>(metrics.hardShadowOffsetPx);
+    const float w = width_ * 96.0f / dpi_ - shadow;
+    const float h = height_ * 96.0f / dpi_ - shadow;
+    const float edge = static_cast<float>(metrics.outerBorderWidthPx);
+    const float strip = metrics.metroLeftBarWidthPx ? (vertical ? 3.0f : 4.0f) : 0.0f;
+    const float left = edge + strip;
+    const float right = w - edge;
+    const float bottom = h - edge;
+    const float headerBottom = single ? bottom : edge + codeHeightDp_;
+    const float rowHeight = std::max(layout_ == CandidateLayout::DoubleRow ? 36.0f : 32.0f, candidateHeightDp_);
+    const auto rect = [](float l, float t, float r, float b) { return D2D1::RectF(l, t, r, b); };
+    const auto color = ColorArgb::fromHex;
 
-    const float wDip = static_cast<float>(width_) * 96.0f / static_cast<float>(dpi_);
-    const float hDip = static_cast<float>(height_) * 96.0f / static_cast<float>(dpi_);
-    const float cornerDp = 0.0f;
+    candidateRects_.clear();
+    candidateIndices_.clear();
+    prevPageRect_ = nextPageRect_ = settingsRect_ = RECT{};
 
     renderTarget_->BeginDraw();
     renderTarget_->SetTransform(D2D1::Matrix3x2F::Identity());
-
-    D2D1_RECT_F fullRect = D2D1::RectF(0.0f, 0.0f, wDip, hDip);
-    D2D1_ROUNDED_RECT roundedBounds = D2D1::RoundedRect(fullRect, cornerDp, cornerDp);
-
-    const FangCunColors colors = skinColors(skin_, darkMode_);
-    const ColorArgb topBg = colors.keyboard;
-    const ColorArgb bottomBandBg = ColorArgb::lerp(colors.keyboard, colors.functionKey, 0.28f);
-    const ColorArgb pillAccent = colors.accent;
-    const ColorArgb pillText = accentForeground(colors);
-    const ColorArgb mainText = colors.text;
-    const ColorArgb subText = colors.secondary;
-    const ColorArgb borderCol = colors.border;
-
     ID2D1SolidColorBrush* brush = nullptr;
-    renderTarget_->CreateSolidColorBrush(toD2DColor(topBg), &brush);
+    renderTarget_->CreateSolidColorBrush(toD2DColor(color(palette.windowBg)), &brush);
     if (brush) {
-        renderTarget_->FillRoundedRectangle(roundedBounds, brush);
-    }
-
-    // Mode-switch floating toast (Shift toggle)
-    if (toastActive_ && composing_.empty() && brush) {
-        float logoSize = 20.0f;
-        float logoX = 14.0f;
-        float logoY = (hDip - logoSize) * 0.5f;
-        drawTianzigeLogoD2D(logoX, logoY, logoSize);
-
-        if (primaryFormat_) {
-            std::wstring modeStr = toastEnglish_ ? L"英" : L"中";
-            D2D1_RECT_F txtRc = D2D1::RectF(logoX + logoSize + 10.0f, 0.0f, wDip - 10.0f, hDip);
-            brush->SetColor(toD2DColor(mainText));
-            renderTarget_->DrawText(modeStr.c_str(), static_cast<UINT32>(modeStr.size()), primaryFormat_, txtRc, brush);
-        }
-
-        brush->SetColor(toD2DColor(borderCol));
-        D2D1_ROUNDED_RECT borderRect = D2D1::RoundedRect(
-            D2D1::RectF(0.5f, 0.5f, wDip - 0.5f, hDip - 0.5f), cornerDp, cornerDp);
-        renderTarget_->DrawRoundedRectangle(borderRect, brush, 1.0f);
-        brush->Release();
-
-        HRESULT hr = renderTarget_->EndDraw();
-        if (hr == D2DERR_RECREATE_TARGET) releaseDeviceResources();
-        EndPaint(hwnd_, &ps);
-        return;
-    }
-
-    const float padXDip = 12.0f;
-    const float padYDip = 5.0f;
-    float candTopDip = padYDip + codeHeightDp_ + 3.0f;
-    float candBottomDip = candTopDip + candidateHeightDp_;
-
-    // Subtle two-tone bottom strip for candidates
-    if (brush) {
-        brush->SetColor(toD2DColor(bottomBandBg));
-        D2D1_RECT_F bandRect = D2D1::RectF(0.0f, candTopDip - 1.0f, wDip, hDip);
-        renderTarget_->FillRectangle(bandRect, brush);
-    }
-
-    // TypingGlow layer
-    auto glowCircles = glowEngine_.buildRenderCircles(
-        wDip, hDip, 1.0f, darkMode_, metrics.glowColors);
-    for (const auto& circle : glowCircles) {
-        D2D1_GRADIENT_STOP gStops[3] = {};
-        UINT32 count = circle.isTrailing ? 2 : 3;
-        if (circle.isTrailing) {
-            gStops[0] = {0.0f, toD2DColor(circle.innerColor)};
-            gStops[1] = {1.0f, toD2DColor(circle.midColor)};
-        } else {
-            gStops[0] = {0.0f, toD2DColor(circle.innerColor)};
-            gStops[1] = {0.55f, toD2DColor(circle.midColor)};
-            gStops[2] = {1.0f, toD2DColor(circle.midColor.withAlpha(0.0f))};
-        }
-        ID2D1GradientStopCollection* stopCol = nullptr;
-        if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(gStops, count, &stopCol)) && stopCol) {
-            ID2D1RadialGradientBrush* radBrush = nullptr;
-            if (SUCCEEDED(renderTarget_->CreateRadialGradientBrush(
-                    D2D1::RadialGradientBrushProperties(
-                        D2D1::Point2F(circle.cx, circle.cy),
-                        D2D1::Point2F(0.0f, 0.0f),
-                        circle.radius,
-                        circle.radius),
-                    stopCol,
-                    &radBrush)) && radBrush) {
-                renderTarget_->FillEllipse(
-                    D2D1::Ellipse(D2D1::Point2F(circle.cx, circle.cy), circle.radius, circle.radius),
-                    radBrush);
-                radBrush->Release();
-            }
-            stopCol->Release();
-        }
-    }
-
-    // Top row: Tianzige icon on left + composing text + cursor bar |
-    const float logoSizeDip = 16.0f;
-    float logoX = padXDip;
-    float logoY = padYDip + (codeHeightDp_ - logoSizeDip) * 0.5f;
-    drawTianzigeLogoD2D(logoX, logoY, logoSizeDip);
-
-    settingsRect_ = RECT{
-        static_cast<LONG>(std::floor(dpToPx(logoX - 4.0f))),
-        static_cast<LONG>(std::floor(dpToPx(padYDip))),
-        static_cast<LONG>(std::ceil(dpToPx(logoX + logoSizeDip + 4.0f))),
-        static_cast<LONG>(std::ceil(dpToPx(padYDip + codeHeightDp_ + 2.0f)))
-    };
-
-    if (brush && codeFormat_) {
-        std::wstring compWide = utf8ToWide(composing_);
-        float codeX = logoX + logoSizeDip + 7.0f;
-        float compW = measureTextWidthDip(dwriteFactory_, codeFormat_, compWide);
-        D2D1_RECT_F compRc = D2D1::RectF(
-            codeX,
-            padYDip,
-            std::max(codeX + 20.0f, wDip - padXDip),
-            padYDip + codeHeightDp_);
-        brush->SetColor(toD2DColor(mainText));
-        renderTarget_->DrawText(
-            compWide.c_str(),
-            static_cast<UINT32>(compWide.size()),
-            codeFormat_,
-            compRc,
-            brush);
-
-        // Vertical caret bar at end of composing text
-        float caretX = std::min(wDip - padXDip - 4.0f, codeX + compW + 2.0f);
-        float caretTop = padYDip + 3.0f;
-        float caretBot = padYDip + codeHeightDp_ - 3.0f;
-        brush->SetColor(toD2DColor(mainText.withAlpha(0.75f)));
-        renderTarget_->DrawLine(
-            D2D1::Point2F(caretX, caretTop),
-            D2D1::Point2F(caretX, caretBot),
-            brush,
-            1.4f);
-    }
-
-    // Candidate row
-    candidateRects_.clear();
-    candidateIndices_.clear();
-    prevPageRect_ = RECT{0, 0, 0, 0};
-    nextPageRect_ = RECT{0, 0, 0, 0};
-
-    float curXDip = padXDip;
-    size_t pageStart = 0;
-    size_t pageEnd = 0;
-    size_t currentPage = 0;
-    size_t totalPages = 0;
-    computePageBounds(pageStart, pageEnd, currentPage, totalPages);
-
-    float pagerTotalDip = 0.0f;
-    const float pagerBtnWDip = 16.0f;
-    if (totalPages > 1) {
-        pagerTotalDip = 8.0f + pagerBtnWDip + 4.0f + pagerBtnWDip;
-    }
-
-    float maxCandRightDip = wDip - padXDip - pagerTotalDip;
-
-    for (size_t idx = pageStart; idx < pageEnd; ++idx) {
-        size_t localIdx = idx - pageStart;
-        std::wstring idxWide = std::to_wstring(localIdx + 1);
-        std::wstring candWide = utf8ToWide(candidates_[idx]);
-        IDWriteTextFormat* wordFormat = (localIdx == 0) ? primaryFormat_ : secondaryFormat_;
-
-        float idxWDip = measureTextWidthDip(dwriteFactory_, indexFormat_, idxWide);
-        float wordWDip = measureTextWidthDip(dwriteFactory_, wordFormat, candWide);
-        float itemWDip = HeaderMetricsSpec::kItemHorizontalPaddingDp * 2.0f + idxWDip + 5.0f + wordWDip;
-
-        if (curXDip + itemWDip > maxCandRightDip && localIdx > 0) break;
-
-        float pillTop = candTopDip + 3.0f;
-        float pillBottom = candBottomDip - 3.0f;
-        D2D1_RECT_F itemRc = D2D1::RectF(curXDip, pillTop, curXDip + itemWDip, pillBottom);
-        bool isSelected = (static_cast<int>(idx) == selectedIndex_);
-
-        if (isSelected && !pending_ && brush) {
-            D2D1_ROUNDED_RECT selPill = D2D1::RoundedRect(itemRc, HeaderMetricsSpec::kFirstCornerDp, HeaderMetricsSpec::kFirstCornerDp);
-            brush->SetColor(toD2DColor(pillAccent));
-            renderTarget_->FillRoundedRectangle(selPill, brush);
-        }
-
-        if (brush && indexFormat_ && wordFormat) {
-            ColorArgb idxColor = pending_
-                ? subText.withAlpha(HeaderMetricsSpec::kPendingAlpha)
-                : (isSelected ? pillText.withAlpha(0.92f) : subText);
-            ColorArgb wordColor = pending_
-                ? subText.withAlpha(HeaderMetricsSpec::kPendingAlpha)
-                : (isSelected ? pillText : mainText);
-
-            float textX = curXDip + HeaderMetricsSpec::kItemHorizontalPaddingDp;
-            D2D1_RECT_F idxRc = D2D1::RectF(textX, candTopDip, textX + idxWDip + 2.0f, candBottomDip);
-            brush->SetColor(toD2DColor(idxColor));
-            renderTarget_->DrawText(
-                idxWide.c_str(),
-                static_cast<UINT32>(idxWide.size()),
-                indexFormat_,
-                idxRc,
-                brush);
-
-            float wordX = textX + idxWDip + 5.0f;
-            D2D1_RECT_F wordRc = D2D1::RectF(wordX, candTopDip, wordX + wordWDip + 2.0f, candBottomDip);
-            brush->SetColor(toD2DColor(wordColor));
-            renderTarget_->DrawText(
-                candWide.c_str(),
-                static_cast<UINT32>(candWide.size()),
-                wordFormat,
-                wordRc,
-                brush);
-        }
-
-        RECT hitRc{
-            static_cast<LONG>(std::floor(dpToPx(itemRc.left))),
-            static_cast<LONG>(std::floor(dpToPx(candTopDip))),
-            static_cast<LONG>(std::ceil(dpToPx(itemRc.right))),
-            static_cast<LONG>(std::ceil(dpToPx(candBottomDip)))
+        auto fill = [&](D2D1_RECT_F bounds, uint32_t argb) {
+            brush->SetColor(toD2DColor(color(argb)));
+            renderTarget_->FillRectangle(bounds, brush);
         };
-        candidateRects_.push_back(hitRc);
-        candidateIndices_.push_back(idx);
-        curXDip += itemWDip + 6.0f;
-    }
+        auto text = [&](const std::wstring& label, IDWriteTextFormat* format, D2D1_RECT_F bounds,
+                        uint32_t argb, bool alignRight = false) {
+            if (!format || bounds.right <= bounds.left || label.empty()) return;
+            brush->SetColor(toD2DColor(color(argb)));
+            if (alignRight) format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+            renderTarget_->DrawText(label.c_str(), static_cast<UINT32>(label.size()), format, bounds,
+                brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            if (alignRight) format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        };
+        auto hitRect = [&](D2D1_RECT_F r) -> RECT {
+            return {static_cast<LONG>(std::floor(dpToPx(r.left))), static_cast<LONG>(std::floor(dpToPx(r.top))),
+                static_cast<LONG>(std::ceil(dpToPx(r.right))), static_cast<LONG>(std::ceil(dpToPx(r.bottom)))};
+        };
 
-    if (totalPages > 1 && brush && codeFormat_) {
-        float pagerRightDip = wDip - padXDip;
-        float nextLeftDip = pagerRightDip - pagerBtnWDip;
-        float prevLeftDip = nextLeftDip - 4.0f - pagerBtnWDip;
+        if (shadow > 0) fill(rect(shadow, shadow, w + shadow, h + shadow), palette.hardShadowColor);
+        fill(rect(0, 0, w, h), palette.windowOuterBorder);
+        fill(rect(edge, edge, right, bottom), palette.windowBg);
+        if (strip > 0) fill(rect(edge, edge, left, bottom), palette.accent);
 
-        bool canPrev = (currentPage > 0) && !pending_;
-        bool canNext = (currentPage + 1 < totalPages) && !pending_;
+        if (toastActive_ && composing_.empty()) {
+            drawTianzigeLogoD2D(left + 8, (h - 20) * .5f, 20);
+            text(toastEnglish_ ? L"EN" : L"中", primaryFormat_, rect(left + 36, edge, right, bottom), palette.textPrimary);
+        } else {
+            size_t start = 0, end = 0, page = 0, pages = 0;
+            computePageBounds(start, end, page, pages);
+            const std::wstring pageLabel = std::to_wstring(page + 1) + L"/" + std::to_wstring(std::max<size_t>(1, pages));
+            const float codeRight = single ? std::min(left + singleCodeWidth_, right - 70) : right;
+            fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
+            if (single) fill(rect(codeRight - 1.5f, edge, codeRight, bottom), palette.accent);
+            else fill(rect(left, headerBottom - 1, right, headerBottom), palette.innerDivider);
 
-        D2D1_RECT_F prevRc = D2D1::RectF(prevLeftDip, candTopDip, prevLeftDip + pagerBtnWDip, candBottomDip);
-        D2D1_RECT_F nextRc = D2D1::RectF(nextLeftDip, candTopDip, nextLeftDip + pagerBtnWDip, candBottomDip);
+            const float labelRight = codeRight - (single ? 9 : 43);
+            const float codeX = left + 9;
+            const std::wstring preedit = utf8ToWide(composing_);
+            text(preedit, codeFormat_, rect(codeX, edge, labelRight, headerBottom), palette.textPrimary);
+            const float caret = std::min(labelRight, codeX + measureTextWidthDip(dwriteFactory_, codeFormat_, preedit) + 2);
+            fill(rect(caret, (headerBottom + edge - 16) / 2, caret + 2, (headerBottom + edge + 16) / 2), palette.accent);
+            if (!single) text(pageLabel, indexFormat_, rect(labelRight + 5, edge, right - 8, headerBottom), palette.textSecondary, true);
 
-        codeFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-        brush->SetColor(toD2DColor(canPrev ? mainText : subText.withAlpha(0.35f)));
-        renderTarget_->DrawText(L"‹", 1, codeFormat_, prevRc, brush);
+            // Only translucent accents on Metro and Brutal, behind the candidate cells.
+            const auto glow = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, skinMetrics(skin_).glowColors);
+            if (!glow.empty() && strip > 0) {
+                brush->SetColor(toD2DColor(glow.front().innerColor.withAlpha(.18f)));
+                renderTarget_->FillRectangle(rect(left, edge, left + strip, headerBottom), brush);
+            }
 
-        brush->SetColor(toD2DColor(canNext ? mainText : subText.withAlpha(0.35f)));
-        renderTarget_->DrawText(L"›", 1, codeFormat_, nextRc, brush);
-        codeFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+            const float footerTop = vertical ? bottom - 24 : (single ? edge : headerBottom);
+            const float pagerLeft = right - 40;
+            const float candidatesRight = !vertical && pages > 1 ? pagerLeft : right;
+            float x = single ? codeRight : left;
+            for (size_t index = start; index < end; ++index) {
+                const size_t local = index - start;
+                const std::wstring word = utf8ToWide(candidates_[index]);
+                auto* format = local == 0 ? primaryFormat_ : secondaryFormat_;
+                const float desired = measureTextWidthDip(dwriteFactory_, format, word)
+                    + (metrics.useMonospaceCode ? 45.0f : 33.0f);
+                const float width = vertical ? right - left : std::min(desired, (candidatesRight - x) / (end - index));
+                const float y = vertical ? headerBottom + local * rowHeight : (single ? edge : headerBottom);
+                const auto cell = rect(vertical ? left : x, y, (vertical ? left : x) + width, std::min(bottom, y + rowHeight));
+                const bool active = !pending_ && static_cast<int>(index) == selectedIndex_;
+                if (active) fill(cell, palette.candidateActiveBg);
+                if (vertical) fill(rect(cell.left, cell.bottom - 1, cell.right, cell.bottom), palette.innerDivider);
+                else if (metrics.collapseCandidateCells) fill(rect(cell.right - 1, y, cell.right, cell.bottom), palette.innerDivider);
+                const bool badge = active && metrics.collapseCandidateCells;
+                if (badge) fill(rect(cell.left + 4, (y + cell.bottom) / 2 - 2, cell.left + 8, (y + cell.bottom) / 2 + 2), palette.accent);
+                std::wstring number = std::to_wstring(local + 1);
+                if (metrics.useMonospaceCode) number = L"[" + number + L"]";
+                const float indexX = cell.left + (badge ? 11 : 6);
+                const float wordX = indexX + (metrics.useMonospaceCode ? 23 : 14);
+                const bool hasCode = vertical && active && !preedit.empty();
+                const float wordRight = cell.right - (hasCode ? 74 : 3);
+                text(number, indexFormat_, rect(indexX, y, wordX, cell.bottom),
+                    active ? palette.candidateActiveText : palette.textSecondary);
+                text(word, format, rect(wordX, y, wordRight, cell.bottom),
+                    active ? palette.candidateActiveText : pending_ ? palette.textSecondary : palette.textPrimary);
+                if (hasCode) text(L"[" + preedit + L"]", indexFormat_,
+                    rect(wordRight + 3, y, cell.right - 7, cell.bottom), palette.candidateActiveText, true);
+                candidateRects_.push_back(hitRect(cell));
+                candidateIndices_.push_back(index);
+                x += width;
+            }
 
-        if (canPrev) {
-            prevPageRect_ = RECT{
-                static_cast<LONG>(std::floor(dpToPx(prevRc.left))),
-                static_cast<LONG>(std::floor(dpToPx(prevRc.top))),
-                static_cast<LONG>(std::ceil(dpToPx(prevRc.right))),
-                static_cast<LONG>(std::ceil(dpToPx(prevRc.bottom)))
-            };
+            if (vertical) {
+                fill(rect(left, footerTop, right, bottom), palette.windowHeaderBg);
+                text(pageLabel, indexFormat_, rect(left + 9, footerTop, pagerLeft, bottom), palette.textSecondary);
+            }
+            if (pages > 1) {
+                for (int direction : {-1, 1}) {
+                    const bool enabled = !pending_ && (direction < 0 ? page > 0 : page + 1 < pages);
+                    const float startX = pagerLeft + (direction > 0 ? 20 : 0);
+                    const auto cell = rect(startX, footerTop, startX + 20, bottom);
+                    fill(rect(startX, footerTop, startX + 1, bottom), palette.innerDivider);
+                    // Geometry of the pack's chevron-left/right icons, centered in the page cell.
+                    const float cx = startX + 10, cy = (footerTop + bottom) * .5f;
+                    brush->SetColor(toD2DColor(color(enabled ? palette.textPrimary : palette.innerDivider)));
+                    renderTarget_->DrawLine(D2D1::Point2F(cx - direction * 2, cy - 4), D2D1::Point2F(cx + direction * 2, cy), brush, 1.5f);
+                    renderTarget_->DrawLine(D2D1::Point2F(cx + direction * 2, cy), D2D1::Point2F(cx - direction * 2, cy + 4), brush, 1.5f);
+                    if (enabled) (direction < 0 ? prevPageRect_ : nextPageRect_) = hitRect(cell);
+                }
+            }
         }
-        if (canNext) {
-            nextPageRect_ = RECT{
-                static_cast<LONG>(std::floor(dpToPx(nextRc.left))),
-                static_cast<LONG>(std::floor(dpToPx(nextRc.top))),
-                static_cast<LONG>(std::ceil(dpToPx(nextRc.right))),
-                static_cast<LONG>(std::ceil(dpToPx(nextRc.bottom)))
-            };
-        }
-    }
-
-    // Outer border
-    if (brush) {
-        brush->SetColor(toD2DColor(borderCol));
-        D2D1_ROUNDED_RECT borderRect = D2D1::RoundedRect(
-            D2D1::RectF(0.5f, 0.5f, wDip - 0.5f, hDip - 0.5f),
-            cornerDp,
-            cornerDp);
-        renderTarget_->DrawRoundedRectangle(borderRect, brush, 1.0f);
         brush->Release();
     }
 
-    HRESULT hr = renderTarget_->EndDraw();
-    if (hr == D2DERR_RECREATE_TARGET) {
-        releaseDeviceResources();
-    }
-
+    if (renderTarget_->EndDraw() == D2DERR_RECREATE_TARGET) releaseDeviceResources();
     EndPaint(hwnd_, &ps);
 }
 

@@ -27,6 +27,16 @@ pub struct AppSettings {
     pub key_letter_bold: bool,
     #[serde(default = "default_true")]
     pub clipboard_enabled: bool,
+    #[serde(default = "default_candidate_layout")]
+    pub candidate_layout: String,
+    #[serde(default)]
+    pub full_width: bool,
+    #[serde(default)]
+    pub traditional: bool,
+}
+
+fn default_candidate_layout() -> String {
+    "double".to_string()
 }
 
 fn default_true() -> bool {
@@ -48,7 +58,7 @@ impl Default for AppSettings {
             caps_lock_bypass: true,
             page_size: 7,
             wheel_paging: true,
-            skin: "square_cream".to_string(),
+            skin: "swiss".to_string(),
             theme_mode: "system".to_string(),
             dark_mode: sys_dark,
             system_dark: sys_dark,
@@ -58,6 +68,9 @@ impl Default for AppSettings {
             key_letter_size: 18,
             key_letter_bold: false,
             clipboard_enabled: true,
+            candidate_layout: default_candidate_layout(),
+            full_width: false,
+            traditional: false,
         }
     }
 }
@@ -88,11 +101,11 @@ fn settings_path() -> PathBuf {
 // preferences continue to be read from the same existing settings file.
 fn canonical_skin(id: &str) -> &'static str {
     match id {
-        "square_aluminum" | "native_light" => "square_aluminum",
-        "square_amber" | "deep_blue" => "square_amber",
-        "square_jade" | "mint" => "square_jade",
-        "square_cream" | "warm_grid" => "square_cream",
-        _ => "square_cream",
+        "metro" | "square_aluminum" | "native_light" => "metro",
+        "brutal" | "square_amber" | "deep_blue" => "brutal",
+        "eink" | "square_jade" | "mint" => "eink",
+        "swiss" | "square_cream" | "warm_grid" => "swiss",
+        _ => "swiss",
     }
 }
 
@@ -110,6 +123,9 @@ fn normalize(mut s: AppSettings) -> AppSettings {
         "light" => false,
         _ => s.system_dark,
     };
+    if !matches!(s.candidate_layout.as_str(), "double" | "single" | "vertical") {
+        s.candidate_layout = default_candidate_layout();
+    }
     s.page_size = s.page_size.clamp(5, 9);
     s.first_candidate_size = s.first_candidate_size.clamp(16, 30);
     s.key_letter_size = s.key_letter_size.clamp(14, 30);
@@ -176,6 +192,9 @@ fn load_from_path(path: &Path) -> AppSettings {
                 "key_letter_bold" => {
                     s.key_letter_bold = val == "1" || val.eq_ignore_ascii_case("true")
                 }
+                "candidate_layout" => s.candidate_layout = val.to_string(),
+                "full_width" => s.full_width = val == "1",
+                "traditional" => s.traditional = val == "1",
                 "clipboard_enabled" => {
                     s.clipboard_enabled = val == "1" || val.eq_ignore_ascii_case("true")
                 }
@@ -199,7 +218,7 @@ fn save_to_path(path: &Path, input: AppSettings) -> Result<AppSettings, String> 
     }
     let bool_int = |b: bool| if b { 1 } else { 0 };
     let body = format!(
-        "scheme={}\nmixed_input={}\nchinese_punctuation={}\nshift_toggle_english={}\ncapslock_bypass={}\npage_size={}\nwheel_paging={}\nskin={}\ntheme_mode={}\ndark={}\ndark_mode={}\nfirst_candidate_size={}\nkey_opacity={:.2}\ntyping_glow={}\nkey_letter_size={}\nkey_letter_bold={}\nclipboard_enabled={}\n",
+        "scheme={}\nmixed_input={}\nchinese_punctuation={}\nshift_toggle_english={}\ncapslock_bypass={}\npage_size={}\nwheel_paging={}\nskin={}\ntheme_mode={}\ndark={}\ndark_mode={}\nfirst_candidate_size={}\nkey_opacity={:.2}\ntyping_glow={}\nkey_letter_size={}\nkey_letter_bold={}\nclipboard_enabled={}\ncandidate_layout={}\nfull_width={}\ntraditional={}\n",
         s.scheme,
         bool_int(s.mixed_input),
         bool_int(s.chinese_punctuation),
@@ -217,6 +236,9 @@ fn save_to_path(path: &Path, input: AppSettings) -> Result<AppSettings, String> 
         s.key_letter_size,
         bool_int(s.key_letter_bold),
         bool_int(s.clipboard_enabled),
+        s.candidate_layout,
+        bool_int(s.full_width),
+        bool_int(s.traditional),
     );
     fs::write(path, body).map_err(|e| format!("write settings.ini failed: {e}"))?;
     Ok(s)
@@ -344,10 +366,10 @@ mod tests {
     #[test]
     fn upgrading_legacy_skin_ini_preserves_typography_language_and_clipboard_preferences() {
         for (legacy, current) in [
-            ("native_light", "square_aluminum"),
-            ("warm_grid", "square_cream"),
-            ("mint", "square_jade"),
-            ("deep_blue", "square_amber"),
+            ("native_light", "metro"),
+            ("warm_grid", "swiss"),
+            ("mint", "eink"),
+            ("deep_blue", "brutal"),
         ] {
             let file = IniFixture::new();
             fs::write(&file.0, format!(
@@ -384,10 +406,10 @@ mod tests {
     #[test]
     fn all_four_new_skins_round_trip_through_real_ini_without_resetting_explicit_theme() {
         for skin in [
-            "square_cream",
-            "square_aluminum",
-            "square_amber",
-            "square_jade",
+            "swiss",
+            "metro",
+            "brutal",
+            "eink",
         ] {
             let file = IniFixture::new();
             let mut selected = AppSettings::default();
