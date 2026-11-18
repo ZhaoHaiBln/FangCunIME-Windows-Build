@@ -93,6 +93,7 @@ private:
     void applySettings(const AppSettings& newSettings);
     void requestCaretRect(ITfContext* context);
     void resetAllState(ITfContext* context = nullptr);
+    void finishShiftTap(ITfContext* context, WPARAM wParam, LPARAM lParam);
 
     KeyInput translateKey(WPARAM wParam, LPARAM lParam) const;
     static std::wstring utf8ToWide(std::string_view utf8);
@@ -115,7 +116,7 @@ private:
 
     std::mutex asyncMutex_;
     std::vector<AsyncPayload> asyncQueue_;
-    bool shiftTapPending_ = false;
+    ShiftTapTracker shiftTap_;
 };
 
 } // namespace fangcun::tsf

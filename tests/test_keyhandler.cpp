@@ -261,11 +261,32 @@ int runKeyHandlerTests() {
 
     // 7. English mode toggle and CapsLock uppercase passthrough
     {
+        ShiftTapTracker tap;
+        tap.keyDown(ShiftSide::Left, true, false);
+        tap.keyDown(ShiftSide::Left, true, true);
+        KH_ASSERT(tap.keyUp(ShiftSide::Left) && !tap.keyUp(ShiftSide::Left),
+                  "A held or duplicated TSF callback toggles at most once when released");
+        tap.keyDown(ShiftSide::Right, true, false);
+        KH_ASSERT(tap.keyUp(ShiftSide::Right), "A solo right Shift can toggle too");
+
+        for (const auto key : {ShiftSide::None, ShiftSide::Right}) {
+            tap.keyDown(ShiftSide::Left, true, false);
+            tap.keyDown(key, true, false);
+            KH_ASSERT(!tap.keyUp(ShiftSide::Left) && !tap.keyUp(key), "A Shift chord must pass through without a toggle");
+        }
+        tap.keyDown(ShiftSide::Left, false, false);
+        KH_ASSERT(!tap.keyUp(ShiftSide::Left), "Disabled or modified Shift must not toggle");
+        tap.keyDown(ShiftSide::Left, true, false);
+        tap.reset();
+        KH_ASSERT(!tap.keyUp(ShiftSide::Left), "A shift release after losing focus must not change modes");
+
         KeyInput upperA{'A', 'A', false, false, false, false, true};
         KH_ASSERT(!handler.shouldEatKey(upperA), "CapsLock uppercase letter on empty composing should pass through");
 
         KeyInput shiftA{'A', 'A', false, false, false, true, false};
         KH_ASSERT(handler.shouldEatKey(shiftA), "Shift+A in mixed mode should still compose");
+        KH_ASSERT(handler.onKeyDown(shiftA).compositionText == "A", "The Shift+A chord must preserve case");
+        handler.resetContext();
 
         handler.onKeyDown(keyW);
         KH_ASSERT(handler.composing() == "w", "Composing should be 'w'");

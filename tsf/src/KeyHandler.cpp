@@ -19,6 +19,26 @@ constexpr uint32_t kVkPrior = 0x21; // PageUp
 constexpr uint32_t kVkNext = 0x22;  // PageDown
 } // namespace
 
+void ShiftTapTracker::keyDown(ShiftSide side, bool allowTap, bool repeat) {
+    const auto mask = static_cast<uint8_t>(side);
+    if (!mask) {
+        tapPending_ = false;
+        return;
+    }
+    if ((down_ & mask) != 0) return;
+    tapPending_ = down_ == 0 && allowTap && !repeat;
+    down_ |= mask;
+}
+
+bool ShiftTapTracker::keyUp(ShiftSide side) {
+    const auto mask = static_cast<uint8_t>(side);
+    if ((down_ & mask) == 0) return false;
+    down_ ^= mask;
+    const bool toggle = tapPending_ && down_ == 0;
+    tapPending_ = false;
+    return toggle;
+}
+
 KeyHandler::KeyHandler(AsyncQueryFn asyncQuery, LearnFn learnFn, CancelQueriesFn cancelFn)
     : asyncQuery_(std::move(asyncQuery)),
       learnFn_(std::move(learnFn)),

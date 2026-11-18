@@ -66,6 +66,14 @@ bool fullWidthDirectKey(const KeyInput& key, const AppSettings& settings) {
         key.ascii >= ' ' && key.ascii <= '~';
 }
 
+ShiftSide shiftSide(WPARAM key, LPARAM message) {
+    if (key == VK_LSHIFT) return ShiftSide::Left;
+    if (key == VK_RSHIFT) return ShiftSide::Right;
+    if (key != VK_SHIFT) return ShiftSide::None;
+    const auto scanCode = (static_cast<UINT>(message) >> 16) & 0xFF;
+    return scanCode == 0x36 ? ShiftSide::Right : ShiftSide::Left;
+}
+
 class FangCunDisplayAttributeInfo : public ITfDisplayAttributeInfo {
 public:
     FangCunDisplayAttributeInfo() { DllAddRef(); }
@@ -498,6 +506,7 @@ void TextService::openSettingsWindow() {
 
 void TextService::applySettings(const AppSettings& newSettings) {
     bool schemeChanged = (settings_.scheme != newSettings.scheme);
+    if (settings_.shiftToggleEnglish != newSettings.shiftToggleEnglish) shiftTap_.reset();
     settings_ = newSettings;
     if (engine_ && schemeChanged) {
         engine_->prepare(settings_.scheme);
@@ -541,6 +550,7 @@ void TextService::updateCandidateWindowPosition(const RECT& caretRect) {
 }
 
 void TextService::resetAllState(ITfContext* context) {
+    shiftTap_.reset();
     {
         std::lock_guard<std::mutex> lock(asyncMutex_);
         asyncQueue_.clear();
@@ -683,7 +693,6 @@ STDMETHODIMP TextService::OnPopContext(ITfContext*) {
 // ITfKeyEventSink
 STDMETHODIMP TextService::OnSetFocus(BOOL fForeground) {
     if (!fForeground) {
-        shiftTapPending_ = false;
         resetAllState(activeContext_);
     }
     return S_OK;
@@ -700,13 +709,9 @@ STDMETHODIMP TextService::OnTestKeyDown(ITfContext* pic, WPARAM wParam, LPARAM l
         if (activeContext_) activeContext_->AddRef();
     }
     KeyInput ki = translateKey(wParam, lParam);
-    if (wParam == VK_SHIFT || wParam == VK_LSHIFT || wParam == VK_RSHIFT) {
-        if (settings_.shiftToggleEnglish && !ki.ctrl && !ki.alt && !ki.win && (lParam & (1LL << 30)) == 0) {
-            shiftTapPending_ = true;
-        }
-        return S_OK;
-    }
-    shiftTapPending_ = false;
+    const auto shift = shiftSide(wParam, lParam);
+    shiftTap_.keyDown(shift, settings_.shiftToggleEnglish && !ki.ctrl && !ki.alt && !ki.win, (lParam & (1LL << 30)) != 0);
+    if (shift != ShiftSide::None) return S_OK;
     if (ki.alt && !ki.ctrl && !ki.win && !ki.shift && (wParam == 'V' || wParam == 'v')) {
         *pfEaten = TRUE;
         return S_OK;
@@ -725,6 +730,9 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* pic, WPARAM wParam, LPARAM lPara
     if (!keyHandler_) return S_OK;
 
     KeyInput ki = translateKey(wParam, lParam);
+    const auto shift = shiftSide(wParam, lParam);
+    shiftTap_.keyDown(shift, settings_.shiftToggleEnglish && !ki.ctrl && !ki.alt && !ki.win, (lParam & (1LL << 30)) != 0);
+    if (shift != ShiftSide::None) return S_OK;
     if (ki.alt && !ki.ctrl && !ki.win && !ki.shift && (wParam == 'V' || wParam == 'v')) {
         HWND h = FindWindowExW(HWND_MESSAGE, nullptr, L"Static", kCompanionWndTitle);
         if (h) {
@@ -773,36 +781,33 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* pic, WPARAM wParam, LPARAM lPara
     return S_OK;
 }
 
-STDMETHODIMP TextService::OnTestKeyUp(ITfContext* pic, WPARAM wParam, LPARAM, BOOL* pfEaten) {
+void TextService::finishShiftTap(ITfContext* context, WPARAM wParam, LPARAM lParam) {
+    // TSF hosts can observe the release through TestKeyUp, KeyUp, or both.
+    // Consume our tap state once and leave the hardware key event with the host.
+    if (!shiftTap_.keyUp(shiftSide(wParam, lParam)) || !keyHandler_ || !settings_.shiftToggleEnglish) return;
+    ITfContext* ctx = context ? context : activeContext_;
+    KeyAction act = keyHandler_->toggleEnglishMode();
+    if (act.handled || act.hideCandidates || act.updateComposition) applyKeyAction(ctx, act);
+    if (ctx) requestCaretRect(ctx);
+    broadcastEnglishToTsf(keyHandler_->englishMode());
+    postToCompanion(1, keyHandler_->englishMode() ? 1 : 0);
+    if (candidateWindow_) {
+        candidateWindow_->showModeToast(keyHandler_->englishMode(), settings_.skin,
+                                        SettingsStore::effectiveDarkMode(settings_));
+    }
+}
+
+STDMETHODIMP TextService::OnTestKeyUp(ITfContext* pic, WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
     if (!pfEaten) return E_INVALIDARG;
     *pfEaten = FALSE;
-    if ((wParam == VK_SHIFT || wParam == VK_LSHIFT || wParam == VK_RSHIFT) && shiftTapPending_) {
-        shiftTapPending_ = false;
-        if (keyHandler_ && settings_.shiftToggleEnglish) {
-            ITfContext* ctx = pic ? pic : activeContext_;
-            KeyAction act = keyHandler_->toggleEnglishMode();
-            if (act.handled || act.hideCandidates || act.updateComposition) {
-                applyKeyAction(ctx, act);
-            }
-            if (ctx) {
-                requestCaretRect(ctx);
-            }
-            broadcastEnglishToTsf(keyHandler_->englishMode());
-            postToCompanion(1, keyHandler_->englishMode() ? 1 : 0);
-            if (candidateWindow_) {
-                candidateWindow_->showModeToast(
-                    keyHandler_->englishMode(),
-                    settings_.skin,
-                    SettingsStore::effectiveDarkMode(settings_));
-            }
-        }
-    }
+    finishShiftTap(pic, wParam, lParam);
     return S_OK;
 }
 
-STDMETHODIMP TextService::OnKeyUp(ITfContext*, WPARAM, LPARAM, BOOL* pfEaten) {
+STDMETHODIMP TextService::OnKeyUp(ITfContext* pic, WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
     if (!pfEaten) return E_INVALIDARG;
     *pfEaten = FALSE;
+    finishShiftTap(pic, wParam, lParam);
     return S_OK;
 }
 

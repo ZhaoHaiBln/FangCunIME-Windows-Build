@@ -20,6 +20,19 @@ struct KeyInput {
     bool capsLock = false;
 };
 
+enum class ShiftSide : uint8_t { None, Left = 1, Right = 2 };
+
+class ShiftTapTracker {
+public:
+    void keyDown(ShiftSide side, bool allowTap, bool repeat);
+    bool keyUp(ShiftSide side);
+    void reset() { *this = {}; }
+
+private:
+    uint8_t down_ = 0;
+    bool tapPending_ = false;
+};
+
 struct KeyAction {
     bool handled = false;               // true = consume key, false = pass through to host
     bool updateComposition = false;     // update TSF composing text
