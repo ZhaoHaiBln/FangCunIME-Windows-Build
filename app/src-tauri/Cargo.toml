@@ -1,6 +1,6 @@
 [package]
 name = "fangcun-settings"
-version = "0.6.2"
+version = "0.6.3"
 description = "FangCun IME Settings & Clipboard Companion"
 authors = ["FangCunIME"]
 edition = "2021"

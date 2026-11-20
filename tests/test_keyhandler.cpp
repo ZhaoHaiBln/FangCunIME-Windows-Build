@@ -129,17 +129,18 @@ int runKeyHandlerTests() {
     {
         using fangcun::SkinPreset;
         const auto& wood = fangcun::sharpTheme(SkinPreset::WoodType);
-        KH_ASSERT(wood.light.windowOuterBorder == 0xFF493629 && wood.light.candidateActiveText == 0xFF8B1A10,
+        KH_ASSERT(wood.light.windowOuterBorder == 0xFF472A16 && wood.light.candidateActiveText == 0xFF9E2F1E,
                   "Wood type uses a walnut frame and red ink");
         const auto& typewriter = fangcun::sharpTheme(SkinPreset::Typewriter);
-        KH_ASSERT(typewriter.metrics.candidateRadiusDp == 4 && typewriter.light.candidateActiveBg == 0xFF29251D,
-                  "Typewriter selection is a dark round-edged stamp on paper");
+        KH_ASSERT(typewriter.metrics.candidateRadiusDp == 4.0f && typewriter.light.candidateActiveBg == 0xFF2B2723 &&
+                      typewriter.light.accent == 0xFF237218,
+                  "Typewriter selection is a dark round-edged stamp on paper with emerald caret");
         const auto& terminal = fangcun::sharpTheme(SkinPreset::Terminal);
-        KH_ASSERT(terminal.metrics.useMonospaceCode && terminal.light.accent == 0xFFEAD17B &&
-                      terminal.light.candidateActiveBg == 0xFF83F064 && terminal.light.candidateActiveText == 0xFF142411,
+        KH_ASSERT(terminal.metrics.useMonospaceCode && terminal.light.accent == 0xFFF4E667 &&
+                      terminal.light.candidateActiveBg == 0xFF78F867 && terminal.light.candidateActiveText == 0xFF0B1A0D,
                   "Terminal uses amber monospaced code and a solid green selection");
-        KH_ASSERT(wood.metrics.outerBorderWidthPx == 7 && typewriter.metrics.outerBorderWidthPx == 7 &&
-                      terminal.metrics.outerBorderWidthPx == 7,
+        KH_ASSERT(wood.metrics.outerBorderWidthPx == 6 && typewriter.metrics.outerBorderWidthPx == 6 &&
+                      terminal.metrics.outerBorderWidthPx == 6,
                   "The three reference candidate frames have the same thickness");
         const auto& brutal = fangcun::sharpTheme(SkinPreset::Brutal);
         KH_ASSERT(brutal.metrics.useMonospaceCode && brutal.metrics.hardShadowOffsetPx == 4,

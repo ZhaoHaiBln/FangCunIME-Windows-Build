@@ -875,26 +875,44 @@ void CandidateWindow::onPaint() {
                 }
                 renderTarget_->PopAxisAlignedClip();
             }
-            if (single) fill(rect(codeRight - 1.5f, edge, codeRight, bottom), palette.accent);
-            else fill(rect(left, headerBottom - 1, right, headerBottom), palette.innerDivider);
+            const bool isReference = skin_ != SkinPreset::Brutal;
+            const bool showNumbers = skin_ == SkinPreset::Terminal || skin_ == SkinPreset::Brutal;
+            if (single) {
+                fill(rect(codeRight - 1.5f, edge, codeRight, bottom), palette.accent);
+            } else if (skin_ != SkinPreset::Typewriter) {
+                const float divInset = isReference ? 8.0f : 0.0f;
+                fill(rect(left + divInset, headerBottom - 1, right - divInset, headerBottom), palette.innerDivider);
+            }
 
-            const bool terminalLeds = skin_ == SkinPreset::Terminal && !single && w > 275.0f;
-            const float ledWidth = terminalLeds ? 28.0f : 0.0f;
-            const float labelRight = codeRight - (single ? 9 : 43 + ledWidth);
+            const bool terminalLeds = skin_ == SkinPreset::Terminal && !single;
+            const float ledWidth = terminalLeds ? 30.0f : 0.0f;
+            const bool showPageCount = !isReference || pages > 1;
+            const float labelRight = codeRight - (single ? 9.0f : (showPageCount ? 43.0f : 8.0f) + ledWidth);
             const float codeX = left + 9;
             const std::wstring preedit = utf8ToWide(composing_);
             const std::wstring displayCode = skin_ == SkinPreset::Brutal ? preedit : L"> " + preedit;
             const auto codeInk = skin_ == SkinPreset::Terminal ? palette.accent : argb(chrome.text);
             const auto secondaryInk = skin_ == SkinPreset::Terminal ? palette.textSecondary : argb(chrome.secondary);
             text(displayCode, codeFormat_, rect(codeX, edge, labelRight, headerBottom), codeInk);
-            const float caret = std::min(labelRight, codeX + measureTextWidthDip(dwriteFactory_, codeFormat_, displayCode) + 2);
-            fill(rect(caret, (headerBottom + edge - 16) / 2, caret + 2, (headerBottom + edge + 16) / 2), palette.accent);
-            if (!single) text(pageLabel, indexFormat_, rect(labelRight + 5, edge, right - 8 - ledWidth, headerBottom), secondaryInk, true);
+            if (skin_ != SkinPreset::Terminal) {
+                const float caretW = skin_ == SkinPreset::Typewriter ? 2.6f : (skin_ == SkinPreset::WoodType ? 1.2f : 2.0f);
+                const float caret = std::min(labelRight, codeX + measureTextWidthDip(dwriteFactory_, codeFormat_, displayCode) + 4.0f);
+                fill(rect(caret, (headerBottom + edge - 15) / 2, caret + caretW, (headerBottom + edge + 15) / 2), palette.accent);
+            }
+            if (!single && showPageCount) {
+                text(pageLabel, indexFormat_, rect(labelRight + 5, edge, right - 8 - ledWidth, headerBottom), secondaryInk, true);
+            }
             if (terminalLeds) {
-                const bool indicators[] = {pending_, !pending_ && candidates_.empty(), !pending_ && !candidates_.empty()};
+                const float ledCy = (edge + headerBottom) * 0.5f;
                 for (int i = 0; i < 3; ++i) {
-                    brush->SetColor(toD2DColor(color(indicators[i] ? palette.candidateActiveBg : 0xFF475C44)));
-                    renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(right - 24 + i * 8, (edge + headerBottom) * .5f), 2.3f, 2.3f), brush);
+                    const float lx = right - 26.0f + i * 8.5f;
+                    const bool lit = (i == 2);
+                    if (lit) {
+                        brush->SetColor(toD2DColor(color(palette.candidateActiveBg).withAlpha(0.32f)));
+                        renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(lx, ledCy), 5.2f, 5.2f), brush);
+                    }
+                    brush->SetColor(toD2DColor(color(lit ? palette.candidateActiveBg : 0xFF475C44)));
+                    renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(lx, ledCy), 2.4f, 2.4f), brush);
                 }
             }
 
@@ -912,26 +930,32 @@ void CandidateWindow::onPaint() {
                 if (active && skin_ == SkinPreset::Brutal) {
                     fill(cell, palette.candidateActiveBg);
                 } else if (active && cell.right - cell.left > 7.0f) {
-                    const auto inset = rect(cell.left + 2.5f, cell.top + 3.0f,
-                        cell.right - 2.5f, cell.bottom - 3.0f);
+                    const float hPad = vertical ? 8.0f : 3.0f;
+                    const auto inset = rect(cell.left + hPad, cell.top + 3.0f,
+                        cell.right - hPad, cell.bottom - 3.0f);
                     const float radius = metrics.candidateRadiusDp;
                     const auto cap = D2D1::RoundedRect(inset, radius, radius);
-                    brush->SetColor(toD2DColor(color(palette.candidateActiveBg)));
-                    renderTarget_->FillRoundedRectangle(cap, brush);
                     if (skin_ == SkinPreset::WoodType) {
-                        brush->SetColor(toD2DColor(color(palette.candidateActiveText)));
-                        renderTarget_->DrawRoundedRectangle(cap, brush, 1.0f);
+                        brush->SetColor(toD2DColor(color(0xFFB54632).withAlpha(0.05f)));
+                        renderTarget_->FillRoundedRectangle(cap, brush);
+                        brush->SetColor(toD2DColor(color(0xFFB54632)));
+                        renderTarget_->DrawRoundedRectangle(cap, brush, 1.3f);
+                    } else {
+                        brush->SetColor(toD2DColor(color(palette.candidateActiveBg)));
+                        renderTarget_->FillRoundedRectangle(cap, brush);
                     }
                 }
-                if (vertical) fill(rect(cell.left, cell.bottom - 1, cell.right, cell.bottom), palette.innerDivider);
+                if (vertical && !isReference) fill(rect(cell.left, cell.bottom - 1, cell.right, cell.bottom), palette.innerDivider);
                 std::wstring number = std::to_wstring(local + 1);
                 if (skin_ == SkinPreset::Brutal) number = L"[" + number + L"]";
-                const float indexX = cell.left + kCandidateIndexInset;
-                const float wordX = indexX + candidateIndexWidth(metrics);
-                const bool hasCode = vertical && active && !preedit.empty();
+                const float indexX = cell.left + (vertical ? 14.0f : kCandidateIndexInset);
+                const float wordX = showNumbers ? (indexX + candidateIndexWidth(metrics)) : (cell.left + (vertical ? 14.0f : 10.0f));
+                const bool hasCode = vertical && active && !preedit.empty() && !isReference;
                 const float wordRight = cell.right - kCandidateTrailingPadding - (hasCode ? kAuxiliaryCodeWidth : 0.0f);
-                text(number, indexFormat_, rect(indexX, y, wordX, cell.bottom),
-                    active ? palette.candidateActiveText : palette.textSecondary);
+                if (showNumbers) {
+                    text(number, indexFormat_, rect(indexX, y, wordX, cell.bottom),
+                        active ? palette.candidateActiveText : palette.textSecondary);
+                }
                 text(word, format, rect(wordX, y, wordRight, cell.bottom),
                     active ? palette.candidateActiveText : pending_ ? palette.textSecondary : palette.textPrimary);
                 if (hasCode) text(L"[" + preedit + L"]", indexFormat_,
@@ -941,7 +965,7 @@ void CandidateWindow::onPaint() {
                 x += width;
             }
 
-            if (vertical) {
+            if (vertical && showPageCount) {
                 fill(rect(left, footerTop, right, bottom), palette.windowHeaderBg);
                 text(pageLabel, indexFormat_, rect(left + 9, footerTop, pagerLeft, bottom), secondaryInk);
             }
