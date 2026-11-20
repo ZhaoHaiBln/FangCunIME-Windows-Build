@@ -1,20 +1,20 @@
 /* 木框活字 */
 [data-ime-theme="wood_type"] {
-  --ime-board-bg: #E8D5B7;
-  --ime-toolbar-bg: #ECDCBE;
-  --ime-key-bg: #F0DFC3;
+  --ime-board-bg: #EBDDCA;
+  --ime-toolbar-bg: #E8D6BA;
+  --ime-key-bg: #E2D4BF;
   --ime-key-pressed-bg: #E8CFAA;
   --ime-fn-key-bg: #DFC9AC;
   --ime-border: #AA8B6C;
   --ime-win-outer-border: #493629;
-  --ime-text: #241B14;
+  --ime-text: #251B14;
   --ime-subtext: #624A37;
   --ime-accent: #963E2C;
   --ime-accent-text: #FFF5DE;
   --ime-cand-active-bg: #F4DBB9;
   --ime-cand-active-text: #8B1A10;
   --ime-win-bg: #F0DFC3;
-  --ime-win-header-bg: #ECDCBE;
+  --ime-win-header-bg: #E8D6BA;
   --ime-radius: 0px;
   --ime-key-gap: 5px;
   --ime-board-pad: 4px;
@@ -26,21 +26,21 @@
 
 /* 经典打字机 */
 [data-ime-theme="typewriter"] {
-  --ime-board-bg: #151412;
-  --ime-toolbar-bg: #191816;
-  --ime-key-bg: #20201D;
+  --ime-board-bg: #E7D8BF;
+  --ime-toolbar-bg: #EBDDCA;
+  --ime-key-bg: #F1E3CA;
   --ime-key-pressed-bg: #322C22;
-  --ime-fn-key-bg: #292724;
-  --ime-border: #817968;
-  --ime-win-outer-border: #2B2823;
-  --ime-text: #F8EACB;
-  --ime-subtext: #D2BC8A;
+  --ime-fn-key-bg: #DDC9AA;
+  --ime-border: #9D8667;
+  --ime-win-outer-border: #34302B;
+  --ime-text: #272019;
+  --ime-subtext: #644F39;
   --ime-accent: #745633;
   --ime-accent-text: #FFF1D2;
   --ime-cand-active-bg: #342A1E;
   --ime-cand-active-text: #FFF1D2;
-  --ime-win-bg: #20201D;
-  --ime-win-header-bg: #191816;
+  --ime-win-bg: #F1DFC0;
+  --ime-win-header-bg: #EBDDCA;
   --ime-radius: 0px;
   --ime-key-gap: 5px;
   --ime-board-pad: 4px;
@@ -52,21 +52,21 @@
 
 /* 绿屏终端 */
 [data-ime-theme="terminal"] {
-  --ime-board-bg: #C5BAA5;
-  --ime-toolbar-bg: #D3C9B7;
-  --ime-key-bg: #E0D8C7;
+  --ime-board-bg: #C9BEA9;
+  --ime-toolbar-bg: #D7CDBA;
+  --ime-key-bg: #E5DDCC;
   --ime-key-pressed-bg: #B7AB94;
   --ime-fn-key-bg: #DBD0BA;
   --ime-border: #8E816B;
   --ime-win-outer-border: #766C5C;
-  --ime-text: #222522;
-  --ime-subtext: #4D493E;
+  --ime-text: #252722;
+  --ime-subtext: #514B40;
   --ime-accent: #303535;
   --ime-accent-text: #F5ECDD;
   --ime-cand-active-bg: #253729;
   --ime-cand-active-text: #C2FFAF;
   --ime-win-bg: #E0D8C7;
-  --ime-win-header-bg: #D3C9B7;
+  --ime-win-header-bg: #D7CDBA;
   --ime-radius: 0px;
   --ime-key-gap: 5px;
   --ime-board-pad: 4px;
@@ -74,6 +74,60 @@
   --ime-win-border-w: 3px;
   --ime-key-shadow: 0 2px 2px #160f0b70;
   --ime-win-shadow: 0 6px 18px #0003;
+}
+
+[data-ime-theme="wood_type"][data-ime-mode="dark"] {
+  --ime-board-bg: #2B211B;
+  --ime-toolbar-bg: #3C2D24;
+  --ime-key-bg: #45362D;
+  --ime-key-pressed-bg: #594235;
+  --ime-fn-key-bg: #392C24;
+  --ime-border: #8B6E55;
+  --ime-win-outer-border: #584031;
+  --ime-text: #F5E3CC;
+  --ime-subtext: #CDB69B;
+  --ime-accent: #A84834;
+  --ime-accent-text: #FFF5DE;
+  --ime-cand-active-bg: #56352A;
+  --ime-cand-active-text: #FFB294;
+  --ime-win-bg: #45362D;
+  --ime-win-header-bg: #3C2D24;
+}
+
+[data-ime-theme="typewriter"][data-ime-mode="dark"] {
+  --ime-board-bg: #181615;
+  --ime-toolbar-bg: #302923;
+  --ime-key-bg: #272321;
+  --ime-key-pressed-bg: #3E342A;
+  --ime-fn-key-bg: #211D19;
+  --ime-border: #8F8271;
+  --ime-win-outer-border: #191615;
+  --ime-text: #F6E8D1;
+  --ime-subtext: #CBBA9B;
+  --ime-accent: #795936;
+  --ime-accent-text: #FFEECC;
+  --ime-cand-active-bg: #3C3126;
+  --ime-cand-active-text: #FFEECC;
+  --ime-win-bg: #272321;
+  --ime-win-header-bg: #302923;
+}
+
+[data-ime-theme="terminal"][data-ime-mode="dark"] {
+  --ime-board-bg: #232720;
+  --ime-toolbar-bg: #34382F;
+  --ime-key-bg: #494B40;
+  --ime-key-pressed-bg: #565A4C;
+  --ime-fn-key-bg: #292C27;
+  --ime-border: #777760;
+  --ime-win-outer-border: #5A5E4F;
+  --ime-text: #F0ECDB;
+  --ime-subtext: #CCCEAF;
+  --ime-accent: #3E6443;
+  --ime-accent-text: #F9FFE8;
+  --ime-cand-active-bg: #253729;
+  --ime-cand-active-text: #B7FFA4;
+  --ime-win-bg: #494B40;
+  --ime-win-header-bg: #34382F;
 }
 
 /* 极客机械 - Light */

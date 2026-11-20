@@ -126,17 +126,20 @@ inline FangCunColors skinColors(SkinPreset skin, bool dark) {
     const auto color = ColorArgb::fromHex;
     switch (skin) {
         case SkinPreset::WoodType:
-            return {color(0xFFE8D5B7), color(0xFFF0DFC3), color(0xFFAA8B6C),
-                color(0xFFECDCBE), color(0xFF241B14), color(0xFF624A37), color(palette.accent),
+            return {color(dark ? 0xFF2B211B : 0xFFEBDDCA), color(dark ? 0xFF45362D : 0xFFE2D4BF),
+                color(dark ? 0xFF8B6E55 : 0xFF735B46), color(palette.windowHeaderBg),
+                color(palette.textPrimary), color(palette.textSecondary), color(palette.accent),
                 color(palette.candidateActiveBg), color(palette.accentText), color(palette.candidateActiveText), {}};
         case SkinPreset::Typewriter:
-            return {color(0xFF151412), color(0xFF20201D), color(0xFF817968),
-                color(0xFF292724), color(0xFFF8EACB), color(0xFFD2BC8A), color(palette.accent),
+            return {color(dark ? 0xFF181615 : 0xFFE7D8BF), color(dark ? 0xFF272321 : 0xFFF1E3CA),
+                color(dark ? 0xFF8F8271 : 0xFF9D8667), color(palette.windowHeaderBg),
+                color(palette.textPrimary), color(palette.textSecondary), color(palette.accent),
                 color(palette.candidateActiveBg), color(palette.accentText), color(palette.candidateActiveText), {}};
         case SkinPreset::Terminal:
-            return {color(0xFFC5BAA5), color(0xFFE0D8C7), color(0xFF8E816B),
-                color(0xFFD3C9B7), color(0xFF222522), color(0xFF4D493E), color(palette.accent),
-                color(0xFF303535), color(palette.accentText), color(palette.accentText), {}};
+            return {color(dark ? 0xFF232720 : 0xFFC9BEA9), color(dark ? 0xFF494B40 : 0xFFE5DDCC),
+                color(dark ? 0xFF777760 : 0xFF81745E), color(palette.windowHeaderBg),
+                color(dark ? 0xFFF0ECDB : 0xFF252722), color(dark ? 0xFFCCCEAF : 0xFF514B40), color(palette.accent),
+                color(palette.candidateActiveBg), color(palette.accentText), color(palette.candidateActiveText), {}};
         default:
             return {color(dark ? 0xFF101412 : 0xFFE6E1D6), color(palette.windowBg),
                 color(palette.innerDivider), color(palette.windowHeaderBg), color(palette.textPrimary),
@@ -152,15 +155,21 @@ inline ColorArgb accentForeground(const FangCunColors& colors) {
 inline SkinMetrics skinMetrics(SkinPreset skin) {
     switch (skin) {
         case SkinPreset::Typewriter:
-            return {"typewriter", "经典打字机", ThemeMode::Light, 10.0f, 0.0f, 0.0f, {}};
+            return {"typewriter", "经典打字机", ThemeMode::Light, 10.0f, 0.0f, 0.0f,
+                {{ColorArgb::fromHex(0xFFFFD08A), ColorArgb::fromHex(0xFFC5AAFF),
+                  ColorArgb::fromHex(0xFF9BCFE5), ColorArgb::fromHex(0xFFEF9A8C)}}};
         case SkinPreset::Terminal:
-            return {"terminal", "绿屏终端", ThemeMode::Light, 4.0f, 0.0f, 0.0f, {}};
+            return {"terminal", "绿屏终端", ThemeMode::Light, 4.0f, 0.0f, 0.0f,
+                {{ColorArgb::fromHex(0xFF97ED97), ColorArgb::fromHex(0xFF7DDDCF),
+                  ColorArgb::fromHex(0xFFB6AAF4), ColorArgb::fromHex(0xFFF4C678)}}};
         case SkinPreset::Brutal:
             return {"brutal", "极客机械", ThemeMode::Dark, 0.0f, 0.0f, 2.0f,
                 {{ColorArgb::fromHex(0xFFDDAA51), ColorArgb::fromHex(0xFFCDBA85),
                   ColorArgb::fromHex(0xFFE4C187), ColorArgb::fromHex(0xFFB1A488)}}};
         default:
-            return {"wood_type", "木框活字", ThemeMode::Light, 3.0f, 0.0f, 0.0f, {}};
+            return {"wood_type", "木框活字", ThemeMode::Light, 3.0f, 0.0f, 0.0f,
+                {{ColorArgb::fromHex(0xFFFFB471), ColorArgb::fromHex(0xFFF0877C),
+                  ColorArgb::fromHex(0xFFE8B5FF), ColorArgb::fromHex(0xFF85CFC3)}}};
     }
 }
 

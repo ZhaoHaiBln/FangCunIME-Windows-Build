@@ -120,7 +120,7 @@ function applySkinTheme(): void {
   }
   const lightLabel = document.getElementById("showcase-light-label");
   const darkLabel = document.getElementById("showcase-dark-label");
-  if (lightLabel) lightLabel.textContent = skin === "brutal" ? "极客机械 · 浅色候选窗" : SKIN_LABELS[skin];
+  if (lightLabel) lightLabel.textContent = `${SKIN_LABELS[skin]} · 浅色候选窗`;
   if (darkLabel) darkLabel.textContent = `${SKIN_LABELS[skin]} · 深色候选窗`;
 }
 
@@ -379,12 +379,13 @@ function switchTab(tab: string): void {
 }
 
 function triggerGlow(x: number, y: number): void {
-  if (!state.typingGlow) return;
+  if (!state.typingGlow || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const layer = document.getElementById("glow-layer")!;
   const pulse = document.createElement("div");
   pulse.className = "glow-pulse";
   pulse.style.left = `${x}px`;
   pulse.style.top = `${y}px`;
+  if (layer.childElementCount >= 6) layer.firstElementChild?.remove();
   layer.appendChild(pulse);
   pulse.addEventListener("animationend", () => pulse.remove());
 }
@@ -425,8 +426,9 @@ document.getElementById("settings-search")!.addEventListener("input", (e) => {
 
 // Preview Stage Interactions
 document.getElementById("preview-card")!.addEventListener("click", (e) => {
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  triggerGlow(e.clientX - rect.left, e.clientY - rect.top);
+  const rect = document.getElementById("cand-window-preview")!.getBoundingClientRect();
+  const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+  triggerGlow(inside ? e.clientX - rect.left : rect.width / 2, inside ? e.clientY - rect.top : rect.height / 2);
 });
 
 document.getElementById("btn-preview-light")!.addEventListener("click", () => {
@@ -540,7 +542,9 @@ document.getElementById("mode-group")!.addEventListener("click", (e) => {
 
 // Effects & Metrics Controls
 document.getElementById("sw-glow")!.addEventListener("change", (e) => {
-  void save({ typingGlow: (e.target as HTMLInputElement).checked });
+  const enabled = (e.target as HTMLInputElement).checked;
+  if (!enabled) document.getElementById("glow-layer")?.replaceChildren();
+  void save({ typingGlow: enabled });
 });
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));

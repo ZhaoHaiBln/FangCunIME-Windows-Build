@@ -267,7 +267,7 @@ void CandidateWindow::update(
     firstCandidateSize_ = std::clamp(firstCandidateSize, HeaderMetricsSpec::kFirstCandidateMinSp, HeaderMetricsSpec::kFirstCandidateMaxSp);
     typingGlow_ = typingGlow;
 
-    glowEngine_.setEnabled(typingGlow_ && skin_ == SkinPreset::Brutal);
+    glowEngine_.setEnabled(typingGlow_);
     glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
 
     if (!hwnd_) return;
@@ -795,7 +795,8 @@ void CandidateWindow::onPaint() {
         fill(rect(edge, edge, right, bottom), palette.windowBg);
         if (skin_ == SkinPreset::WoodType) {
             // The grain stays in the frame, so it never reduces candidate contrast.
-            gradient(rect(0, 0, w, h), 0xFF6B5240, 0xFF382A20, 0xFF5C4432);
+            gradient(rect(0, 0, w, h), darkMode_ ? 0xFF4D382C : 0xFF6B5240,
+                darkMode_ ? 0xFF251B15 : 0xFF382A20, darkMode_ ? 0xFF3F2F25 : 0xFF5C4432);
             for (float line = .5f; line < edge; line += .7f) {
                 fill(rect(0, line, w, line + .3f), 0x5078614C);
                 fill(rect(0, h - line - .3f, w, h - line), 0x50AA8B6C);
@@ -814,13 +815,17 @@ void CandidateWindow::onPaint() {
             const float candidateLeft = single ? codeRight : left;
             const float candidateTop = single ? edge : headerBottom;
             const auto candidateArea = rect(candidateLeft, candidateTop, right, bottom);
+            const auto material = color(palette.windowBg);
             if (skin_ == SkinPreset::Terminal) {
-                gradient(candidateArea, 0xFF0B100B, 0xFF172018, 0xFF0B100B);
+                gradient(candidateArea, argb(ColorArgb::lerp(material, color(0xFF000000), .35f)),
+                    palette.windowBg, argb(ColorArgb::lerp(material, color(0xFF000000), .35f)));
                 for (float y = candidateTop + .75f; y < bottom; y += 2.5f) {
                     fill(rect(candidateLeft, y, right, std::min(y + .55f, bottom)), 0x49000000);
                 }
             } else if (skin_ != SkinPreset::Brutal) {
-                gradient(candidateArea, 0xFFDCC29F, 0xFFF4E3C6, 0xFFE8CFAA);
+                gradient(candidateArea, argb(ColorArgb::lerp(material, color(0xFF4D3020), .13f)),
+                    argb(ColorArgb::lerp(material, color(0xFFFFF6DF), darkMode_ ? .035f : .42f)),
+                    palette.windowBg);
                 for (unsigned i = 1; i <= 150; ++i) {
                     const float x = candidateLeft + (right - candidateLeft) * ((i * 83u) % 157u) / 157.0f;
                     const float y = candidateTop + (bottom - candidateTop) * ((i * 47u) % 149u) / 149.0f;
@@ -832,6 +837,31 @@ void CandidateWindow::onPaint() {
                 }
             }
             fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
+
+            const auto pulses = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, skinMetrics(skin_).glowColors);
+            if (!pulses.empty()) {
+                const auto surface = rect(left, edge, right, bottom);
+                renderTarget_->PushAxisAlignedClip(surface, D2D1_ANTIALIAS_MODE_ALIASED);
+                for (const auto& pulse : pulses) {
+                    // Paint under the glyphs and selection, and keep the wood / metal frame clear.
+                    const auto center = D2D1::Point2F(pulse.cx, pulse.cy);
+                    const D2D1_GRADIENT_STOP stops[] = {
+                        {0.0f, toD2DColor(pulse.innerColor.withAlpha(pulse.innerColor.a / 390.0f))},
+                        {0.46f, toD2DColor(pulse.midColor.withAlpha(pulse.midColor.a / 390.0f))},
+                        {1.0f, toD2DColor(pulse.midColor.withAlpha(0.0f))},
+                    };
+                    ID2D1GradientStopCollection* colors = nullptr;
+                    if (FAILED(renderTarget_->CreateGradientStopCollection(stops, 3, &colors))) continue;
+                    ID2D1RadialGradientBrush* glow = nullptr;
+                    const auto geometry = D2D1::RadialGradientBrushProperties(center, D2D1::Point2F(0, 0), pulse.radius, pulse.radius);
+                    if (SUCCEEDED(renderTarget_->CreateRadialGradientBrush(geometry, colors, &glow))) {
+                        renderTarget_->FillRectangle(surface, glow);
+                        glow->Release();
+                    }
+                    colors->Release();
+                }
+                renderTarget_->PopAxisAlignedClip();
+            }
             if (single) fill(rect(codeRight - 1.5f, edge, codeRight, bottom), palette.accent);
             else fill(rect(left, headerBottom - 1, right, headerBottom), palette.innerDivider);
 

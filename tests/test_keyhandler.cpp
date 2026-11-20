@@ -158,6 +158,11 @@ int runKeyHandlerTests() {
             KH_ASSERT(fangcun::resolveEffectiveDarkMode(fangcun::ThemeMode::Light, preset, true) == false &&
                       fangcun::resolveEffectiveDarkMode(fangcun::ThemeMode::Dark, preset, false) == true,
                       "Explicit OS window modes must work for all four skins");
+            KH_ASSERT(fangcun::sharpPalette(preset, false).windowBg != fangcun::sharpPalette(preset, true).windowBg,
+                      "Light and dark candidates use different surfaces in every skin");
+            for (const auto& glow : metrics.glowColors) {
+                KH_ASSERT(glow.a == 255 && (glow.r != glow.g || glow.g != glow.b), "Every skin supplies colorful glow");
+            }
             for (bool dark : {false, true}) {
                 const auto& screen = fangcun::sharpPalette(preset, dark);
                 const auto colors = fangcun::skinColors(preset, dark);

@@ -266,7 +266,7 @@ float SettingsWindow::dpToPx(float dp) const {
 
 void SettingsWindow::showOrActivate(HWND owner) {
     settings_ = SettingsStore::load();
-    glowEngine_.setEnabled(settings_.typingGlow && settings_.skin == SkinPreset::Brutal);
+    glowEngine_.setEnabled(settings_.typingGlow);
     glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
 
     if (hwnd_ && IsWindow(hwnd_)) {
@@ -474,7 +474,7 @@ void SettingsWindow::onLButtonDown(int x, int y) {
         if (xDip >= hc.rectDip.left && xDip <= hc.rectDip.right &&
             yDip >= hc.rectDip.top && yDip <= hc.rectDip.bottom) {
             if (hc.action == ActionId::PreviewGlowTrigger) {
-                glowEngine_.setEnabled(settings_.typingGlow && settings_.skin == SkinPreset::Brutal);
+                glowEngine_.setEnabled(settings_.typingGlow);
                 glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
                 glowEngine_.trigger(true, xDip - hc.rectDip.left, yDip - hc.rectDip.top);
                 glowEngine_.advanceFrame(monotonicNowNanos());
@@ -530,7 +530,7 @@ void SettingsWindow::applyAction(ActionId action) {
         case ActionId::ModeDark: settings_.themeMode = ThemeMode::Dark; break;
         case ActionId::ToggleTypingGlow:
             settings_.typingGlow = !settings_.typingGlow;
-            glowEngine_.setEnabled(settings_.typingGlow && settings_.skin == SkinPreset::Brutal);
+            glowEngine_.setEnabled(settings_.typingGlow);
             if (settings_.typingGlow) {
                 glowEngine_.trigger(false, 0.0f, 0.0f);
                 glowEngine_.advanceFrame(monotonicNowNanos());
@@ -558,7 +558,7 @@ void SettingsWindow::applyAction(ActionId action) {
             break;
         case ActionId::ResetDefaults:
             settings_ = AppSettings{};
-            glowEngine_.setEnabled(settings_.typingGlow && settings_.skin == SkinPreset::Brutal);
+            glowEngine_.setEnabled(settings_.typingGlow);
             syncGlowTimer();
             break;
         case ActionId::CloseWindow:
