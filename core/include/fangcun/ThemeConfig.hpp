@@ -12,22 +12,17 @@
 namespace fangcun {
 
 enum class SkinPreset {
-    SquareCream,
-    SquareAluminum,
-    SquareAmber,
-    SquareJade,
-    // Source aliases remain valid; persisted INI aliases decode below.
-    NativeLight = SquareAluminum,
-    WarmGrid = SquareCream,
-    Mint = SquareJade,
-    DeepBlue = SquareAmber,
+    WoodType,
+    Typewriter,
+    Terminal,
+    Brutal,
 };
 
 inline SkinPreset parseSkinPreset(std::string_view id) {
-    if (id == "metro" || id == "square_aluminum" || id == "native_light") return SkinPreset::SquareAluminum;
-    if (id == "brutal" || id == "square_amber" || id == "deep_blue") return SkinPreset::SquareAmber;
-    if (id == "eink" || id == "square_jade" || id == "mint") return SkinPreset::SquareJade;
-    return SkinPreset::SquareCream;
+    if (id == "typewriter" || id == "eink" || id == "square_jade" || id == "mint") return SkinPreset::Typewriter;
+    if (id == "terminal" || id == "metro" || id == "square_aluminum" || id == "native_light") return SkinPreset::Terminal;
+    if (id == "brutal" || id == "square_amber" || id == "deep_blue") return SkinPreset::Brutal;
+    return SkinPreset::WoodType;
 }
 
 enum class ThemeMode {
@@ -114,10 +109,10 @@ struct SkinMetrics {
 // The supplied native palette also supplies the fallback settings window.
 inline const SharpIme::WinThemeSpec& sharpTheme(SkinPreset skin) {
     switch (skin) {
-        case SkinPreset::SquareAluminum: return SharpIme::THEME_METRO;
-        case SkinPreset::SquareAmber: return SharpIme::THEME_BRUTAL;
-        case SkinPreset::SquareJade: return SharpIme::THEME_EINK;
-        default: return SharpIme::THEME_SWISS;
+        case SkinPreset::Typewriter: return SharpIme::THEME_TYPEWRITER;
+        case SkinPreset::Terminal: return SharpIme::THEME_TERMINAL;
+        case SkinPreset::Brutal: return SharpIme::THEME_BRUTAL;
+        default: return SharpIme::THEME_WOOD_TYPE;
     }
 }
 
@@ -129,14 +124,25 @@ inline const SharpIme::WinPalette& sharpPalette(SkinPreset skin, bool dark) {
 inline FangCunColors skinColors(SkinPreset skin, bool dark) {
     const auto& palette = sharpPalette(skin, dark);
     const auto color = ColorArgb::fromHex;
-    constexpr uint32_t board[4][2] = {
-        {0xFFD4D4CE, 0xFF2A2A2A}, {0xFFE3E7ED, 0xFF151920},
-        {0xFFE6E1D6, 0xFF101412}, {0xFFFFFFFF, 0xFF000000}
-    };
-    return {color(board[static_cast<int>(skin)][dark]), color(palette.windowBg),
-        color(palette.innerDivider), color(palette.windowHeaderBg), color(palette.textPrimary),
-        color(palette.textSecondary), color(palette.accent), color(palette.candidateActiveBg),
-        color(palette.accentText), color(palette.candidateActiveText), color(palette.hardShadowColor)};
+    switch (skin) {
+        case SkinPreset::WoodType:
+            return {color(0xFFE8D5B7), color(0xFFF0DFC3), color(0xFFAA8B6C),
+                color(0xFFECDCBE), color(0xFF241B14), color(0xFF624A37), color(palette.accent),
+                color(palette.candidateActiveBg), color(palette.accentText), color(palette.candidateActiveText), {}};
+        case SkinPreset::Typewriter:
+            return {color(0xFF151412), color(0xFF20201D), color(0xFF817968),
+                color(0xFF292724), color(0xFFF8EACB), color(0xFFD2BC8A), color(palette.accent),
+                color(palette.candidateActiveBg), color(palette.accentText), color(palette.candidateActiveText), {}};
+        case SkinPreset::Terminal:
+            return {color(0xFFC5BAA5), color(0xFFE0D8C7), color(0xFF8E816B),
+                color(0xFFD3C9B7), color(0xFF222522), color(0xFF4D493E), color(palette.accent),
+                color(0xFF303535), color(palette.accentText), color(palette.accentText), {}};
+        default:
+            return {color(dark ? 0xFF101412 : 0xFFE6E1D6), color(palette.windowBg),
+                color(palette.innerDivider), color(palette.windowHeaderBg), color(palette.textPrimary),
+                color(palette.textSecondary), color(palette.accent), color(palette.candidateActiveBg),
+                color(palette.accentText), color(palette.candidateActiveText), color(palette.hardShadowColor)};
+    }
 }
 
 inline ColorArgb accentForeground(const FangCunColors& colors) {
@@ -145,24 +151,17 @@ inline ColorArgb accentForeground(const FangCunColors& colors) {
 
 inline SkinMetrics skinMetrics(SkinPreset skin) {
     switch (skin) {
-        case SkinPreset::SquareCream:
-            return SkinMetrics{"swiss", "瑞士网格", ThemeMode::Light,
-                0.0f, 0.0f, 0.0f,
-                {{ColorArgb::fromHex(0xFFACCAA2), ColorArgb::fromHex(0xFFD7C5A6), ColorArgb::fromHex(0xFFC0D3B2), ColorArgb::fromHex(0xFFD9CFB5)}}};
-        case SkinPreset::SquareAluminum:
-            return SkinMetrics{"metro", "现代色块", ThemeMode::Light,
-                0.0f, 0.0f, 0.0f,
-                {{ColorArgb::fromHex(0xFF92B8DF), ColorArgb::fromHex(0xFF83C9D0), ColorArgb::fromHex(0xFFB7BCE2), ColorArgb::fromHex(0xFFA5BDCF)}}};
-        case SkinPreset::SquareAmber:
-            return SkinMetrics{"brutal", "极客机械", ThemeMode::Dark,
-                0.0f, 0.0f, 2.0f,
-                {{ColorArgb::fromHex(0xFFDDAA51), ColorArgb::fromHex(0xFFCDBA85), ColorArgb::fromHex(0xFFE4C187), ColorArgb::fromHex(0xFFB1A488)}}};
-        case SkinPreset::SquareJade:
-            return SkinMetrics{"eink", "纯粹线框", ThemeMode::Light,
-                0.0f, 0.0f, 0.0f,
-                {{ColorArgb::fromHex(0xFF91CDB0), ColorArgb::fromHex(0xFFB9DDC7), ColorArgb::fromHex(0xFFA5CEBF), ColorArgb::fromHex(0xFFCADDB5)}}};
+        case SkinPreset::Typewriter:
+            return {"typewriter", "经典打字机", ThemeMode::Light, 10.0f, 0.0f, 0.0f, {}};
+        case SkinPreset::Terminal:
+            return {"terminal", "绿屏终端", ThemeMode::Light, 4.0f, 0.0f, 0.0f, {}};
+        case SkinPreset::Brutal:
+            return {"brutal", "极客机械", ThemeMode::Dark, 0.0f, 0.0f, 2.0f,
+                {{ColorArgb::fromHex(0xFFDDAA51), ColorArgb::fromHex(0xFFCDBA85),
+                  ColorArgb::fromHex(0xFFE4C187), ColorArgb::fromHex(0xFFB1A488)}}};
+        default:
+            return {"wood_type", "木框活字", ThemeMode::Light, 3.0f, 0.0f, 0.0f, {}};
     }
-    return skinMetrics(SkinPreset::SquareCream);
 }
 
 inline bool resolveEffectiveDarkMode(ThemeMode mode, SkinPreset skin, bool systemIsDark) {
@@ -193,14 +192,13 @@ struct GlassKeyColors {
 inline GlassKeyColors computeGlassKeyColors(
     SkinPreset skin, const FangCunColors& colors, float keyOpacity = 0.82f,
     bool pressed = false, bool functional = false, bool emphasized = false, bool selected = false) {
-    const bool brutal = skin == SkinPreset::SquareAmber;
-    const bool eink = skin == SkinPreset::SquareJade;
-    auto fill = emphasized ? colors.accent : (selected || (eink && pressed) ? colors.pressed :
-        (functional ? colors.functionKey : colors.key));
-    if (!eink && !emphasized && !selected) fill = fill.withAlpha(std::clamp(keyOpacity, 0.4f, 1.0f));
-    const float border = skin == SkinPreset::SquareAluminum ? 0.0f : brutal ? 1.5f : 1.0f;
-    return {fill, fill, colors.hardShadow, colors.border, {}, {},
-        0.0f, brutal ? 2.0f : 0.0f, pressed && brutal ? 2.0f : 0.0f, 0.0f, border, 0.0f, 0.0f};
+    const bool brutal = skin == SkinPreset::Brutal;
+    auto fill = emphasized ? colors.accent : (selected ? colors.pressed : (functional ? colors.functionKey : colors.key));
+    if (!emphasized && !selected) fill = fill.withAlpha(std::clamp(keyOpacity, 0.4f, 1.0f));
+    const auto lowerFace = brutal ? fill : ColorArgb::lerp(fill, colors.border, .18f);
+    return {fill, lowerFace, colors.hardShadow, colors.border, {}, {},
+        skinMetrics(skin).cornerRadiusDp, brutal ? 2.0f : 0.0f,
+        pressed && brutal ? 2.0f : 0.0f, 0.0f, brutal ? 1.5f : 1.0f, 0.0f, 0.0f};
 }
 
 struct BackdropGradientColors {

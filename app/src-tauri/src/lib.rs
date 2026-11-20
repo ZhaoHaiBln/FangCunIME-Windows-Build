@@ -334,14 +334,11 @@ fn apply_native_chrome(hwnd: windows_sys::Win32::Foundation::HWND, settings: &Ap
     const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
     const DWMWCP_DONOTROUND: i32 = 1;
     let (background, text): (u32, u32) = match (settings.skin.as_str(), settings.dark_mode) {
-        ("metro", false) => (0xF4F7FB, 0x0F1722),
-        ("metro", true) => (0x151921, 0xF2F6FC),
+        ("typewriter", _) => (0x191816, 0xF8EACB),
+        ("terminal", _) => (0xD3C9B7, 0x222522),
         ("brutal", false) => (0xEFEAE0, 0x121212),
         ("brutal", true) => (0x0F1412, 0xE6F4EC),
-        ("eink", false) => (0xFFFFFF, 0x000000),
-        ("eink", true) => (0x000000, 0xFFFFFF),
-        (_, false) => (0xF1F1ED, 0x141413),
-        (_, true) => (0x121212, 0xEFEFEC),
+        _ => (0xECDCBE, 0x241B14),
     };
     let color_ref = |rgb: u32| ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
     let caption = color_ref(background);

@@ -266,7 +266,7 @@ float SettingsWindow::dpToPx(float dp) const {
 
 void SettingsWindow::showOrActivate(HWND owner) {
     settings_ = SettingsStore::load();
-    glowEngine_.setEnabled(settings_.typingGlow && settings_.skin != SkinPreset::SquareJade);
+    glowEngine_.setEnabled(settings_.typingGlow && settings_.skin == SkinPreset::Brutal);
     glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
 
     if (hwnd_ && IsWindow(hwnd_)) {
@@ -474,7 +474,7 @@ void SettingsWindow::onLButtonDown(int x, int y) {
         if (xDip >= hc.rectDip.left && xDip <= hc.rectDip.right &&
             yDip >= hc.rectDip.top && yDip <= hc.rectDip.bottom) {
             if (hc.action == ActionId::PreviewGlowTrigger) {
-                glowEngine_.setEnabled(settings_.typingGlow && settings_.skin != SkinPreset::SquareJade);
+                glowEngine_.setEnabled(settings_.typingGlow && settings_.skin == SkinPreset::Brutal);
                 glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
                 glowEngine_.trigger(true, xDip - hc.rectDip.left, yDip - hc.rectDip.top);
                 glowEngine_.advanceFrame(monotonicNowNanos());
@@ -521,16 +521,16 @@ void SettingsWindow::applyAction(ActionId action) {
         case ActionId::SchemeNineKey: settings_.scheme = InputScheme::NineKey; break;
         case ActionId::ToggleMixedInput: settings_.mixedInput = !settings_.mixedInput; break;
         case ActionId::ToggleChinesePunct: settings_.chinesePunctuation = !settings_.chinesePunctuation; break;
-        case ActionId::SkinNativeLight: settings_.skin = SkinPreset::NativeLight; break;
-        case ActionId::SkinWarmGrid: settings_.skin = SkinPreset::WarmGrid; break;
-        case ActionId::SkinMint: settings_.skin = SkinPreset::Mint; break;
-        case ActionId::SkinDeepBlue: settings_.skin = SkinPreset::DeepBlue; break;
+        case ActionId::SkinTerminal: settings_.skin = SkinPreset::Terminal; break;
+        case ActionId::SkinWoodType: settings_.skin = SkinPreset::WoodType; break;
+        case ActionId::SkinTypewriter: settings_.skin = SkinPreset::Typewriter; break;
+        case ActionId::SkinBrutal: settings_.skin = SkinPreset::Brutal; break;
         case ActionId::ModeSystem: settings_.themeMode = ThemeMode::System; break;
         case ActionId::ModeLight: settings_.themeMode = ThemeMode::Light; break;
         case ActionId::ModeDark: settings_.themeMode = ThemeMode::Dark; break;
         case ActionId::ToggleTypingGlow:
             settings_.typingGlow = !settings_.typingGlow;
-            glowEngine_.setEnabled(settings_.typingGlow && settings_.skin != SkinPreset::SquareJade);
+            glowEngine_.setEnabled(settings_.typingGlow && settings_.skin == SkinPreset::Brutal);
             if (settings_.typingGlow) {
                 glowEngine_.trigger(false, 0.0f, 0.0f);
                 glowEngine_.advanceFrame(monotonicNowNanos());
@@ -558,7 +558,7 @@ void SettingsWindow::applyAction(ActionId action) {
             break;
         case ActionId::ResetDefaults:
             settings_ = AppSettings{};
-            glowEngine_.setEnabled(settings_.typingGlow && settings_.skin != SkinPreset::SquareJade);
+            glowEngine_.setEnabled(settings_.typingGlow && settings_.skin == SkinPreset::Brutal);
             syncGlowTimer();
             break;
         case ActionId::CloseWindow:
@@ -567,8 +567,8 @@ void SettingsWindow::applyAction(ActionId action) {
         default:
             return;
     }
-    if (action == ActionId::SkinNativeLight || action == ActionId::SkinWarmGrid ||
-        action == ActionId::SkinMint || action == ActionId::SkinDeepBlue) {
+    if (action == ActionId::SkinTerminal || action == ActionId::SkinWoodType ||
+        action == ActionId::SkinTypewriter || action == ActionId::SkinBrutal) {
         settings_.themeMode = skinMetrics(settings_.skin).defaultThemeMode;
     }
     saveAndNotify();
@@ -622,10 +622,11 @@ void SettingsWindow::drawGlassButton(
                 face.right + offset, face.bottom + offset), solid);
         }
         solid->SetColor(toD2DColor(gc.top));
-        renderTarget_->FillRectangle(face, solid);
+        const auto cap = D2D1::RoundedRect(face, gc.cornerRadiusDp, gc.cornerRadiusDp);
+        renderTarget_->FillRoundedRectangle(cap, solid);
         if (gc.borderWidthDp > 0) {
             solid->SetColor(toD2DColor(gc.edge));
-            renderTarget_->DrawRectangle(face, solid, gc.borderWidthDp);
+            renderTarget_->DrawRoundedRectangle(cap, solid, gc.borderWidthDp);
         }
         solid->Release();
     }
@@ -974,12 +975,12 @@ void SettingsWindow::onPaint() {
         float iw = w - 28.0f;
         float ry = cy + 40.0f;
         float w2 = (iw - 6.0f) / 2.0f;
-        addPill(ix, ry, w2, 36.0f, L"瑞士网格", ActionId::SkinWarmGrid, settings_.skin == SkinPreset::SquareCream);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"现代色块", ActionId::SkinNativeLight, settings_.skin == SkinPreset::SquareAluminum);
+        addPill(ix, ry, w2, 36.0f, L"木框活字", ActionId::SkinWoodType, settings_.skin == SkinPreset::WoodType);
+        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"经典打字机", ActionId::SkinTypewriter, settings_.skin == SkinPreset::Typewriter);
 
         ry += 42.0f;
-        addPill(ix, ry, w2, 36.0f, L"极客机械", ActionId::SkinDeepBlue, settings_.skin == SkinPreset::SquareAmber);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"纯粹线框", ActionId::SkinMint, settings_.skin == SkinPreset::SquareJade);
+        addPill(ix, ry, w2, 36.0f, L"绿屏终端", ActionId::SkinTerminal, settings_.skin == SkinPreset::Terminal);
+        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"极客机械", ActionId::SkinBrutal, settings_.skin == SkinPreset::Brutal);
 
         ry += 46.0f;
         float w3 = (iw - 12.0f) / 3.0f;

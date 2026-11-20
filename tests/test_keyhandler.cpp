@@ -125,60 +125,58 @@ int runKeyHandlerTests() {
     KH_ASSERT(actEngSpace.commitText && actEngSpace.textToCommit == "AI ",
               "Space on English candidate should append trailing space");
 
-    // 8. Sharp layouts, token colors, and bounded typing glow.
+    // 8. Reference materials, migrated settings, and bounded typing glow.
     {
-        const auto& swiss = fangcun::sharpTheme(fangcun::SkinPreset::WarmGrid);
-        KH_ASSERT(swiss.metrics.collapseCandidateCells && swiss.metrics.outerBorderWidthPx == 1,
-                  "Swiss merges candidate cells into a single-pixel grid");
-        const auto& metro = fangcun::sharpTheme(fangcun::SkinPreset::NativeLight);
-        KH_ASSERT(metro.metrics.metroLeftBarWidthPx == 4 && metro.metrics.hardShadowOffsetPx == 0,
-                  "Metro needs a flat appearance and four pixel anchor");
-        const auto& brutal = fangcun::sharpTheme(fangcun::SkinPreset::DeepBlue);
+        using fangcun::SkinPreset;
+        const auto& wood = fangcun::sharpTheme(SkinPreset::WoodType);
+        KH_ASSERT(wood.light.windowOuterBorder == 0xFF493629 && wood.light.candidateActiveText == 0xFF8B1A10,
+                  "Wood type uses a walnut frame and red ink");
+        const auto& typewriter = fangcun::sharpTheme(SkinPreset::Typewriter);
+        KH_ASSERT(typewriter.metrics.candidateRadiusDp == 6 && typewriter.light.candidateActiveBg == 0xFF29251D,
+                  "Typewriter selection is a dark round-edged stamp on paper");
+        const auto& terminal = fangcun::sharpTheme(SkinPreset::Terminal);
+        KH_ASSERT(terminal.metrics.useMonospaceCode && terminal.light.textPrimary == 0xFFA5F492,
+                  "Terminal uses green screen text and monospaced code");
+        const auto& brutal = fangcun::sharpTheme(SkinPreset::Brutal);
         KH_ASSERT(brutal.metrics.useMonospaceCode && brutal.metrics.hardShadowOffsetPx == 4,
-                  "Brutal has a monospace code and four pixel hard shadow");
-        const auto& eink = fangcun::sharpTheme(fangcun::SkinPreset::Mint);
-        KH_ASSERT(eink.light.candidateActiveBg == 0xFF000000 && eink.dark.candidateActiveBg == 0xFFFFFFFF &&
-                  eink.dark.innerDivider == 0xFFFFFFFF,
-                  "E-Ink uses binary opaque colors for highlights and borders");
+                  "Brutal keeps its monospace code and four pixel hard shadow");
 
-        const std::array presets{
-            fangcun::SkinPreset::SquareCream, fangcun::SkinPreset::SquareAluminum,
-            fangcun::SkinPreset::SquareAmber, fangcun::SkinPreset::SquareJade,
+        const std::array presets{SkinPreset::WoodType, SkinPreset::Typewriter, SkinPreset::Terminal, SkinPreset::Brutal};
+        const std::array<std::string_view, 4> ids{"wood_type", "typewriter", "terminal", "brutal"};
+        const std::array<std::string_view, 4> oldIds{"swiss", "eink", "metro", "deep_blue"};
+        const auto contrast = [](fangcun::ColorArgb a, fangcun::ColorArgb b) {
+            auto la = a.relativeLuminance();
+            auto lb = b.relativeLuminance();
+            return (std::max(la, lb) + .05f) / (std::min(la, lb) + .05f);
         };
-        const std::array<std::string_view, 4> ids{"swiss", "metro", "brutal", "eink"};
-        const std::array<std::string_view, 4> oldIds{"warm_grid", "native_light", "deep_blue", "mint"};
         for (size_t i = 0; i < presets.size(); ++i) {
             const auto preset = presets[i];
             const auto metrics = fangcun::skinMetrics(preset);
             KH_ASSERT(fangcun::parseSkinPreset(ids[i]) == preset && fangcun::parseSkinPreset(oldIds[i]) == preset,
-                      "Canonical and old INI IDs must select the same square skin");
-            KH_ASSERT(std::string_view(metrics.id) == ids[i] && metrics.cornerRadiusDp == 0.0f,
-                      "Skin serialization and zero-radius geometry must agree");
+                      "Stored IDs and their replacements must agree");
+            KH_ASSERT(std::string_view(metrics.id) == ids[i], "Skin serialization must preserve the chosen material");
             KH_ASSERT(fangcun::resolveEffectiveDarkMode(fangcun::ThemeMode::Light, preset, true) == false &&
                       fangcun::resolveEffectiveDarkMode(fangcun::ThemeMode::Dark, preset, false) == true,
-                      "Explicit light and dark modes must remain available for every square skin");
+                      "Explicit OS window modes must work for all four skins");
             for (bool dark : {false, true}) {
-                const auto palette = fangcun::skinColors(preset, dark);
-                const auto foreground = palette.onCandidate;
-                const auto luminance = palette.pressed.relativeLuminance();
-                const auto foregroundLuminance = foreground.relativeLuminance();
-                const float contrast = (std::max(luminance, foregroundLuminance) + 0.05f) /
-                                       (std::min(luminance, foregroundLuminance) + 0.05f);
-                KH_ASSERT(contrast >= 4.5f, "Selected candidate text must remain readable in all eight palettes");
-                const auto baseLuminance = palette.keyboard.relativeLuminance();
-                const auto textLuminance = palette.text.relativeLuminance();
-                KH_ASSERT((std::max(baseLuminance, textLuminance) + 0.05f) /
-                          (std::min(baseLuminance, textLuminance) + 0.05f) >= 4.5f,
-                          "Candidate text must remain readable against every keyboard background");
-                const auto square = fangcun::computeGlassKeyColors(preset, palette, 0.4f, true, true, true);
-                KH_ASSERT(square.cornerRadiusDp == 0.0f && square.top.a == 255 && square.ledgeDepthDp == (preset == fangcun::SkinPreset::SquareAmber ? 2.0f : 0.0f),
-                          "Pressed functional and emphasized surfaces must stay square, opaque with the selected theme’s shadow depth");
+                const auto& screen = fangcun::sharpPalette(preset, dark);
+                const auto colors = fangcun::skinColors(preset, dark);
+                using fangcun::ColorArgb;
+                KH_ASSERT(contrast(ColorArgb::fromHex(screen.candidateActiveText),
+                                   ColorArgb::fromHex(screen.candidateActiveBg)) >= 4.5f,
+                          "Selected candidates must have readable text");
+                KH_ASSERT(contrast(colors.text, colors.keyboard) >= 4.5f &&
+                          contrast(colors.onCandidate, colors.pressed) >= 4.5f &&
+                          contrast(colors.onAccent, colors.accent) >= 4.5f,
+                          "Desktop controls must have readable text");
+                const auto preview = fangcun::computeGlassKeyColors(preset, colors, .4f, true, true, true);
+                KH_ASSERT(preview.cornerRadiusDp == metrics.cornerRadiusDp && preview.top.a == 255 &&
+                          preview.ledgeDepthDp == (preset == SkinPreset::Brutal ? 2.0f : 0.0f),
+                          "Preview geometry must preserve each material's cap shape");
             }
         }
-        KH_ASSERT(fangcun::parseSkinPreset("unknown") == fangcun::SkinPreset::SquareCream,
-                  "An invalid persisted skin falls back to Swiss");
-        KH_ASSERT(fangcun::HeaderMetricsSpec::kFirstCornerDp == 0.0f && fangcun::HeaderMetricsSpec::kFirstBackgroundAlpha == 1.0f,
-                  "Candidate selection remains a solid square block");
+        KH_ASSERT(fangcun::parseSkinPreset("unknown") == SkinPreset::WoodType,
+                  "An invalid skin falls back to wood type");
 
         fangcun::TypingGlowEngine glow;
         glow.setEnabled(true);
@@ -188,7 +186,7 @@ int runKeyHandlerTests() {
                   "TypingGlow must cap at 6 pulses");
         glow.advanceFrame(1'000'000'000LL);
         glow.advanceFrame(1'050'000'000LL);
-        auto circles = glow.buildRenderCircles(360.0f, 68.0f, 1.0f, false, fangcun::skinMetrics(fangcun::SkinPreset::NativeLight).glowColors);
+        auto circles = glow.buildRenderCircles(360.0f, 68.0f, 1.0f, false, fangcun::skinMetrics(fangcun::SkinPreset::Brutal).glowColors);
         KH_ASSERT(circles.size() == 12, "Each pulse must emit primary + trailing glow circle");
         glow.advanceFrame(1'000'000'000LL + fangcun::TypingGlowEngine::kDurationNanos);
         KH_ASSERT(glow.activeCount() == 0, "Pulses must expire after 1100ms");

@@ -1,5 +1,5 @@
 #define MyAppName "方寸输入法"
-#define MyAppVersion "0.5.1"
+#define MyAppVersion "0.6.0"
 #define MyAppPublisher "FangCunIME"
 #define MyAppURL "https://github.com/ZhaoHaiBln/FangCunIME-Windows-Build"
 #ifndef MySourceDir

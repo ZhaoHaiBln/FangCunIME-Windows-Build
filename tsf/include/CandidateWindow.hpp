@@ -104,14 +104,14 @@ private:
     int selectedIndex_ = 0;
     bool pending_ = false;
     InputScheme scheme_ = InputScheme::Flypy;
-    SkinPreset skin_ = SkinPreset::SquareCream;
+    SkinPreset skin_ = SkinPreset::WoodType;
     bool darkMode_ = false;
     int firstCandidateSize_ = 20;
     bool typingGlow_ = true;
     size_t pageSize_ = kPageSize;
     bool wheelPaging_ = true;
     CandidateLayout layout_ = CandidateLayout::DoubleRow;
-    bool lastBudgetMono_ = false;
+    SkinPreset lastBudgetSkin_ = SkinPreset::WoodType;
     float singleCodeWidth_ = 110.0f;
     bool toastActive_ = false;
     bool toastEnglish_ = false;

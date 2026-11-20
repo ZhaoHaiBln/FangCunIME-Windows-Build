@@ -12,7 +12,7 @@ struct AppSettings {
     InputScheme scheme = InputScheme::Flypy;
     bool mixedInput = true;
     bool chinesePunctuation = true;
-    SkinPreset skin = SkinPreset::SquareCream;
+    SkinPreset skin = SkinPreset::WoodType;
     ThemeMode themeMode = ThemeMode::System;
     bool darkMode = false; // legacy / explicit override when themeMode != System
     int firstCandidateSize = 20;

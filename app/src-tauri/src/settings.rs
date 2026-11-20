@@ -58,7 +58,7 @@ impl Default for AppSettings {
             caps_lock_bypass: true,
             page_size: 7,
             wheel_paging: true,
-            skin: "swiss".to_string(),
+            skin: "wood_type".to_string(),
             theme_mode: "system".to_string(),
             dark_mode: sys_dark,
             system_dark: sys_dark,
@@ -96,16 +96,15 @@ fn settings_path() -> PathBuf {
     data_dir().join("settings.ini")
 }
 
-// Keep legacy files readable while offering only the four current square skins.
+// Keep legacy files readable while offering only the four current skins.
 // This changes one visual identifier; language, privacy, sharing and typography
 // preferences continue to be read from the same existing settings file.
 fn canonical_skin(id: &str) -> &'static str {
     match id {
-        "metro" | "square_aluminum" | "native_light" => "metro",
+        "terminal" | "metro" | "square_aluminum" | "native_light" => "terminal",
         "brutal" | "square_amber" | "deep_blue" => "brutal",
-        "eink" | "square_jade" | "mint" => "eink",
-        "swiss" | "square_cream" | "warm_grid" => "swiss",
-        _ => "swiss",
+        "typewriter" | "eink" | "square_jade" | "mint" => "typewriter",
+        _ => "wood_type",
     }
 }
 
@@ -366,9 +365,12 @@ mod tests {
     #[test]
     fn upgrading_legacy_skin_ini_preserves_typography_language_and_clipboard_preferences() {
         for (legacy, current) in [
-            ("native_light", "metro"),
-            ("warm_grid", "swiss"),
-            ("mint", "eink"),
+            ("native_light", "terminal"),
+            ("metro", "terminal"),
+            ("warm_grid", "wood_type"),
+            ("swiss", "wood_type"),
+            ("mint", "typewriter"),
+            ("eink", "typewriter"),
             ("deep_blue", "brutal"),
         ] {
             let file = IniFixture::new();
@@ -406,10 +408,10 @@ mod tests {
     #[test]
     fn all_four_new_skins_round_trip_through_real_ini_without_resetting_explicit_theme() {
         for skin in [
-            "swiss",
-            "metro",
+            "wood_type",
+            "typewriter",
+            "terminal",
             "brutal",
-            "eink",
         ] {
             let file = IniFixture::new();
             let mut selected = AppSettings::default();

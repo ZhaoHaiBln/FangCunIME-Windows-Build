@@ -63,7 +63,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   capsLockBypass: true,
   pageSize: 7,
   wheelPaging: true,
-  skin: "swiss",
+  skin: "wood_type",
   themeMode: "system",
   darkMode: false,
   systemDark: false,
@@ -78,18 +78,19 @@ const DEFAULT_SETTINGS: AppSettings = {
   traditional: false,
 };
 
-type SkinId = "swiss" | "metro" | "brutal" | "eink";
-const SKIN_ORDER: SkinId[] = ["swiss", "metro", "brutal", "eink"];
+type SkinId = "wood_type" | "typewriter" | "terminal" | "brutal";
+const SKIN_ORDER: SkinId[] = ["wood_type", "typewriter", "terminal", "brutal"];
 const SKIN_LABELS: Record<SkinId, string> = {
-  swiss: "瑞士网格", metro: "现代色块", brutal: "极客机械", eink: "纯粹线框",
+  wood_type: "木框活字", typewriter: "经典打字机", terminal: "绿屏终端", brutal: "极客机械",
 };
 function canonicalSkin(value: string): SkinId {
   if (SKIN_ORDER.includes(value as SkinId)) return value as SkinId;
   const legacy: Record<string, SkinId> = {
-    warm_grid: "swiss", native_light: "metro", deep_blue: "brutal", mint: "eink",
-    square_cream: "swiss", square_aluminum: "metro", square_amber: "brutal", square_jade: "eink",
+    swiss: "wood_type", metro: "terminal", eink: "typewriter",
+    warm_grid: "wood_type", native_light: "terminal", deep_blue: "brutal", mint: "typewriter",
+    square_cream: "wood_type", square_aluminum: "terminal", square_amber: "brutal", square_jade: "typewriter",
   };
-  return Object.prototype.hasOwnProperty.call(legacy, value) ? legacy[value]! : "swiss";
+  return Object.prototype.hasOwnProperty.call(legacy, value) ? legacy[value]! : "wood_type";
 }
 
 function effectiveDark(): boolean {
@@ -119,7 +120,7 @@ function applySkinTheme(): void {
   }
   const lightLabel = document.getElementById("showcase-light-label");
   const darkLabel = document.getElementById("showcase-dark-label");
-  if (lightLabel) lightLabel.textContent = `${SKIN_LABELS[skin]} · 浅色候选窗`;
+  if (lightLabel) lightLabel.textContent = skin === "brutal" ? "极客机械 · 浅色候选窗" : SKIN_LABELS[skin];
   if (darkLabel) darkLabel.textContent = `${SKIN_LABELS[skin]} · 深色候选窗`;
 }
 

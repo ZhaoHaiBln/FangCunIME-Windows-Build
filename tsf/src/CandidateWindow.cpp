@@ -17,12 +17,10 @@ constexpr float kCandidateTrailingPadding = 6.0f;
 constexpr float kAuxiliaryCodeWidth = 74.0f;
 constexpr float kPagerWidth = 40.0f;
 
-float candidateIndexInset(const SharpIme::WinMetrics& metrics) {
-    return metrics.collapseCandidateCells ? 11.0f : 6.0f;
-}
+constexpr float kCandidateIndexInset = 6.0f;
 
 float candidateIndexWidth(const SharpIme::WinMetrics& metrics) {
-    return metrics.useMonospaceCode ? 23.0f : 14.0f;
+    return metrics.hardShadowOffsetPx > 0 ? 23.0f : 14.0f;
 }
 
 template <typename T>
@@ -269,7 +267,7 @@ void CandidateWindow::update(
     firstCandidateSize_ = std::clamp(firstCandidateSize, HeaderMetricsSpec::kFirstCandidateMinSp, HeaderMetricsSpec::kFirstCandidateMaxSp);
     typingGlow_ = typingGlow;
 
-    glowEngine_.setEnabled(typingGlow_ && skin_ != SkinPreset::SquareJade);
+    glowEngine_.setEnabled(typingGlow_ && skin_ == SkinPreset::Brutal);
     glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
 
     if (!hwnd_) return;
@@ -322,7 +320,7 @@ void CandidateWindow::showModeToast(bool englishMode, SkinPreset skin, bool dark
 void CandidateWindow::recomputeHeaderBudget() {
     if (!ensureFactories()) return;
     const bool mono = sharpTheme(skin_).metrics.useMonospaceCode;
-    if (lastBudgetMono_ == mono && lastBudgetFirstSize_ == firstCandidateSize_ && lastBudgetDpi_ == dpi_ && primaryFormat_) {
+    if (lastBudgetSkin_ == skin_ && lastBudgetFirstSize_ == firstCandidateSize_ && lastBudgetDpi_ == dpi_ && primaryFormat_) {
         return;
     }
 
@@ -332,23 +330,23 @@ void CandidateWindow::recomputeHeaderBudget() {
     safeRelease(indexFormat_);
 
     auto makeFormat = [this](float sizeDip, DWRITE_FONT_WEIGHT weight, IDWriteTextFormat** out, const wchar_t* family = kUiFontFamily) {
-        if (SUCCEEDED(dwriteFactory_->CreateTextFormat(
-                family,
-                nullptr,
-                weight,
-                DWRITE_FONT_STYLE_NORMAL,
-                DWRITE_FONT_STRETCH_NORMAL,
-                sizeDip,
-                L"",
-                out)) && *out) {
+        const auto create = [&](const wchar_t* name) {
+            return dwriteFactory_->CreateTextFormat(name, nullptr, weight,
+                DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, sizeDip, L"", out);
+        };
+        if (FAILED(create(family)) && family != kUiFontFamily) create(kUiFontFamily);
+        if (*out) {
             (*out)->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
             (*out)->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         }
     };
 
-    makeFormat(static_cast<float>(HeaderMetricsSpec::kCodeSp + 1), DWRITE_FONT_WEIGHT_MEDIUM, &codeFormat_, mono ? L"Consolas" : kUiFontFamily);
-    makeFormat(static_cast<float>(firstCandidateSize_), DWRITE_FONT_WEIGHT_MEDIUM, &primaryFormat_);
-    makeFormat(static_cast<float>(HeaderMetricsSpec::kOtherCandidateSp), DWRITE_FONT_WEIGHT_NORMAL, &secondaryFormat_);
+    const bool serif = skin_ == SkinPreset::WoodType || skin_ == SkinPreset::Typewriter;
+    const wchar_t* candidateFont = serif ? L"SimSun" : kUiFontFamily;
+    const wchar_t* codeFont = mono ? L"Consolas" : serif ? L"Georgia" : kUiFontFamily;
+    makeFormat(static_cast<float>(HeaderMetricsSpec::kCodeSp + 1), DWRITE_FONT_WEIGHT_MEDIUM, &codeFormat_, codeFont);
+    makeFormat(static_cast<float>(firstCandidateSize_), DWRITE_FONT_WEIGHT_MEDIUM, &primaryFormat_, candidateFont);
+    makeFormat(static_cast<float>(HeaderMetricsSpec::kOtherCandidateSp), DWRITE_FONT_WEIGHT_NORMAL, &secondaryFormat_, candidateFont);
     makeFormat(static_cast<float>(HeaderMetricsSpec::kCandidateIndexSp), DWRITE_FONT_WEIGHT_NORMAL, &indexFormat_, mono ? L"Consolas" : kUiFontFamily);
 
     const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
@@ -374,7 +372,7 @@ void CandidateWindow::recomputeHeaderBudget() {
         HeaderMetricsSpec::kHeaderMinimumDp,
         codeHeightDp_ + candidateHeightDp_ + 8.0f);
 
-    lastBudgetMono_ = mono;
+    lastBudgetSkin_ = skin_;
     lastBudgetFirstSize_ = firstCandidateSize_;
     lastBudgetDpi_ = dpi_;
 }
@@ -435,7 +433,7 @@ void CandidateWindow::recalculateSize() {
     const float codeWidth = measureTextWidthDip(dwriteFactory_, codeFormat_, utf8ToWide(composing_));
     singleCodeWidth_ = std::clamp(codeWidth + 25.0f, 82.0f, 190.0f);
     const float pagerWidth = !vertical && pages > 1 ? kPagerWidth : 0.0f;
-    const float candidatePadding = candidateIndexInset(style) + candidateIndexWidth(style) + kCandidateTrailingPadding;
+    const float candidatePadding = kCandidateIndexInset + candidateIndexWidth(style) + kCandidateTrailingPadding;
     float contentWidth = pagerWidth;
     horizontalCellWidths_.clear();
     if (!vertical) horizontalCellWidths_.reserve(end - start);
@@ -461,7 +459,7 @@ void CandidateWindow::recalculateSize() {
     if (!vertical) {
         fitHorizontalCandidateWidths(horizontalCellWidths_, fittedWidth - pagerWidth - (single ? singleCodeWidth_ : 0.0f));
     }
-    const float clampedWDp = fittedWidth + border * 2.0f + static_cast<float>(style.metroLeftBarWidthPx) + shadow;
+    const float clampedWDp = fittedWidth + border * 2.0f + shadow;
 
     int newW = static_cast<int>(std::ceil(dpToPx(clampedWDp)));
     int newH = static_cast<int>(std::ceil(dpToPx(totalHDp)));
@@ -735,14 +733,14 @@ void CandidateWindow::onPaint() {
     const float w = width_ * 96.0f / dpi_ - shadow;
     const float h = height_ * 96.0f / dpi_ - shadow;
     const float edge = static_cast<float>(metrics.outerBorderWidthPx);
-    const float strip = metrics.metroLeftBarWidthPx ? (vertical ? 3.0f : 4.0f) : 0.0f;
-    const float left = edge + strip;
+    const float left = edge;
     const float right = w - edge;
     const float bottom = h - edge;
     const float headerBottom = single ? bottom : edge + codeHeightDp_;
     const float rowHeight = std::max(layout_ == CandidateLayout::DoubleRow ? 36.0f : 32.0f, candidateHeightDp_);
     const auto rect = [](float l, float t, float r, float b) { return D2D1::RectF(l, t, r, b); };
     const auto color = ColorArgb::fromHex;
+    const auto chrome = skinColors(skin_, darkMode_);
 
     candidateRects_.clear();
     candidateIndices_.clear();
@@ -756,6 +754,27 @@ void CandidateWindow::onPaint() {
         auto fill = [&](D2D1_RECT_F bounds, uint32_t argb) {
             brush->SetColor(toD2DColor(color(argb)));
             renderTarget_->FillRectangle(bounds, brush);
+        };
+        auto argb = [](ColorArgb c) -> uint32_t {
+            return (static_cast<uint32_t>(c.a) << 24) | (static_cast<uint32_t>(c.r) << 16) |
+                (static_cast<uint32_t>(c.g) << 8) | c.b;
+        };
+        auto gradient = [&](D2D1_RECT_F bounds, uint32_t top, uint32_t middle, uint32_t bottomColor) {
+            if (bounds.bottom <= bounds.top || bounds.right <= bounds.left) return;
+            const D2D1_GRADIENT_STOP stops[] = {
+                {0.0f, toD2DColor(color(top))}, {0.5f, toD2DColor(color(middle))},
+                {1.0f, toD2DColor(color(bottomColor))},
+            };
+            ID2D1GradientStopCollection* collection = nullptr;
+            if (FAILED(renderTarget_->CreateGradientStopCollection(stops, 3, &collection))) return;
+            ID2D1LinearGradientBrush* surface = nullptr;
+            const auto axis = D2D1::LinearGradientBrushProperties(
+                D2D1::Point2F(bounds.left, bounds.top), D2D1::Point2F(bounds.left, bounds.bottom));
+            if (SUCCEEDED(renderTarget_->CreateLinearGradientBrush(axis, collection, &surface))) {
+                renderTarget_->FillRectangle(bounds, surface);
+                surface->Release();
+            }
+            collection->Release();
         };
         auto text = [&](const std::wstring& label, IDWriteTextFormat* format, D2D1_RECT_F bounds,
                         uint32_t argb, bool alignRight = false) {
@@ -774,7 +793,15 @@ void CandidateWindow::onPaint() {
         if (shadow > 0) fill(rect(shadow, shadow, w + shadow, h + shadow), palette.hardShadowColor);
         fill(rect(0, 0, w, h), palette.windowOuterBorder);
         fill(rect(edge, edge, right, bottom), palette.windowBg);
-        if (strip > 0) fill(rect(edge, edge, left, bottom), palette.accent);
+        if (skin_ == SkinPreset::WoodType) {
+            // The grain stays in the frame, so it never reduces candidate contrast.
+            gradient(rect(0, 0, w, h), 0xFF6B5240, 0xFF382A20, 0xFF5C4432);
+            for (float line = .5f; line < edge; line += .7f) {
+                fill(rect(0, line, w, line + .3f), 0x5078614C);
+                fill(rect(0, h - line - .3f, w, h - line), 0x50AA8B6C);
+            }
+            fill(rect(left, edge, right, bottom), palette.windowBg);
+        }
 
         if (toastActive_ && composing_.empty()) {
             drawTianzigeLogoD2D(left + 8, (h - 20) * .5f, 20);
@@ -784,6 +811,26 @@ void CandidateWindow::onPaint() {
             computePageBounds(start, end, page, pages);
             const std::wstring pageLabel = std::to_wstring(page + 1) + L"/" + std::to_wstring(std::max<size_t>(1, pages));
             const float codeRight = single ? left + singleCodeWidth_ : right;
+            const float candidateLeft = single ? codeRight : left;
+            const float candidateTop = single ? edge : headerBottom;
+            const auto candidateArea = rect(candidateLeft, candidateTop, right, bottom);
+            if (skin_ == SkinPreset::Terminal) {
+                gradient(candidateArea, 0xFF0B100B, 0xFF172018, 0xFF0B100B);
+                for (float y = candidateTop + .75f; y < bottom; y += 2.5f) {
+                    fill(rect(candidateLeft, y, right, std::min(y + .55f, bottom)), 0x49000000);
+                }
+            } else if (skin_ != SkinPreset::Brutal) {
+                gradient(candidateArea, 0xFFDCC29F, 0xFFF4E3C6, 0xFFE8CFAA);
+                for (unsigned i = 1; i <= 150; ++i) {
+                    const float x = candidateLeft + (right - candidateLeft) * ((i * 83u) % 157u) / 157.0f;
+                    const float y = candidateTop + (bottom - candidateTop) * ((i * 47u) % 149u) / 149.0f;
+                    fill(rect(x, y, std::min(x + .65f, right), std::min(y + .65f, bottom)), 0x19805C36);
+                }
+                if (skin_ == SkinPreset::Typewriter && !single) {
+                    gradient(rect(candidateLeft, candidateTop, right, std::min(candidateTop + 3.0f, bottom)),
+                        0xFFBDB8AD, 0xFF4D4941, 0xFF171512);
+                }
+            }
             fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
             if (single) fill(rect(codeRight - 1.5f, edge, codeRight, bottom), palette.accent);
             else fill(rect(left, headerBottom - 1, right, headerBottom), palette.innerDivider);
@@ -791,17 +838,10 @@ void CandidateWindow::onPaint() {
             const float labelRight = codeRight - (single ? 9 : 43);
             const float codeX = left + 9;
             const std::wstring preedit = utf8ToWide(composing_);
-            text(preedit, codeFormat_, rect(codeX, edge, labelRight, headerBottom), palette.textPrimary);
+            text(preedit, codeFormat_, rect(codeX, edge, labelRight, headerBottom), argb(chrome.text));
             const float caret = std::min(labelRight, codeX + measureTextWidthDip(dwriteFactory_, codeFormat_, preedit) + 2);
             fill(rect(caret, (headerBottom + edge - 16) / 2, caret + 2, (headerBottom + edge + 16) / 2), palette.accent);
-            if (!single) text(pageLabel, indexFormat_, rect(labelRight + 5, edge, right - 8, headerBottom), palette.textSecondary, true);
-
-            // Only translucent accents on Metro and Brutal, behind the candidate cells.
-            const auto glow = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, skinMetrics(skin_).glowColors);
-            if (!glow.empty() && strip > 0) {
-                brush->SetColor(toD2DColor(glow.front().innerColor.withAlpha(.18f)));
-                renderTarget_->FillRectangle(rect(left, edge, left + strip, headerBottom), brush);
-            }
+            if (!single) text(pageLabel, indexFormat_, rect(labelRight + 5, edge, right - 8, headerBottom), argb(chrome.secondary), true);
 
             const float footerTop = vertical ? bottom - 24 : (single ? edge : headerBottom);
             const float pagerLeft = right - kPagerWidth;
@@ -814,14 +854,26 @@ void CandidateWindow::onPaint() {
                 const float y = vertical ? headerBottom + local * rowHeight : (single ? edge : headerBottom);
                 const auto cell = rect(vertical ? left : x, y, (vertical ? left : x) + width, std::min(bottom, y + rowHeight));
                 const bool active = !pending_ && static_cast<int>(index) == selectedIndex_;
-                if (active) fill(cell, palette.candidateActiveBg);
+                if (active && skin_ == SkinPreset::Brutal) {
+                    fill(cell, palette.candidateActiveBg);
+                } else if (active && cell.right - cell.left > 7.0f) {
+                    const auto inset = rect(cell.left + 2.5f, cell.top + 3.0f,
+                        cell.right - 2.5f, cell.bottom - 3.0f);
+                    const float radius = metrics.candidateRadiusDp;
+                    const auto cap = D2D1::RoundedRect(inset, radius, radius);
+                    if (skin_ != SkinPreset::Terminal) {
+                        brush->SetColor(toD2DColor(color(palette.candidateActiveBg)));
+                        renderTarget_->FillRoundedRectangle(cap, brush);
+                    }
+                    if (skin_ != SkinPreset::Typewriter) {
+                        brush->SetColor(toD2DColor(color(palette.candidateActiveText)));
+                        renderTarget_->DrawRoundedRectangle(cap, brush, 1.0f);
+                    }
+                }
                 if (vertical) fill(rect(cell.left, cell.bottom - 1, cell.right, cell.bottom), palette.innerDivider);
-                else if (metrics.collapseCandidateCells) fill(rect(cell.right - 1, y, cell.right, cell.bottom), palette.innerDivider);
-                const bool badge = active && metrics.collapseCandidateCells;
-                if (badge) fill(rect(cell.left + 4, (y + cell.bottom) / 2 - 2, cell.left + 8, (y + cell.bottom) / 2 + 2), palette.accent);
                 std::wstring number = std::to_wstring(local + 1);
-                if (metrics.useMonospaceCode) number = L"[" + number + L"]";
-                const float indexX = cell.left + candidateIndexInset(metrics);
+                if (skin_ == SkinPreset::Brutal) number = L"[" + number + L"]";
+                const float indexX = cell.left + kCandidateIndexInset;
                 const float wordX = indexX + candidateIndexWidth(metrics);
                 const bool hasCode = vertical && active && !preedit.empty();
                 const float wordRight = cell.right - kCandidateTrailingPadding - (hasCode ? kAuxiliaryCodeWidth : 0.0f);
@@ -838,7 +890,7 @@ void CandidateWindow::onPaint() {
 
             if (vertical) {
                 fill(rect(left, footerTop, right, bottom), palette.windowHeaderBg);
-                text(pageLabel, indexFormat_, rect(left + 9, footerTop, pagerLeft, bottom), palette.textSecondary);
+                text(pageLabel, indexFormat_, rect(left + 9, footerTop, pagerLeft, bottom), argb(chrome.secondary));
             }
             if (pages > 1) {
                 for (int direction : {-1, 1}) {
@@ -848,7 +900,7 @@ void CandidateWindow::onPaint() {
                     fill(rect(startX, footerTop, startX + 1, bottom), palette.innerDivider);
                     // Geometry of the pack's chevron-left/right icons, centered in the page cell.
                     const float cx = startX + 10, cy = (footerTop + bottom) * .5f;
-                    brush->SetColor(toD2DColor(color(enabled ? palette.textPrimary : palette.innerDivider)));
+                    brush->SetColor(toD2DColor(color(enabled ? (vertical ? argb(chrome.text) : palette.textPrimary) : palette.innerDivider)));
                     renderTarget_->DrawLine(D2D1::Point2F(cx - direction * 2, cy - 4), D2D1::Point2F(cx + direction * 2, cy), brush, 1.5f);
                     renderTarget_->DrawLine(D2D1::Point2F(cx + direction * 2, cy), D2D1::Point2F(cx - direction * 2, cy + 4), brush, 1.5f);
                     if (enabled) (direction < 0 ? prevPageRect_ : nextPageRect_) = hitRect(cell);
