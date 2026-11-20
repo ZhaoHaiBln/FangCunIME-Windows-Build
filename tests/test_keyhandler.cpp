@@ -132,11 +132,15 @@ int runKeyHandlerTests() {
         KH_ASSERT(wood.light.windowOuterBorder == 0xFF493629 && wood.light.candidateActiveText == 0xFF8B1A10,
                   "Wood type uses a walnut frame and red ink");
         const auto& typewriter = fangcun::sharpTheme(SkinPreset::Typewriter);
-        KH_ASSERT(typewriter.metrics.candidateRadiusDp == 6 && typewriter.light.candidateActiveBg == 0xFF29251D,
+        KH_ASSERT(typewriter.metrics.candidateRadiusDp == 4 && typewriter.light.candidateActiveBg == 0xFF29251D,
                   "Typewriter selection is a dark round-edged stamp on paper");
         const auto& terminal = fangcun::sharpTheme(SkinPreset::Terminal);
-        KH_ASSERT(terminal.metrics.useMonospaceCode && terminal.light.textPrimary == 0xFFA5F492,
-                  "Terminal uses green screen text and monospaced code");
+        KH_ASSERT(terminal.metrics.useMonospaceCode && terminal.light.accent == 0xFFEAD17B &&
+                      terminal.light.candidateActiveBg == 0xFF83F064 && terminal.light.candidateActiveText == 0xFF142411,
+                  "Terminal uses amber monospaced code and a solid green selection");
+        KH_ASSERT(wood.metrics.outerBorderWidthPx == 7 && typewriter.metrics.outerBorderWidthPx == 7 &&
+                      terminal.metrics.outerBorderWidthPx == 7,
+                  "The three reference candidate frames have the same thickness");
         const auto& brutal = fangcun::sharpTheme(SkinPreset::Brutal);
         KH_ASSERT(brutal.metrics.useMonospaceCode && brutal.metrics.hardShadowOffsetPx == 4,
                   "Brutal keeps its monospace code and four pixel hard shadow");

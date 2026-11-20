@@ -430,7 +430,8 @@ void CandidateWindow::recalculateSize() {
     size_t start = 0, end = 0, page = 0, pages = 0;
     computePageBounds(start, end, page, pages);
 
-    const float codeWidth = measureTextWidthDip(dwriteFactory_, codeFormat_, utf8ToWide(composing_));
+    const auto code = (skin_ == SkinPreset::Brutal ? L"" : L"> ") + utf8ToWide(composing_);
+    const float codeWidth = measureTextWidthDip(dwriteFactory_, codeFormat_, code);
     singleCodeWidth_ = std::clamp(codeWidth + 25.0f, 82.0f, 190.0f);
     const float pagerWidth = !vertical && pages > 1 ? kPagerWidth : 0.0f;
     const float candidatePadding = kCandidateIndexInset + candidateIndexWidth(style) + kCandidateTrailingPadding;
@@ -491,6 +492,13 @@ void CandidateWindow::updateWindowRegion() {
         }
         if (face) DeleteObject(face);
         if (offset) DeleteObject(offset);
+    } else if (skin_ != SkinPreset::Brutal && width_ > 0 && height_ > 0) {
+        const int diameter = scaleForDpi(10);
+        HRGN face = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, diameter, diameter);
+        if (!face || !SetWindowRgn(hwnd_, face, TRUE)) {
+            if (face) DeleteObject(face);
+            SetWindowRgn(hwnd_, nullptr, TRUE);
+        }
     } else {
         SetWindowRgn(hwnd_, nullptr, TRUE);
     }
@@ -792,17 +800,22 @@ void CandidateWindow::onPaint() {
 
         if (shadow > 0) fill(rect(shadow, shadow, w + shadow, h + shadow), palette.hardShadowColor);
         fill(rect(0, 0, w, h), palette.windowOuterBorder);
-        fill(rect(edge, edge, right, bottom), palette.windowBg);
         if (skin_ == SkinPreset::WoodType) {
-            // The grain stays in the frame, so it never reduces candidate contrast.
-            gradient(rect(0, 0, w, h), darkMode_ ? 0xFF4D382C : 0xFF6B5240,
-                darkMode_ ? 0xFF251B15 : 0xFF382A20, darkMode_ ? 0xFF3F2F25 : 0xFF5C4432);
-            for (float line = .5f; line < edge; line += .7f) {
-                fill(rect(0, line, w, line + .3f), 0x5078614C);
-                fill(rect(0, h - line - .3f, w, h - line), 0x50AA8B6C);
+            gradient(rect(1, 1, w - 1, h - 1), darkMode_ ? 0xFF665041 : 0xFF9A7356,
+                darkMode_ ? 0xFF382820 : 0xFF684A35, darkMode_ ? 0xFF241A16 : 0xFF3F291C);
+            for (float line = 1.5f; line < edge; line += 1.15f) {
+                fill(rect(1, line, w - 1, line + .35f), 0x5FA98B6F);
+                fill(rect(1, h - line - .35f, w - 1, h - line), 0x57342116);
             }
-            fill(rect(left, edge, right, bottom), palette.windowBg);
+        } else if (skin_ == SkinPreset::Typewriter) {
+            gradient(rect(1, 1, w - 1, h - 1), 0xFFDCD1B8, 0xFF716858, 0xFF171614);
+            gradient(rect(2.5f, 2.5f, w - 2.5f, h - 2.5f), 0xFF302F2B, 0xFF1C1B18, 0xFF070706);
+        } else if (skin_ == SkinPreset::Terminal) {
+            gradient(rect(1, 1, w - 1, h - 1), darkMode_ ? 0xFF8E9081 : 0xFFEEE7D3,
+                darkMode_ ? 0xFF6B6D61 : 0xFFC5BCA5, darkMode_ ? 0xFF414437 : 0xFF8E846C);
         }
+        if (skin_ != SkinPreset::Brutal) fill(rect(edge - 1, edge - 1, right + 1, bottom + 1), 0xB0221D16);
+        fill(rect(edge, edge, right, bottom), palette.windowBg);
 
         if (toastActive_ && composing_.empty()) {
             drawTianzigeLogoD2D(left + 8, (h - 20) * .5f, 20);
@@ -812,31 +825,31 @@ void CandidateWindow::onPaint() {
             computePageBounds(start, end, page, pages);
             const std::wstring pageLabel = std::to_wstring(page + 1) + L"/" + std::to_wstring(std::max<size_t>(1, pages));
             const float codeRight = single ? left + singleCodeWidth_ : right;
-            const float candidateLeft = single ? codeRight : left;
-            const float candidateTop = single ? edge : headerBottom;
-            const auto candidateArea = rect(candidateLeft, candidateTop, right, bottom);
+            const auto candidateArea = rect(left, edge, right, bottom);
             const auto material = color(palette.windowBg);
             if (skin_ == SkinPreset::Terminal) {
                 gradient(candidateArea, argb(ColorArgb::lerp(material, color(0xFF000000), .35f)),
                     palette.windowBg, argb(ColorArgb::lerp(material, color(0xFF000000), .35f)));
-                for (float y = candidateTop + .75f; y < bottom; y += 2.5f) {
-                    fill(rect(candidateLeft, y, right, std::min(y + .55f, bottom)), 0x49000000);
+                for (float y = edge + .75f; y < bottom; y += 2.5f) {
+                    fill(rect(left, y, right, std::min(y + .55f, bottom)), 0x49000000);
                 }
             } else if (skin_ != SkinPreset::Brutal) {
-                gradient(candidateArea, argb(ColorArgb::lerp(material, color(0xFF4D3020), .13f)),
-                    argb(ColorArgb::lerp(material, color(0xFFFFF6DF), darkMode_ ? .035f : .42f)),
+                gradient(candidateArea, argb(ColorArgb::lerp(material, color(0xFF4D3020), .08f)),
+                    argb(ColorArgb::lerp(material, color(0xFFFFF6DF), darkMode_ ? .035f : .30f)),
                     palette.windowBg);
                 for (unsigned i = 1; i <= 150; ++i) {
-                    const float x = candidateLeft + (right - candidateLeft) * ((i * 83u) % 157u) / 157.0f;
-                    const float y = candidateTop + (bottom - candidateTop) * ((i * 47u) % 149u) / 149.0f;
+                    const float x = left + (right - left) * ((i * 83u) % 157u) / 157.0f;
+                    const float y = edge + (bottom - edge) * ((i * 47u) % 149u) / 149.0f;
                     fill(rect(x, y, std::min(x + .65f, right), std::min(y + .65f, bottom)), 0x19805C36);
                 }
-                if (skin_ == SkinPreset::Typewriter && !single) {
-                    gradient(rect(candidateLeft, candidateTop, right, std::min(candidateTop + 3.0f, bottom)),
-                        0xFFBDB8AD, 0xFF4D4941, 0xFF171512);
+                if (skin_ == SkinPreset::Typewriter) {
+                    gradient(rect(4, 2, w - 4, edge), 0xFF918B7C, 0xFF2E2B24, 0xFF0D0C0A);
+                    for (const float x : {7.0f, w - 13.0f}) {
+                        gradient(rect(x, 1.5f, x + 6, edge), 0xFFE2D7BC, 0xFF827968, 0xFF4B4032);
+                    }
                 }
             }
-            fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
+            if (skin_ == SkinPreset::Brutal) fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
 
             const auto pulses = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, skinMetrics(skin_).glowColors);
             if (!pulses.empty()) {
@@ -865,13 +878,25 @@ void CandidateWindow::onPaint() {
             if (single) fill(rect(codeRight - 1.5f, edge, codeRight, bottom), palette.accent);
             else fill(rect(left, headerBottom - 1, right, headerBottom), palette.innerDivider);
 
-            const float labelRight = codeRight - (single ? 9 : 43);
+            const bool terminalLeds = skin_ == SkinPreset::Terminal && !single && w > 275.0f;
+            const float ledWidth = terminalLeds ? 28.0f : 0.0f;
+            const float labelRight = codeRight - (single ? 9 : 43 + ledWidth);
             const float codeX = left + 9;
             const std::wstring preedit = utf8ToWide(composing_);
-            text(preedit, codeFormat_, rect(codeX, edge, labelRight, headerBottom), argb(chrome.text));
-            const float caret = std::min(labelRight, codeX + measureTextWidthDip(dwriteFactory_, codeFormat_, preedit) + 2);
+            const std::wstring displayCode = skin_ == SkinPreset::Brutal ? preedit : L"> " + preedit;
+            const auto codeInk = skin_ == SkinPreset::Terminal ? palette.accent : argb(chrome.text);
+            const auto secondaryInk = skin_ == SkinPreset::Terminal ? palette.textSecondary : argb(chrome.secondary);
+            text(displayCode, codeFormat_, rect(codeX, edge, labelRight, headerBottom), codeInk);
+            const float caret = std::min(labelRight, codeX + measureTextWidthDip(dwriteFactory_, codeFormat_, displayCode) + 2);
             fill(rect(caret, (headerBottom + edge - 16) / 2, caret + 2, (headerBottom + edge + 16) / 2), palette.accent);
-            if (!single) text(pageLabel, indexFormat_, rect(labelRight + 5, edge, right - 8, headerBottom), argb(chrome.secondary), true);
+            if (!single) text(pageLabel, indexFormat_, rect(labelRight + 5, edge, right - 8 - ledWidth, headerBottom), secondaryInk, true);
+            if (terminalLeds) {
+                const bool indicators[] = {pending_, !pending_ && candidates_.empty(), !pending_ && !candidates_.empty()};
+                for (int i = 0; i < 3; ++i) {
+                    brush->SetColor(toD2DColor(color(indicators[i] ? palette.candidateActiveBg : 0xFF475C44)));
+                    renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(right - 24 + i * 8, (edge + headerBottom) * .5f), 2.3f, 2.3f), brush);
+                }
+            }
 
             const float footerTop = vertical ? bottom - 24 : (single ? edge : headerBottom);
             const float pagerLeft = right - kPagerWidth;
@@ -891,11 +916,9 @@ void CandidateWindow::onPaint() {
                         cell.right - 2.5f, cell.bottom - 3.0f);
                     const float radius = metrics.candidateRadiusDp;
                     const auto cap = D2D1::RoundedRect(inset, radius, radius);
-                    if (skin_ != SkinPreset::Terminal) {
-                        brush->SetColor(toD2DColor(color(palette.candidateActiveBg)));
-                        renderTarget_->FillRoundedRectangle(cap, brush);
-                    }
-                    if (skin_ != SkinPreset::Typewriter) {
+                    brush->SetColor(toD2DColor(color(palette.candidateActiveBg)));
+                    renderTarget_->FillRoundedRectangle(cap, brush);
+                    if (skin_ == SkinPreset::WoodType) {
                         brush->SetColor(toD2DColor(color(palette.candidateActiveText)));
                         renderTarget_->DrawRoundedRectangle(cap, brush, 1.0f);
                     }
@@ -920,7 +943,7 @@ void CandidateWindow::onPaint() {
 
             if (vertical) {
                 fill(rect(left, footerTop, right, bottom), palette.windowHeaderBg);
-                text(pageLabel, indexFormat_, rect(left + 9, footerTop, pagerLeft, bottom), argb(chrome.secondary));
+                text(pageLabel, indexFormat_, rect(left + 9, footerTop, pagerLeft, bottom), secondaryInk);
             }
             if (pages > 1) {
                 for (int direction : {-1, 1}) {

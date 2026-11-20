@@ -137,7 +137,7 @@ inline FangCunColors skinColors(SkinPreset skin, bool dark) {
                 color(palette.candidateActiveBg), color(palette.accentText), color(palette.candidateActiveText), {}};
         case SkinPreset::Terminal:
             return {color(dark ? 0xFF232720 : 0xFFC9BEA9), color(dark ? 0xFF494B40 : 0xFFE5DDCC),
-                color(dark ? 0xFF777760 : 0xFF81745E), color(palette.windowHeaderBg),
+                color(dark ? 0xFF777760 : 0xFF81745E), color(dark ? 0xFF34382F : 0xFFD7CDBA),
                 color(dark ? 0xFFF0ECDB : 0xFF252722), color(dark ? 0xFFCCCEAF : 0xFF514B40), color(palette.accent),
                 color(palette.candidateActiveBg), color(palette.accentText), color(palette.candidateActiveText), {}};
         default:
