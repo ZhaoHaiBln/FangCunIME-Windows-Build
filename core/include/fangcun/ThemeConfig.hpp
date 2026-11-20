@@ -9,10 +9,18 @@
 namespace fangcun {
 
 enum class SkinPreset {
-    NativeLight, // 原生轻白
-    WarmGrid,    // 米白田字格
-    Mint,        // 薄荷绿
-    DeepBlue,    // 深蓝珊瑚
+    NativeLight,       // 原生轻白
+    WarmGrid,          // 米白田字格
+    Mint,              // 薄荷绿
+    DeepBlue,          // 深蓝珊瑚
+    GreenTerminal,     // 绿屏终端
+    WoodType,          // 木框活字
+    ClassicTypewriter, // 经典打字机
+};
+
+enum class CandidateLayout {
+    Horizontal,
+    Vertical,
 };
 
 enum class ThemeMode {
@@ -112,6 +120,42 @@ inline FangCunColors skinColors(SkinPreset skin, bool dark) {
             return dark
                 ? FangCunColors{{0xFF,0x17,0x28,0x3F}, {0xFF,0x2A,0x3D,0x58}, {0xFF,0x49,0x60,0x78}, {0xFF,0x34,0x4C,0x69}, {0xFF,0xF2,0xF6,0xFC}, {0xFF,0xAD,0xBF,0xD4}, {0xFF,0xFF,0xAD,0x9A}, {0xFF,0x33,0x4E,0x6A}}
                 : FangCunColors{{0xFF,0xE9,0xEF,0xF6}, {0xFF,0xF9,0xFC,0xFF}, {0xFF,0xBE,0xCB,0xDC}, {0xFF,0xD5,0xDF,0xEC}, {0xFF,0x22,0x3B,0x58}, {0xFF,0x5F,0x75,0x8E}, {0xFF,0xAD,0x49,0x38}, {0xFF,0xF7,0xE4,0xDF}};
+        case SkinPreset::GreenTerminal:
+            // Retro beige CRT chassis + deep phosphor screen (#0F1E12) + neon phosphor green (#78F867)
+            return FangCunColors{
+                {0xFF,0x0F,0x1E,0x12}, // keyboard / screen bg
+                {0xFF,0x16,0x2A,0x19}, // key
+                {0xFF,0xD4,0xCC,0xB9}, // bezel border
+                {0xFF,0x1D,0x35,0x21}, // functionKey
+                {0xFF,0x8D,0xEE,0x6F}, // text (phosphor green)
+                {0xFF,0xF4,0xE6,0x67}, // secondary (amber prompt/composing)
+                {0xFF,0x78,0xF8,0x67}, // accent (selected highlight)
+                {0xFF,0x1E,0x44,0x24}  // pressed
+            };
+        case SkinPreset::WoodType:
+            // Walnut wood frame (#684127) + Xuan paper (#F3E4CC) + vermilion seal (#B54632) + ink (#241C14)
+            return FangCunColors{
+                {0xFF,0xF3,0xE4,0xCC}, // paper bg
+                {0xFF,0xF7,0xEB,0xD7}, // key
+                {0xFF,0x68,0x41,0x27}, // walnut wood border
+                {0xFF,0xE8,0xD5,0xB8}, // functionKey
+                {0xFF,0x24,0x1C,0x14}, // ink text
+                {0xFF,0x7B,0x6A,0x54}, // secondary
+                {0xFF,0xB5,0x46,0x32}, // vermilion seal accent
+                {0xFF,0xEC,0xD7,0xBE}  // pressed
+            };
+        case SkinPreset::ClassicTypewriter:
+            // Brushed metal frame (#8F8476) + cream paper (#F6E8D0) + charcoal ribbon pill (#2B2723) + green caret (#237218)
+            return FangCunColors{
+                {0xFF,0xF6,0xE8,0xD0}, // paper bg
+                {0xFF,0xFA,0xF0,0xDD}, // key
+                {0xFF,0x8F,0x84,0x76}, // brushed metal border
+                {0xFF,0xE6,0xD7,0xBE}, // functionKey
+                {0xFF,0x22,0x1E,0x1A}, // typewriter ink text
+                {0xFF,0x6E,0x65,0x58}, // secondary
+                {0xFF,0x2B,0x27,0x23}, // charcoal selected pill
+                {0xFF,0xE2,0xD2,0xB8}  // pressed
+            };
     }
     return skinColors(SkinPreset::NativeLight, false);
 }
@@ -160,6 +204,39 @@ inline SkinMetrics skinMetrics(SkinPreset skin) {
                     {0xFF,0xFF,0x9A,0x87},
                     {0xFF,0x73,0xD9,0xC3},
                     {0xFF,0xB4,0x9A,0xDF}
+                }}
+            };
+        case SkinPreset::GreenTerminal:
+            return SkinMetrics{
+                "green_terminal", "绿屏终端", ThemeMode::Dark,
+                4.0f, 1.8f, 2.0f,
+                {{
+                    {0xFF,0x78,0xF8,0x67},
+                    {0xFF,0x49,0xC8,0x52},
+                    {0xFF,0xF4,0xE6,0x67},
+                    {0xFF,0x62,0xDF,0x7B}
+                }}
+            };
+        case SkinPreset::WoodType:
+            return SkinMetrics{
+                "wood_type", "木框活字", ThemeMode::Light,
+                3.0f, 1.5f, 1.8f,
+                {{
+                    {0xFF,0xB5,0x46,0x32},
+                    {0xFF,0x8E,0x62,0x47},
+                    {0xFF,0xD4,0xA5,0x74},
+                    {0xFF,0xA5,0x4E,0x3D}
+                }}
+            };
+        case SkinPreset::ClassicTypewriter:
+            return SkinMetrics{
+                "classic_typewriter", "经典打字机", ThemeMode::Light,
+                4.0f, 1.8f, 2.2f,
+                {{
+                    {0xFF,0x8F,0x84,0x76},
+                    {0xFF,0x23,0x72,0x18},
+                    {0xFF,0xC0,0xB4,0xA8},
+                    {0xFF,0x4A,0x43,0x3C}
                 }}
             };
     }

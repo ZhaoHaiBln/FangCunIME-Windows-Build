@@ -223,6 +223,7 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD) 
         [this](int delta) { onPageChange(delta); });
     candidateWindow_->setPageSize(static_cast<size_t>(settings_.pageSize));
     candidateWindow_->setWheelPaging(settings_.wheelPaging);
+    candidateWindow_->setLayout(settings_.candidateLayout);
     candidateWindow_->create(nullptr);
 
     keyHandler_ = std::make_unique<KeyHandler>(
@@ -480,6 +481,7 @@ void TextService::applySettings(const AppSettings& newSettings) {
     if (candidateWindow_) {
         candidateWindow_->setPageSize(static_cast<size_t>(settings_.pageSize));
         candidateWindow_->setWheelPaging(settings_.wheelPaging);
+        candidateWindow_->setLayout(settings_.candidateLayout);
         if (candidateWindow_->isVisible() && keyHandler_) {
             candidateWindow_->update(
                 keyHandler_->composing(),

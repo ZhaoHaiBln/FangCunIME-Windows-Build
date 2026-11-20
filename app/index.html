@@ -117,28 +117,40 @@
             <div id="preview-card" class="live-preview-stage" title="点击预览区测试打字流光">
               <div id="glow-layer" class="glow-layer"></div>
 
-              <!-- Candidate Window Preview (Mockup 1 & Mockup 2 #1/#2) -->
-              <div id="cand-window-preview" class="cand-window">
-                <div class="cand-top-row">
-                  <svg class="cand-mini-logo" viewBox="0 0 100 100" aria-hidden="true">
-                    <rect class="logo-tile" x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
-                    <rect class="logo-grid" x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
-                    <line class="logo-grid" x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
-                    <line class="logo-grid" x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
-                    <circle class="logo-dot" cx="77" cy="77" r="10" fill="#E66E33" />
-                  </svg>
-                  <span id="preview-composing" class="cand-composing">wanshang<span class="cand-caret">|</span></span>
+              <!-- Candidate Window Preview -->
+              <div id="cand-window-preview" class="cand-window" data-skin="green_terminal">
+                <div class="cand-platen-bar" aria-hidden="true">
+                  <span class="platen-cap"></span>
+                  <span class="platen-rod"></span>
+                  <span class="platen-cap"></span>
                 </div>
-                <div class="cand-bottom-strip">
-                  <span id="preview-first-cand" class="cand-pill is-selected">
-                    <span class="cand-num">1</span>
-                    <span id="preview-first-word" class="cand-word">晚上</span>
-                  </span>
-                  <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">网上</span></span>
-                  <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">晚上好</span></span>
-                  <span class="cand-pill"><span class="cand-num">4</span><span class="cand-word">婉赏</span></span>
-                  <span class="cand-pill"><span class="cand-num">5</span><span class="cand-word">碗</span></span>
-                  <span class="cand-arrows">‹ ›</span>
+                <div class="cand-inner">
+                  <div class="cand-top-row">
+                    <svg class="cand-mini-logo" viewBox="0 0 100 100" aria-hidden="true">
+                      <rect class="logo-tile" x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
+                      <rect class="logo-grid" x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
+                      <line class="logo-grid" x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
+                      <line class="logo-grid" x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
+                      <circle class="logo-dot" cx="77" cy="77" r="10" fill="#E66E33" />
+                    </svg>
+                    <span class="cand-prompt">&gt;</span>
+                    <span id="preview-composing" class="cand-composing">fang'cun<span class="cand-caret">|</span></span>
+                    <span class="cand-crt-leds" aria-hidden="true">
+                      <i class="crt-led"></i>
+                      <i class="crt-led"></i>
+                      <i class="crt-led is-active"></i>
+                    </span>
+                  </div>
+                  <div class="cand-bottom-strip">
+                    <span id="preview-first-cand" class="cand-pill is-selected">
+                      <span class="cand-num">1</span>
+                      <span id="preview-first-word" class="cand-word">方寸</span>
+                    </span>
+                    <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">方村</span></span>
+                    <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">放存</span></span>
+                    <span class="cand-pill"><span class="cand-num">4</span><span class="cand-word">方寸间</span></span>
+                    <span class="cand-arrows">‹ ›</span>
+                  </div>
                 </div>
               </div>
 
@@ -277,59 +289,89 @@
             </div>
           </section>
 
-          <!-- TAB: 皮肤外观 (Includes Light #1 & Dark #2 Candidate Window Showcase) -->
+          <!-- TAB: 皮肤外观 -->
           <section class="tab-pane" data-pane="theme">
-            <h2 class="pane-title">皮肤外观与明暗变体</h2>
+            <h2 class="pane-title">皮肤外观与排布</h2>
 
-            <div class="dual-cand-showcase">
+            <div class="crafted-showcase-grid">
               <div class="showcase-box">
-                <span class="showcase-label">浅色温润米白 · 候选窗</span>
-                <div class="cand-window is-light-demo">
-                  <div class="cand-top-row">
-                    <svg class="cand-mini-logo" viewBox="0 0 100 100">
-                      <rect x="2" y="2" width="96" height="96" rx="22" fill="#2B5B3C" />
-                      <rect x="21" y="21" width="58" height="58" fill="none" stroke="#FBF8F2" stroke-width="8" />
-                      <line x1="50" y1="22" x2="50" y2="78" stroke="#FBF8F2" stroke-width="7" />
-                      <line x1="22" y1="50" x2="78" y2="50" stroke="#FBF8F2" stroke-width="7" />
-                      <circle cx="77" cy="77" r="10" fill="#E66E33" />
-                    </svg>
-                    <span class="cand-composing">wanshang'hao<span class="cand-caret">|</span></span>
-                  </div>
-                  <div class="cand-bottom-strip">
-                    <span class="cand-pill is-selected"><span class="cand-num">1</span><span class="cand-word">晚上好</span></span>
-                    <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">晚上</span></span>
-                    <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">网上</span></span>
-                    <span class="cand-arrows">‹ ›</span>
+                <span class="showcase-label">绿屏终端 · CRT</span>
+                <div class="cand-window" data-skin="green_terminal">
+                  <div class="cand-inner">
+                    <div class="cand-top-row">
+                      <span class="cand-prompt">&gt;</span>
+                      <span class="cand-composing">fang'cun</span>
+                      <span class="cand-crt-leds" aria-hidden="true">
+                        <i class="crt-led"></i><i class="crt-led"></i><i class="crt-led is-active"></i>
+                      </span>
+                    </div>
+                    <div class="cand-bottom-strip">
+                      <span class="cand-pill is-selected"><span class="cand-num">1</span><span class="cand-word">方寸</span></span>
+                      <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">方村</span></span>
+                      <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">放存</span></span>
+                      <span class="cand-pill"><span class="cand-num">4</span><span class="cand-word">方寸间</span></span>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div class="showcase-box">
-                <span class="showcase-label">深色暗夜珊瑚 · 候选窗</span>
-                <div class="cand-window is-dark">
-                  <div class="cand-top-row">
-                    <svg class="cand-mini-logo" viewBox="0 0 100 100">
-                      <rect x="2" y="2" width="96" height="96" rx="22" fill="#E07A5F" />
-                      <rect x="21" y="21" width="58" height="58" fill="none" stroke="#1F2633" stroke-width="8" />
-                      <line x1="50" y1="22" x2="50" y2="78" stroke="#1F2633" stroke-width="7" />
-                      <line x1="22" y1="50" x2="78" y2="50" stroke="#1F2633" stroke-width="7" />
-                      <circle cx="77" cy="77" r="10" fill="#FFF4E6" />
-                    </svg>
-                    <span class="cand-composing">fangcun<span class="cand-caret">|</span></span>
+                <span class="showcase-label">木框活字 · 宣纸朱印</span>
+                <div class="cand-window" data-skin="wood_type">
+                  <div class="cand-inner">
+                    <div class="cand-top-row">
+                      <span class="cand-prompt">&gt;</span>
+                      <span class="cand-composing">fang'cun<span class="cand-caret">|</span></span>
+                    </div>
+                    <div class="cand-bottom-strip">
+                      <span class="cand-pill is-selected"><span class="cand-word">方寸</span></span>
+                      <span class="cand-pill"><span class="cand-word">方村</span></span>
+                      <span class="cand-pill"><span class="cand-word">放存</span></span>
+                      <span class="cand-pill"><span class="cand-word">方寸间</span></span>
+                    </div>
                   </div>
-                  <div class="cand-bottom-strip">
-                    <span class="cand-pill is-selected"><span class="cand-num">1</span><span class="cand-word">方寸</span></span>
-                    <span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">分寸</span></span>
-                    <span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">芳村</span></span>
-                    <span class="cand-arrows">‹ ›</span>
+                </div>
+              </div>
+
+              <div class="showcase-box">
+                <span class="showcase-label">经典打字机 · 金属滚轴</span>
+                <div class="cand-window" data-skin="classic_typewriter">
+                  <div class="cand-platen-bar" aria-hidden="true">
+                    <span class="platen-cap"></span>
+                    <span class="platen-rod"></span>
+                    <span class="platen-cap"></span>
+                  </div>
+                  <div class="cand-inner">
+                    <div class="cand-top-row">
+                      <span class="cand-prompt">&gt;</span>
+                      <span class="cand-composing">fang'cun<span class="cand-caret"></span></span>
+                    </div>
+                    <div class="cand-bottom-strip">
+                      <span class="cand-pill is-selected"><span class="cand-word">方寸</span></span>
+                      <span class="cand-pill"><span class="cand-word">方村</span></span>
+                      <span class="cand-pill"><span class="cand-word">放存</span></span>
+                      <span class="cand-pill"><span class="cand-word">方寸间</span></span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
             <div class="section-card" style="margin-top: 14px">
-              <h3 class="sub-heading">主题色预设</h3>
+              <h3 class="sub-heading">质感皮肤预设</h3>
               <div id="skin-group" class="skin-grid">
+                <button class="skin-option" data-skin="green_terminal" type="button">
+                  <span class="skin-swatch" style="background: linear-gradient(135deg, #0F1E12 55%, #78F867 55%); border: 2px solid #D4CCB9"></span>
+                  <span>绿屏终端</span>
+                </button>
+                <button class="skin-option" data-skin="wood_type" type="button">
+                  <span class="skin-swatch" style="background: linear-gradient(135deg, #F3E4CC 55%, #B54632 55%); border: 2px solid #684127"></span>
+                  <span>木框活字</span>
+                </button>
+                <button class="skin-option" data-skin="classic_typewriter" type="button">
+                  <span class="skin-swatch" style="background: linear-gradient(135deg, #F6E8D0 55%, #2B2723 55%); border: 2px solid #8F8476"></span>
+                  <span>经典打字机</span>
+                </button>
                 <button class="skin-option" data-skin="warm_grid" type="button">
                   <span class="skin-swatch" style="background: #2B5B3C"></span>
                   <span>温润松绿 · 米白田字格</span>
@@ -346,6 +388,12 @@
                   <span class="skin-swatch" style="background: #E07A5F"></span>
                   <span>深夜珊瑚</span>
                 </button>
+              </div>
+
+              <h3 class="sub-heading" style="margin-top: 16px">候选窗排布</h3>
+              <div id="layout-group" class="mode-pills">
+                <button class="mode-pill" data-layout="horizontal" type="button">横排候选</button>
+                <button class="mode-pill" data-layout="vertical" type="button">竖排候选</button>
               </div>
 
               <h3 class="sub-heading" style="margin-top: 16px">明暗模式</h3>

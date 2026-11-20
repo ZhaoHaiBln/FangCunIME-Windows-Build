@@ -523,6 +523,11 @@ void SettingsWindow::applyAction(ActionId action) {
         case ActionId::SkinWarmGrid: settings_.skin = SkinPreset::WarmGrid; break;
         case ActionId::SkinMint: settings_.skin = SkinPreset::Mint; break;
         case ActionId::SkinDeepBlue: settings_.skin = SkinPreset::DeepBlue; break;
+        case ActionId::SkinGreenTerminal: settings_.skin = SkinPreset::GreenTerminal; break;
+        case ActionId::SkinWoodType: settings_.skin = SkinPreset::WoodType; break;
+        case ActionId::SkinClassicTypewriter: settings_.skin = SkinPreset::ClassicTypewriter; break;
+        case ActionId::LayoutHorizontal: settings_.candidateLayout = CandidateLayout::Horizontal; break;
+        case ActionId::LayoutVertical: settings_.candidateLayout = CandidateLayout::Vertical; break;
         case ActionId::ModeSystem: settings_.themeMode = ThemeMode::System; break;
         case ActionId::ModeLight: settings_.themeMode = ThemeMode::Light; break;
         case ActionId::ModeDark: settings_.themeMode = ThemeMode::Dark; break;
@@ -1019,23 +1024,31 @@ void SettingsWindow::onPaint() {
     };
 
     auto drawThemeCard = [&](float x, float cy, float w, float h) {
-        drawCardFrame(x, cy, w, h, L"02 · ~/THEME", L"皮肤预设与明暗");
+        drawCardFrame(x, cy, w, h, L"02 · ~/THEME", L"皮肤预设与排布");
         float ix = x + 14.0f;
         float iw = w - 28.0f;
-        float ry = cy + 40.0f;
-        float w2 = (iw - 6.0f) / 2.0f;
-        addPill(ix, ry, w2, 36.0f, L"原生轻白", ActionId::SkinNativeLight, settings_.skin == SkinPreset::NativeLight);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"米白田字格", ActionId::SkinWarmGrid, settings_.skin == SkinPreset::WarmGrid);
-
-        ry += 42.0f;
-        addPill(ix, ry, w2, 36.0f, L"薄荷绿", ActionId::SkinMint, settings_.skin == SkinPreset::Mint);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"深蓝珊瑚", ActionId::SkinDeepBlue, settings_.skin == SkinPreset::DeepBlue);
-
-        ry += 46.0f;
+        float ry = cy + 38.0f;
         float w3 = (iw - 12.0f) / 3.0f;
-        addPill(ix, ry, w3, 34.0f, L"跟随系统", ActionId::ModeSystem, settings_.themeMode == ThemeMode::System);
-        addPill(ix + w3 + 6.0f, ry, w3, 34.0f, L"浅色模式", ActionId::ModeLight, settings_.themeMode == ThemeMode::Light);
-        addPill(ix + (w3 + 6.0f) * 2.0f, ry, w3, 34.0f, L"深色模式", ActionId::ModeDark, settings_.themeMode == ThemeMode::Dark);
+        addPill(ix, ry, w3, 32.0f, L"绿屏终端", ActionId::SkinGreenTerminal, settings_.skin == SkinPreset::GreenTerminal);
+        addPill(ix + w3 + 6.0f, ry, w3, 32.0f, L"木框活字", ActionId::SkinWoodType, settings_.skin == SkinPreset::WoodType);
+        addPill(ix + (w3 + 6.0f) * 2.0f, ry, w3, 32.0f, L"经典打字机", ActionId::SkinClassicTypewriter, settings_.skin == SkinPreset::ClassicTypewriter);
+
+        ry += 38.0f;
+        float w4 = (iw - 18.0f) / 4.0f;
+        addPill(ix, ry, w4, 30.0f, L"原生轻白", ActionId::SkinNativeLight, settings_.skin == SkinPreset::NativeLight);
+        addPill(ix + (w4 + 6.0f), ry, w4, 30.0f, L"田字格", ActionId::SkinWarmGrid, settings_.skin == SkinPreset::WarmGrid);
+        addPill(ix + (w4 + 6.0f) * 2.0f, ry, w4, 30.0f, L"薄荷绿", ActionId::SkinMint, settings_.skin == SkinPreset::Mint);
+        addPill(ix + (w4 + 6.0f) * 3.0f, ry, w4, 30.0f, L"深蓝珊瑚", ActionId::SkinDeepBlue, settings_.skin == SkinPreset::DeepBlue);
+
+        ry += 36.0f;
+        float w2 = (iw - 6.0f) / 2.0f;
+        addPill(ix, ry, w2, 30.0f, L"横排候选", ActionId::LayoutHorizontal, settings_.candidateLayout == CandidateLayout::Horizontal);
+        addPill(ix + w2 + 6.0f, ry, w2, 30.0f, L"竖排候选", ActionId::LayoutVertical, settings_.candidateLayout == CandidateLayout::Vertical);
+
+        ry += 36.0f;
+        addPill(ix, ry, w3, 30.0f, L"跟随系统", ActionId::ModeSystem, settings_.themeMode == ThemeMode::System);
+        addPill(ix + w3 + 6.0f, ry, w3, 30.0f, L"浅色模式", ActionId::ModeLight, settings_.themeMode == ThemeMode::Light);
+        addPill(ix + (w3 + 6.0f) * 2.0f, ry, w3, 30.0f, L"深色模式", ActionId::ModeDark, settings_.themeMode == ThemeMode::Dark);
     };
 
     auto drawEffectsCard = [&](float x, float cy, float w, float h) {

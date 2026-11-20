@@ -142,6 +142,26 @@ int runKeyHandlerTests() {
         KH_ASSERT(circles.size() == 12, "Each pulse must emit primary + trailing glow circle");
         glow.advanceFrame(1'000'000'000LL + fangcun::TypingGlowEngine::kDurationNanos);
         KH_ASSERT(glow.activeCount() == 0, "Pulses must expire after 1100ms");
+
+        auto gtMetrics = fangcun::skinMetrics(fangcun::SkinPreset::GreenTerminal);
+        auto wtMetrics = fangcun::skinMetrics(fangcun::SkinPreset::WoodType);
+        auto ctMetrics = fangcun::skinMetrics(fangcun::SkinPreset::ClassicTypewriter);
+        KH_ASSERT(std::string(gtMetrics.id) == "green_terminal" && gtMetrics.defaultThemeMode == fangcun::ThemeMode::Dark,
+                  "GreenTerminal metrics mismatch");
+        KH_ASSERT(std::string(wtMetrics.id) == "wood_type" && wtMetrics.defaultThemeMode == fangcun::ThemeMode::Light,
+                  "WoodType metrics mismatch");
+        KH_ASSERT(std::string(ctMetrics.id) == "classic_typewriter" && ctMetrics.defaultThemeMode == fangcun::ThemeMode::Light,
+                  "ClassicTypewriter metrics mismatch");
+
+        auto gtColors = fangcun::skinColors(fangcun::SkinPreset::GreenTerminal, true);
+        auto wtColors = fangcun::skinColors(fangcun::SkinPreset::WoodType, false);
+        auto ctColors = fangcun::skinColors(fangcun::SkinPreset::ClassicTypewriter, false);
+        KH_ASSERT(gtColors.isDarkKeyboard() && gtColors.accent.r == 0x78 && gtColors.accent.g == 0xF8,
+                  "GreenTerminal phosphor palette mismatch");
+        KH_ASSERT(!wtColors.isDarkKeyboard() && wtColors.accent.r == 0xB5 && wtColors.border.r == 0x68,
+                  "WoodType walnut/vermilion palette mismatch");
+        KH_ASSERT(!ctColors.isDarkKeyboard() && ctColors.accent.r == 0x2B && ctColors.keyboard.r == 0xF6,
+                  "ClassicTypewriter paper/charcoal palette mismatch");
     }
 
     // 9. Candidate pagination (> 9 candidates): =/-/PageDown/PageUp, arrow wrap, and page-relative digit selection

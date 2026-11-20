@@ -58,6 +58,7 @@ public:
     bool isVisible() const;
     void setPageSize(size_t size) { pageSize_ = (size >= 5 && size <= 9) ? size : kPageSize; }
     void setWheelPaging(bool enabled) { wheelPaging_ = enabled; }
+    void setLayout(CandidateLayout layout) { layout_ = layout; }
     void showModeToast(bool englishMode, SkinPreset skin, bool darkMode);
 
 private:
@@ -83,6 +84,9 @@ private:
     bool ensureDeviceResources();
     void releaseDeviceResources();
     void drawTianzigeLogoD2D(float x, float y, float size);
+    void drawGreenTerminalChrome(float wDip, float hDip, float innerL, float innerT, float innerR, float innerB, float dividerY);
+    void drawWoodTypeChrome(float wDip, float hDip, float innerL, float innerT, float innerR, float innerB, float dividerY);
+    void drawClassicTypewriterChrome(float wDip, float hDip, float innerL, float innerT, float innerR, float innerB);
 
     HWND hwnd_ = nullptr;
     SelectCallback onSelect_;
@@ -101,6 +105,7 @@ private:
     bool pending_ = false;
     InputScheme scheme_ = InputScheme::Flypy;
     SkinPreset skin_ = SkinPreset::NativeLight;
+    CandidateLayout layout_ = CandidateLayout::Horizontal;
     bool darkMode_ = false;
     int firstCandidateSize_ = 20;
     bool typingGlow_ = true;
@@ -117,6 +122,7 @@ private:
     float candidateHeightDp_ = 40.0f;
     int lastBudgetFirstSize_ = -1;
     UINT lastBudgetDpi_ = 0;
+    SkinPreset lastBudgetSkin_ = SkinPreset::NativeLight;
 
     RECT lastCaretRect_{0, 0, 0, 0};
     HWND lastCaretFgWnd_ = nullptr;

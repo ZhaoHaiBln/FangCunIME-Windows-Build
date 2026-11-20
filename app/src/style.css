@@ -1379,6 +1379,368 @@ body.mode-statusbar .win-shell {
   background: #1f8a68;
 }
 
+/* Shared optional chrome elements hidden on legacy skins */
+.cand-platen-bar,
+.cand-prompt,
+.cand-crt-leds {
+  display: none;
+}
+
+.cand-inner {
+  position: relative;
+}
+
+/* Vertical layout support */
+.cand-window.is-vertical {
+  min-width: 196px;
+  max-width: 240px;
+}
+
+.cand-window.is-vertical .cand-bottom-strip {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 10px 8px;
+}
+
+.cand-window.is-vertical .cand-pill {
+  width: 100%;
+  padding: 4px 10px;
+}
+
+.cand-window.is-vertical .cand-arrows {
+  margin-left: auto;
+  padding-top: 2px;
+}
+
+/* Showcase grid for the 3 flagship crafted skins */
+.crafted-showcase-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ==========================================================================
+   CRAFTED SKIN 1: 绿屏终端 (green_terminal)
+   ========================================================================== */
+.cand-window[data-skin="green_terminal"] {
+  background: linear-gradient(180deg, #eae2d2 0%, #d4ccb9 48%, #b8af99 100%);
+  border: 1px solid #8e8574;
+  border-radius: 9px;
+  padding: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 252, 244, 0.8),
+    inset 0 -1px 1px rgba(105, 97, 82, 0.45),
+    0 10px 24px rgba(18, 22, 16, 0.24);
+}
+
+.cand-window[data-skin="green_terminal"] .cand-inner {
+  position: relative;
+  border-radius: 4px;
+  border: 1.5px solid #4d483e;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.18) 0px,
+      rgba(0, 0, 0, 0.18) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    linear-gradient(180deg, #102013 0%, #142717 52%, #0c190e 100%);
+  box-shadow: inset 0 0 8px rgba(4, 12, 5, 0.85);
+  overflow: hidden;
+}
+
+.cand-window[data-skin="green_terminal"] .cand-mini-logo,
+.cand-window[data-skin="green_terminal"] .cand-caret,
+.cand-window[data-skin="green_terminal"] .cand-arrows {
+  display: none;
+}
+
+.cand-window[data-skin="green_terminal"] .cand-prompt {
+  display: inline;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: #f4e667;
+}
+
+.cand-window[data-skin="green_terminal"] .cand-top-row {
+  background: transparent;
+  padding: 6px 10px 5px;
+  gap: 6px;
+  border-bottom: 1px solid #214526;
+}
+
+.cand-window[data-skin="green_terminal"] .cand-composing {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: #f4e667;
+  letter-spacing: 0.02em;
+}
+
+.cand-window[data-skin="green_terminal"] .cand-crt-leds {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.cand-window[data-skin="green_terminal"] .crt-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #6b886e, #475e49 70%);
+  display: inline-block;
+}
+
+.cand-window[data-skin="green_terminal"] .crt-led.is-active {
+  background: radial-gradient(circle at 35% 35%, #dfffd8, #7bfb62 65%);
+  box-shadow: 0 0 8px 2px rgba(123, 251, 98, 0.72);
+}
+
+.cand-window[data-skin="green_terminal"] .cand-bottom-strip {
+  background: transparent;
+  border-top: none;
+  padding: 6px 10px 7px;
+  gap: 10px;
+}
+
+.cand-window[data-skin="green_terminal"] .cand-pill {
+  color: #8dee6f;
+  padding: 2px 8px;
+  border-radius: 4px;
+  gap: 6px;
+}
+
+.cand-window[data-skin="green_terminal"] .cand-pill .cand-num {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  color: #8dee6f;
+}
+
+.cand-window[data-skin="green_terminal"] .cand-pill.is-selected {
+  background: #78f867;
+  color: #0b1a0d;
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(120, 248, 103, 0.35);
+}
+
+.cand-window[data-skin="green_terminal"] .cand-pill.is-selected .cand-num {
+  color: #0b1a0d;
+}
+
+/* ==========================================================================
+   CRAFTED SKIN 2: 木框活字 (wood_type)
+   ========================================================================== */
+.cand-window[data-skin="wood_type"] {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(62, 34, 16, 0.14) 0px,
+      rgba(62, 34, 16, 0.14) 2px,
+      transparent 2px,
+      transparent 10px
+    ),
+    linear-gradient(180deg, #8c5f41 0%, #6e462b 28%, #5d3920 75%, #472a16 100%);
+  border: 1px solid #3d2211;
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(180, 134, 98, 0.45),
+    0 10px 24px rgba(42, 24, 12, 0.24);
+}
+
+.cand-window[data-skin="wood_type"] .cand-inner {
+  border-radius: 3px;
+  background: linear-gradient(180deg, #efdfc6 0%, #f4e6cf 50%, #ecdbc0 100%);
+  box-shadow: inset 0 0 6px rgba(74, 45, 24, 0.26);
+  overflow: hidden;
+}
+
+.cand-window[data-skin="wood_type"] .cand-mini-logo,
+.cand-window[data-skin="wood_type"] .cand-num,
+.cand-window[data-skin="wood_type"] .cand-arrows {
+  display: none;
+}
+
+.cand-window[data-skin="wood_type"] .cand-prompt {
+  display: inline;
+  font-family: Georgia, "Songti SC", "SimSun", serif;
+  font-size: 14px;
+  color: #292015;
+}
+
+.cand-window[data-skin="wood_type"] .cand-top-row {
+  background: transparent;
+  padding: 6px 12px 5px;
+  gap: 5px;
+  position: relative;
+}
+
+.cand-window[data-skin="wood_type"] .cand-top-row::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 1px;
+  background: #aa9a81;
+}
+
+.cand-window[data-skin="wood_type"] .cand-composing {
+  font-family: Georgia, "Songti SC", "SimSun", serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #292015;
+}
+
+.cand-window[data-skin="wood_type"] .cand-caret {
+  color: #3a2e22;
+  margin-left: 3px;
+}
+
+.cand-window[data-skin="wood_type"] .cand-bottom-strip {
+  background: transparent;
+  border-top: none;
+  padding: 6px 12px 7px;
+  gap: 12px;
+}
+
+.cand-window[data-skin="wood_type"] .cand-pill {
+  font-family: "SimSun", "Songti SC", "Noto Serif SC", Georgia, serif;
+  color: #241c14;
+  padding: 2px 10px;
+  border-radius: 4px;
+  border: 1.5px solid transparent;
+}
+
+.cand-window[data-skin="wood_type"] .cand-pill.is-selected {
+  background: rgba(181, 70, 50, 0.045);
+  border-color: #b54632;
+  color: #b03e2b;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   CRAFTED SKIN 3: 经典打字机 (classic_typewriter)
+   ========================================================================== */
+.cand-window[data-skin="classic_typewriter"] {
+  background: linear-gradient(180deg, #d3c9bc 0%, #8c8173 35%, #564f47 72%, #b5aba0 100%);
+  border: 1px solid #3a3530;
+  border-radius: 10px;
+  padding: 5.5px;
+  box-shadow:
+    inset 0 1px 0 rgba(235, 228, 218, 0.78),
+    0 10px 24px rgba(24, 20, 16, 0.28);
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-platen-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 10px;
+  padding: 1px 4px;
+  background: linear-gradient(180deg, #eeddc2 0%, #f4e6ce 100%);
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  border-left: 1.5px solid #1e1a18;
+  border-right: 1.5px solid #1e1a18;
+  border-top: 1.5px solid #1e1a18;
+}
+
+.cand-window[data-skin="classic_typewriter"] .platen-cap {
+  width: 12px;
+  height: 9px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    #afa598 0px,
+    #afa598 2px,
+    #423c35 2px,
+    #423c35 3.5px
+  );
+  border: 1px solid #38332e;
+  flex-shrink: 0;
+}
+
+.cand-window[data-skin="classic_typewriter"] .platen-rod {
+  flex: 1;
+  height: 7px;
+  background: linear-gradient(180deg, #141311 0%, #494641 28%, #161513 62%, #0a0908 100%);
+  box-shadow: 0 3px 5px rgba(20, 16, 12, 0.32);
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-inner {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  border-left: 1.5px solid #1e1a18;
+  border-right: 1.5px solid #1e1a18;
+  border-bottom: 1.5px solid #1e1a18;
+  background: linear-gradient(180deg, #efdfc4 0%, #f6e8d0 45%, #ecdbc0 100%);
+  box-shadow: inset 0 4px 6px -3px rgba(26, 21, 16, 0.25);
+  overflow: hidden;
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-mini-logo,
+.cand-window[data-skin="classic_typewriter"] .cand-num,
+.cand-window[data-skin="classic_typewriter"] .cand-arrows {
+  display: none;
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-prompt {
+  display: inline;
+  font-family: "Courier New", var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: #221e1a;
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-top-row {
+  background: transparent;
+  padding: 6px 12px 4px;
+  gap: 5px;
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-composing {
+  font-family: "Courier New", var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: #221e1a;
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-caret {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  margin-left: 4px;
+  vertical-align: -2px;
+  background: #237218;
+  color: transparent;
+  overflow: hidden;
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-bottom-strip {
+  background: transparent;
+  border-top: none;
+  padding: 4px 12px 7px;
+  gap: 12px;
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-pill {
+  font-family: "SimSun", "Songti SC", "Noto Serif SC", Georgia, serif;
+  color: #221e1a;
+  padding: 2px 11px;
+  border-radius: 4px;
+}
+
+.cand-window[data-skin="classic_typewriter"] .cand-pill.is-selected {
+  background: #2b2723;
+  color: #f7eedb;
+  font-weight: 600;
+}
+
 .sb-btn {
   border: none;
   background: transparent;

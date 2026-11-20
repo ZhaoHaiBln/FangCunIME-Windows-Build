@@ -10,6 +10,7 @@ export interface AppSettings {
   pageSize: number;
   wheelPaging: boolean;
   skin: string;
+  candidateLayout: string;
   themeMode: string;
   darkMode: boolean;
   systemDark: boolean;
@@ -43,7 +44,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   capsLockBypass: true,
   pageSize: 7,
   wheelPaging: true,
-  skin: "warm_grid",
+  skin: "green_terminal",
+  candidateLayout: "horizontal",
   themeMode: "system",
   darkMode: false,
   systemDark: false,
@@ -229,9 +231,12 @@ function render(): void {
     btn.classList.toggle("is-selected", btn.dataset.scheme === state.scheme);
   });
 
-  // Skin & Mode buttons
+  // Skin, Layout & Mode buttons
   document.querySelectorAll<HTMLButtonElement>("[data-skin]").forEach((btn) => {
     btn.classList.toggle("is-selected", btn.dataset.skin === state.skin);
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-layout]").forEach((btn) => {
+    btn.classList.toggle("is-selected", btn.dataset.layout === (state.candidateLayout || "horizontal"));
   });
   document.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach((btn) => {
     btn.classList.toggle("is-selected", btn.dataset.mode === state.themeMode);
@@ -253,12 +258,18 @@ function render(): void {
 
   // Live Candidate Window Preview
   const candWin = document.getElementById("cand-window-preview")!;
+  const isCrafted =
+    state.skin === "green_terminal" ||
+    state.skin === "wood_type" ||
+    state.skin === "classic_typewriter";
   const isDark =
-    previewDarkCand ||
-    state.themeMode === "dark" ||
-    state.skin === "deep_blue" ||
-    (state.themeMode === "system" && state.systemDark);
+    !isCrafted &&
+    (previewDarkCand ||
+      state.themeMode === "dark" ||
+      state.skin === "deep_blue" ||
+      (state.themeMode === "system" && state.systemDark));
   candWin.classList.toggle("is-dark", isDark);
+  candWin.classList.toggle("is-vertical", state.candidateLayout === "vertical");
   candWin.dataset.skin = state.skin;
 
   const firstWord = document.getElementById("preview-first-word")!;
@@ -433,6 +444,10 @@ document.getElementById("skin-group")!.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-skin]");
   if (btn?.dataset.skin) void save({ skin: btn.dataset.skin });
 });
+document.getElementById("layout-group")?.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-layout]");
+  if (btn?.dataset.layout) void save({ candidateLayout: btn.dataset.layout });
+});
 document.getElementById("mode-group")!.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-mode]");
   if (btn?.dataset.mode) void save({ themeMode: btn.dataset.mode });
@@ -548,7 +563,15 @@ document.getElementById("sb-punct")?.addEventListener("click", () => {
   });
 });
 document.getElementById("sb-skin")?.addEventListener("click", () => {
-  const order = ["warm_grid", "native_light", "mint", "deep_blue"];
+  const order = [
+    "green_terminal",
+    "wood_type",
+    "classic_typewriter",
+    "warm_grid",
+    "native_light",
+    "mint",
+    "deep_blue",
+  ];
   const idx = order.indexOf(state.skin);
   const nextSkin = order[(idx + 1) % order.length];
   void save({ skin: nextSkin });

@@ -100,7 +100,12 @@ AppSettings SettingsStore::load() {
             if (val == "warm_grid") s.skin = SkinPreset::WarmGrid;
             else if (val == "mint") s.skin = SkinPreset::Mint;
             else if (val == "deep_blue") s.skin = SkinPreset::DeepBlue;
+            else if (val == "green_terminal") s.skin = SkinPreset::GreenTerminal;
+            else if (val == "wood_type") s.skin = SkinPreset::WoodType;
+            else if (val == "classic_typewriter") s.skin = SkinPreset::ClassicTypewriter;
             else s.skin = SkinPreset::NativeLight;
+        } else if (key == "candidate_layout") {
+            s.candidateLayout = (val == "vertical") ? CandidateLayout::Vertical : CandidateLayout::Horizontal;
         } else if (key == "theme_mode") {
             hasThemeMode = true;
             if (val == "light") s.themeMode = ThemeMode::Light;
@@ -154,7 +159,12 @@ void SettingsStore::save(const AppSettings& s) {
     const char* skinStr =
         (s.skin == SkinPreset::WarmGrid) ? "warm_grid" :
         (s.skin == SkinPreset::Mint) ? "mint" :
-        (s.skin == SkinPreset::DeepBlue) ? "deep_blue" : "native_light";
+        (s.skin == SkinPreset::DeepBlue) ? "deep_blue" :
+        (s.skin == SkinPreset::GreenTerminal) ? "green_terminal" :
+        (s.skin == SkinPreset::WoodType) ? "wood_type" :
+        (s.skin == SkinPreset::ClassicTypewriter) ? "classic_typewriter" : "native_light";
+    const char* layoutStr =
+        (s.candidateLayout == CandidateLayout::Vertical) ? "vertical" : "horizontal";
     const char* modeStr =
         (s.themeMode == ThemeMode::Light) ? "light" :
         (s.themeMode == ThemeMode::Dark) ? "dark" : "system";
@@ -164,6 +174,7 @@ void SettingsStore::save(const AppSettings& s) {
         << "mixed_input=" << (s.mixedInput ? "1" : "0") << "\n"
         << "chinese_punctuation=" << (s.chinesePunctuation ? "1" : "0") << "\n"
         << "skin=" << skinStr << "\n"
+        << "candidate_layout=" << layoutStr << "\n"
         << "theme_mode=" << modeStr << "\n"
         << "dark=" << darkBit << "\n"
         << "dark_mode=" << darkBit << "\n"

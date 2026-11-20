@@ -17,6 +17,8 @@ pub struct AppSettings {
     #[serde(default = "default_true")]
     pub wheel_paging: bool,
     pub skin: String,
+    #[serde(default = "default_candidate_layout")]
+    pub candidate_layout: String,
     pub theme_mode: String,
     pub dark_mode: bool,
     pub system_dark: bool,
@@ -37,6 +39,10 @@ fn default_page_size() -> i32 {
     7
 }
 
+fn default_candidate_layout() -> String {
+    "horizontal".to_string()
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         let sys_dark = is_windows_apps_dark();
@@ -48,7 +54,8 @@ impl Default for AppSettings {
             caps_lock_bypass: true,
             page_size: 7,
             wheel_paging: true,
-            skin: "warm_grid".to_string(),
+            skin: "green_terminal".to_string(),
+            candidate_layout: "horizontal".to_string(),
             theme_mode: "system".to_string(),
             dark_mode: sys_dark,
             system_dark: sys_dark,
@@ -90,9 +97,18 @@ fn normalize(mut s: AppSettings) -> AppSettings {
     }
     if !matches!(
         s.skin.as_str(),
-        "native_light" | "warm_grid" | "mint" | "deep_blue"
+        "native_light"
+            | "warm_grid"
+            | "mint"
+            | "deep_blue"
+            | "green_terminal"
+            | "wood_type"
+            | "classic_typewriter"
     ) {
-        s.skin = "warm_grid".to_string();
+        s.skin = "green_terminal".to_string();
+    }
+    if !matches!(s.candidate_layout.as_str(), "horizontal" | "vertical") {
+        s.candidate_layout = "horizontal".to_string();
     }
     if !matches!(s.theme_mode.as_str(), "system" | "light" | "dark") {
         s.theme_mode = "system".to_string();
@@ -142,6 +158,7 @@ pub fn load_from_disk() -> AppSettings {
                 }
                 "wheel_paging" => s.wheel_paging = val == "1" || val.eq_ignore_ascii_case("true"),
                 "skin" => s.skin = val.to_string(),
+                "candidate_layout" => s.candidate_layout = val.to_string(),
                 "theme_mode" => s.theme_mode = val.to_string(),
                 "dark" | "dark_mode" => {
                     s.dark_mode = val == "1" || val.eq_ignore_ascii_case("true")
@@ -183,7 +200,7 @@ pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
     }
     let bool_int = |b: bool| if b { 1 } else { 0 };
     let body = format!(
-        "scheme={}\nmixed_input={}\nchinese_punctuation={}\nshift_toggle_english={}\ncapslock_bypass={}\npage_size={}\nwheel_paging={}\nskin={}\ntheme_mode={}\ndark={}\ndark_mode={}\nfirst_candidate_size={}\nkey_opacity={:.2}\ntyping_glow={}\nkey_letter_size={}\nkey_letter_bold={}\nclipboard_enabled={}\n",
+        "scheme={}\nmixed_input={}\nchinese_punctuation={}\nshift_toggle_english={}\ncapslock_bypass={}\npage_size={}\nwheel_paging={}\nskin={}\ncandidate_layout={}\ntheme_mode={}\ndark={}\ndark_mode={}\nfirst_candidate_size={}\nkey_opacity={:.2}\ntyping_glow={}\nkey_letter_size={}\nkey_letter_bold={}\nclipboard_enabled={}\n",
         s.scheme,
         bool_int(s.mixed_input),
         bool_int(s.chinese_punctuation),
@@ -192,6 +209,7 @@ pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
         s.page_size,
         bool_int(s.wheel_paging),
         s.skin,
+        s.candidate_layout,
         s.theme_mode,
         bool_int(s.dark_mode),
         bool_int(s.dark_mode),

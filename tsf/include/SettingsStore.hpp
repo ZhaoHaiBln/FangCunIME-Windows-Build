@@ -24,6 +24,7 @@ struct AppSettings {
     bool capsLockBypass = true;
     int pageSize = 7;
     bool wheelPaging = true;
+    CandidateLayout candidateLayout = CandidateLayout::Horizontal;
 };
 
 class SettingsStore {
