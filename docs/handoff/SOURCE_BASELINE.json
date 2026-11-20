@@ -1,0 +1,262 @@
+{
+  "product": "FangCun IME Windows",
+  "repository": "https://github.com/ZhaoHaiBln/FangCunIME-Windows",
+  "branch": "main",
+  "source_commit_before_handoff": "028be5cf70bac494f0005172bfe52c491d085c6c",
+  "application_version": "0.1.0",
+  "verified_windows_ci": {
+    "id": 43800795464,
+    "url": "https://github.com/ZhaoHaiBln/FangCunIME-Windows/actions/runs/43800795464",
+    "head_sha": "028be5cf70bac494f0005172bfe52c491d085c6c",
+    "conclusion": "success",
+    "scope": "Windows x64 compile, CTest, Inno Setup, artifact upload; not interactive TSF acceptance"
+  },
+  "handoff_scope": "Documentation and archive preparation only; original application/build/assets/installer/license files unchanged. README receives a handoff entry and is excluded from this application-file hash list.",
+  "files": [
+    {
+      "path": ".github/workflows/build.yml",
+      "bytes": 2025,
+      "sha256": "d2df16e1a11d02eb2e95e2a8ada07b5e4f4337f6ccac8f028d85afc43fcb76fc"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "bytes": 5147,
+      "sha256": "6e9a481fcce05be8ffe55646478e3d18fa340872b090bd3de5f8d658df63b488"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 506,
+      "sha256": "da2b2196be160d8c75c20847f0ba6888337b22e7d13b51753ff16ac2c93ca307"
+    },
+    {
+      "path": "assets/dict.db",
+      "bytes": 33189888,
+      "sha256": "11735de4c334cadff974b5cc362d72a9d770c24434b6faca7ee72bda89d9ae07"
+    },
+    {
+      "path": "assets/pinyin-v1.dbz",
+      "bytes": 32597043,
+      "sha256": "52e3ac21a5733f48bf801b5d2c58992af3ccde14168566d4ed6603e84f95920e"
+    },
+    {
+      "path": "assets/pinyin-v1.json",
+      "bytes": 330,
+      "sha256": "9f65a59a7e502e9f2369499355541ae9a469f71f49dccd7cdd72fd35c0b41d2c"
+    },
+    {
+      "path": "core/include/fangcun/CandidateRanker.hpp",
+      "bytes": 797,
+      "sha256": "da62e82d03b7e7cd4d3b85af12779fdb5356d9ca7ddffb0ea96a710944ff62ec"
+    },
+    {
+      "path": "core/include/fangcun/DictionaryRepository.hpp",
+      "bytes": 5171,
+      "sha256": "1731c3ca4c9e2dcec0d3a0020c2e1941c042ea792ea43e0308f477bc67e61047"
+    },
+    {
+      "path": "core/include/fangcun/FangCunEngine.hpp",
+      "bytes": 2853,
+      "sha256": "a1285e8d01061557506f91488bad122298ee581846bacc5e7de8560c4325f3b4"
+    },
+    {
+      "path": "core/include/fangcun/FlypyConverter.hpp",
+      "bytes": 332,
+      "sha256": "5cdcc99b070a29b6a19cdb17f8dc82c8ee60cdb2b1246de45095d2a9fe2efb8f"
+    },
+    {
+      "path": "core/include/fangcun/InputScheme.hpp",
+      "bytes": 893,
+      "sha256": "f55a3115e41ad35d96d1c3d45b16f15a8aaef1d5ce1fad64c50a1d7825b83bfd"
+    },
+    {
+      "path": "core/include/fangcun/MixedInput.hpp",
+      "bytes": 582,
+      "sha256": "6381d00823713f9ed226087e1ae7bcb8a3241ce1654226d1238325b2b48f3bb7"
+    },
+    {
+      "path": "core/include/fangcun/ThemeConfig.hpp",
+      "bytes": 15820,
+      "sha256": "de4672ea4a71e6ef05431d035faccd6517008878ccd1ae8a8d3d0a80e46def63"
+    },
+    {
+      "path": "core/include/fangcun/UserStore.hpp",
+      "bytes": 1861,
+      "sha256": "84ca62d5da272708b5277b9c5327ca9cac810d74e6eada79fc1b0d962d95676a"
+    },
+    {
+      "path": "core/src/CandidateRanker.cpp",
+      "bytes": 1681,
+      "sha256": "89ed401ebbb70b057245a7554efa5ea807074062e26c45943ed48f3227b3c5b0"
+    },
+    {
+      "path": "core/src/DictionaryRepository.cpp",
+      "bytes": 22825,
+      "sha256": "5a934b9068122be23231eb4819866c0251cbd8c5969dd374c532fedf542bd08f"
+    },
+    {
+      "path": "core/src/FangCunEngine.cpp",
+      "bytes": 6251,
+      "sha256": "9f9a9103b7f66b148869f75e2daf94c2bc865ca8cf582b7c86a1ec04deabe2f0"
+    },
+    {
+      "path": "core/src/FlypyConverter.cpp",
+      "bytes": 4797,
+      "sha256": "872a2d3cdce68775e6d71c3d8aaaa5b36b565b6b6643869090f8bd0941f976e4"
+    },
+    {
+      "path": "core/src/InputScheme.cpp",
+      "bytes": 3350,
+      "sha256": "db6051bc389e0ac4ae3fa1c71d38ed343d741782beb1d588b9a9926821921bd9"
+    },
+    {
+      "path": "core/src/MixedInput.cpp",
+      "bytes": 8280,
+      "sha256": "c0397f0b41a79bdcc0ac3bed7a5b4a41bc7ad4fb2deb7956fec1fd2c6bd23119"
+    },
+    {
+      "path": "core/src/UserStore.cpp",
+      "bytes": 15746,
+      "sha256": "05f4ea23279b88895333df1f78f3812f881599fa2bae38df1434479d6a9cbd6a"
+    },
+    {
+      "path": "installer/FangCunIME.iss",
+      "bytes": 1625,
+      "sha256": "4f0bf50be38b79f9ddf69610e188dd76a38559ecd87c9edd9df3a17534a749d7"
+    },
+    {
+      "path": "installer/install.ps1",
+      "bytes": 1699,
+      "sha256": "4fe50ccfba92b28f1ae4ebbbf13cddd57753d609aaf6506714efa371a2e59013"
+    },
+    {
+      "path": "installer/uninstall.ps1",
+      "bytes": 1321,
+      "sha256": "529f837a7f8caae3a5dfeb3ae36b0571b936fffc890c3e9d040e69f8dc266565"
+    },
+    {
+      "path": "installer/upgrade.ps1",
+      "bytes": 1536,
+      "sha256": "51bc44f4efc78c001ae874b92ed7f206196ade9f20a4cbe5c444184a00f48993"
+    },
+    {
+      "path": "installer/升级-方寸输入法.bat",
+      "bytes": 697,
+      "sha256": "e3ffe0338093df70ddd8e13aa2fe42718151f3642c92bb930b4b2ab83defa0bb"
+    },
+    {
+      "path": "installer/卸载-方寸输入法.bat",
+      "bytes": 370,
+      "sha256": "d4cea36a921d8ec443f5017bcfa28cec03a5edde3805fd50dc19d549a5812540"
+    },
+    {
+      "path": "installer/安装-方寸输入法.bat",
+      "bytes": 758,
+      "sha256": "e1b6a90b4c6b47f06b8bd8fb7b6440ad980b2d32a96c53b969fc536f52d8ce88"
+    },
+    {
+      "path": "installer/打开设置-方寸输入法.bat",
+      "bytes": 83,
+      "sha256": "6da31198d91258ec1a5b8a2b82828fdb592a40002e7292415f3eba0ca3480975"
+    },
+    {
+      "path": "licenses/rime-ice-LICENSE.txt",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "tests/test_engine.cpp",
+      "bytes": 6664,
+      "sha256": "1adc06301f4aaaa434eb9e76f8fa2d1ccab4095a8089850cdb0f0ed712490b6a"
+    },
+    {
+      "path": "tests/test_keyhandler.cpp",
+      "bytes": 7828,
+      "sha256": "762cd18f3aa32649524ba18cf56dffa3229927209509344e8151f2ca94686183"
+    },
+    {
+      "path": "tsf/include/CandidateWindow.hpp",
+      "bytes": 3371,
+      "sha256": "805e5bcc0d319a7fe5220e86047b711a306a17fe61548cf8de3ff4867a81cfd9"
+    },
+    {
+      "path": "tsf/include/DllMain.hpp",
+      "bytes": 159,
+      "sha256": "54f4d11b140ba0e5b295be4d4fe48450973566731c6a0d9bb82157886f1088f5"
+    },
+    {
+      "path": "tsf/include/EditSession.hpp",
+      "bytes": 1465,
+      "sha256": "45493e934a091d7f1590a6bdc9335289ed2b8580b2ebaaa8b57ad65f29ceed28"
+    },
+    {
+      "path": "tsf/include/Guid.hpp",
+      "bytes": 749,
+      "sha256": "b48c4c4614a308c5855f3a55c9f30f83ab109055bfb1f36453b1916468fc598d"
+    },
+    {
+      "path": "tsf/include/KeyHandler.hpp",
+      "bytes": 4222,
+      "sha256": "ea9cc1eb490d3193f04ea4c7067942592fa8820c35cd2468580a7676ca36432f"
+    },
+    {
+      "path": "tsf/include/SettingsStore.hpp",
+      "bytes": 1014,
+      "sha256": "3a50cec167bc9bd99d6473715209f2df0a8eec5aff3feadcc1a7d5b4e175fbba"
+    },
+    {
+      "path": "tsf/include/SettingsWindow.hpp",
+      "bytes": 3199,
+      "sha256": "b1ffb237286ac2535e08d45e436d861803f2accec0526185ff3627ac672d8251"
+    },
+    {
+      "path": "tsf/include/TextService.hpp",
+      "bytes": 4381,
+      "sha256": "1f0d5b747635acd42d57325b53cdb3ce4efeb79cdd3800cf273f9c3e6543b66c"
+    },
+    {
+      "path": "tsf/src/CandidateWindow.cpp",
+      "bytes": 27300,
+      "sha256": "f3fba6a0d156ec9dca953195854957fa48bad28e3124478487d0eb4123dbecb4"
+    },
+    {
+      "path": "tsf/src/DllMain.cpp",
+      "bytes": 3111,
+      "sha256": "c3307c06562f50d2bcae6e14f9cb4b690aa7ee158aa79b4964cde0a858d22d34"
+    },
+    {
+      "path": "tsf/src/EditSession.cpp",
+      "bytes": 6393,
+      "sha256": "e1586239b9656b91e17ee9532524649a36c993debb1d0eb07e3a0baba37a2bb9"
+    },
+    {
+      "path": "tsf/src/FangCunTSF.def",
+      "bytes": 172,
+      "sha256": "a8ba6258dc7a2fd4c2d00420ff8931e06d6503aaacd9a8028cd880390088b73d"
+    },
+    {
+      "path": "tsf/src/KeyHandler.cpp",
+      "bytes": 10913,
+      "sha256": "bb8ca3dc3ea590ab7fa88850f9910d096a75fa0c77438636daa5be3b6b813985"
+    },
+    {
+      "path": "tsf/src/Register.cpp",
+      "bytes": 5876,
+      "sha256": "0600d6027a43ce3ad87d2a92506f74415cf97cb6df63d428afcc647ef7fbb419"
+    },
+    {
+      "path": "tsf/src/SettingsStore.cpp",
+      "bytes": 6097,
+      "sha256": "8d28efdf33f53069ef36d56834d9de9413783035a97a878ad1aa8075a7d4ec8b"
+    },
+    {
+      "path": "tsf/src/SettingsWindow.cpp",
+      "bytes": 35175,
+      "sha256": "966275a43da20b3132d30cfad8c8c1f3d8b4c852bd3f27d7bae0ef012eafe36e"
+    },
+    {
+      "path": "tsf/src/TextService.cpp",
+      "bytes": 21362,
+      "sha256": "3f6752328582190ac78e886cb23e7d8c3b15f772ad5de49197114d7c315d068a"
+    }
+  ]
+}

@@ -53,8 +53,6 @@ Windows 的 Token 和密钥输入框不会回填已保存内容，只显示是�
 
 ## 共同协议与验收
 
-两端使用 [共同协议 v1](https://github.com/ZhaoHaiBln/FangCunIME/blob/codex/clipboard-sharing/android/docs/clipboard-sharing/PROTOCOL-v1.txt) 和[公开测试向量](https://github.com/ZhaoHaiBln/FangCunIME/blob/codex/clipboard-sharing/android/docs/clipboard-sharing/vectors-v1.json)。测试向量中的密钥仅用于验证，不用于实际配对。安卓使用说明见 [手机与电脑共享剪贴板](https://github.com/ZhaoHaiBln/FangCunIME/blob/codex/clipboard-sharing/android/docs/clipboard-sharing/README.md)。
+两端使用 [共同协议 v1](../../android/docs/clipboard-sharing/PROTOCOL-v1.txt) 和[公开测试向量](../../android/docs/clipboard-sharing/vectors-v1.json)。测试向量中的密钥仅用于验证，不用于实际配对。安卓使用说明见 [手机与电脑共享剪贴板](../../android/docs/clipboard-sharing/README.md)。
 
 本地协议、存储和页面检查不等于真实设备跨网验收。使用自己的设备 Token，分别验证电脑到手机、手机到电脑，随后检查关闭共享、断线恢复、伴侣重启和显式复制后的防回流行为。
-
-本文档的共同协议链接指向正式合仓的工作分支；此公开构建分支仅将文档相对链接改为完整地址，编译源码与正式工程一致。
