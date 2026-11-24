@@ -94,6 +94,9 @@ private:
 
     std::string composing_;
     std::string lastGlowComposing_;
+    // Derived during layout updates; glow-only paints do not remeasure text.
+    std::wstring visibleCode_;
+    float visibleCodeWidthDp_ = 0.0f;
     std::vector<std::string> candidates_;
     std::vector<float> horizontalCellWidths_;
     std::vector<RECT> candidateRects_;

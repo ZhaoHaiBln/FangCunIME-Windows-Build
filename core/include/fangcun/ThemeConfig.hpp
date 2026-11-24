@@ -152,6 +152,20 @@ inline ColorArgb accentForeground(const FangCunColors& colors) {
     return colors.onAccent;
 }
 
+// Accent fills keep their original hue. Small accent-colored labels need their
+// own foreground check against the native settings plate and translucent cards.
+inline ColorArgb readableSettingsAccent(const FangCunColors& colors) {
+    const auto contrast = [](ColorArgb ink, ColorArgb surface) {
+        const auto a = ink.relativeLuminance();
+        const auto b = surface.relativeLuminance();
+        return (std::max(a, b) + .05f) / (std::min(a, b) + .05f);
+    };
+    const auto card = ColorArgb::lerp(colors.keyboard, colors.key,
+        colors.isDarkKeyboard() ? .35f : .55f);
+    return contrast(colors.accent, colors.keyboard) >= 4.5f && contrast(colors.accent, card) >= 4.5f
+        ? colors.accent : colors.text;
+}
+
 inline SkinMetrics skinMetrics(SkinPreset skin) {
     switch (skin) {
         case SkinPreset::Typewriter:

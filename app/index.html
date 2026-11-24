@@ -28,7 +28,7 @@
             <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
             <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" />
           </svg>
-          <input id="settings-search" type="search" placeholder="搜索设置" autocomplete="off" />
+          <input id="settings-search" type="search" aria-label="搜索设置" placeholder="搜索设置" autocomplete="off" />
         </div>
 
         <nav id="sidebar-nav" class="sidebar-nav" aria-label="设置导航">
@@ -93,7 +93,7 @@
 
         <div class="sidebar-footer">
           <span class="sync-dot"></span>
-          <span id="sidebar-status-text">已启用 · 实时同步</span>
+          <span id="sidebar-status-text" role="status" aria-live="polite">正在连接桌面组件</span>
         </div>
       </aside>
 
@@ -403,7 +403,7 @@
                   <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
                   <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" />
                 </svg>
-                <input id="clip-search" type="search" placeholder="搜索剪贴板" autocomplete="off" />
+                <input id="clip-search" type="search" aria-label="搜索本机剪贴板" placeholder="搜索剪贴板" autocomplete="off" />
               </div>
 
               <div id="clip-list" class="clip-cards-list"></div>
@@ -488,7 +488,7 @@
             <div class="settings-list-card">
               <div class="setting-row">
                 <span class="setting-label">当前版本</span>
-                <span class="setting-value-tag">v0.6.4 (Windows x64 · TSF + Tauri v2)</span>
+                <span class="setting-value-tag">v0.6.5 (Windows x64 · TSF + Tauri v2)</span>
               </div>
               <div class="setting-row">
                 <span class="setting-label">核心特性</span>
@@ -530,7 +530,7 @@
               <circle cx="8.8" cy="8.8" r="5.6" stroke="currentColor" stroke-width="1.6" />
               <path d="M13 13L16.8 16.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" />
             </svg>
-            <input id="altv-search" type="search" placeholder="搜索剪贴板" autocomplete="off" />
+            <input id="altv-search" type="search" aria-label="搜索浮窗剪贴板" placeholder="搜索剪贴板" autocomplete="off" />
           </div>
 
           <div class="clip-view-tabs altv-view-tabs" role="tablist" aria-label="快速剪贴板分类">

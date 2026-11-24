@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-project(FangCunIMEWindows VERSION 0.6.4 LANGUAGES CXX C)
+project(FangCunIMEWindows VERSION 0.6.5 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -105,6 +105,10 @@ if(FANGCUN_BUILD_TSF)
 
     target_include_directories(FangCunTSF PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/tsf/include"
+    )
+
+    target_compile_definitions(FangCunTSF PRIVATE
+        FANGCUN_PROJECT_VERSION="${PROJECT_VERSION}"
     )
 
     target_link_libraries(FangCunTSF PRIVATE

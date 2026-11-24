@@ -7,6 +7,10 @@
 #include <cmath>
 #include <windowsx.h>
 
+#ifndef FANGCUN_PROJECT_VERSION
+#define FANGCUN_PROJECT_VERSION "dev"
+#endif
+
 namespace fangcun::tsf {
 
 namespace {
@@ -667,6 +671,7 @@ void SettingsWindow::onPaint() {
 
     const bool dark = SettingsStore::effectiveDarkMode(settings_);
     const FangCunColors colors = skinColors(settings_.skin, dark);
+    const auto labelAccent = readableSettingsAccent(colors);
     const SkinMetrics metrics = skinMetrics(settings_.skin);
     const BackdropGradientColors backdrop = computeBackdropGradient(settings_.skin, colors);
 
@@ -729,7 +734,7 @@ void SettingsWindow::onPaint() {
                                 D2D1::RectF(pad + 42.0f, y + 1.0f, pad + 190.0f, y + 24.0f), brush);
     }
     if (monoFormat_) {
-        brush->SetColor(toD2DColor(colors.accent));
+        brush->SetColor(toD2DColor(labelAccent));
         std::wstring tag = L"~/SETTINGS";
         renderTarget_->DrawText(tag.c_str(), static_cast<UINT32>(tag.size()), monoFormat_,
                                 D2D1::RectF(pad + 42.0f, y + 23.0f, pad + 130.0f, y + 38.0f), brush);
@@ -756,7 +761,8 @@ void SettingsWindow::onPaint() {
         if (monoFormat_) {
             monoFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
             brush->SetColor(toD2DColor(colors.secondary));
-            std::wstring ver = L"v0.4.0 · x64";
+            const std::string version = FANGCUN_PROJECT_VERSION;
+            const std::wstring ver = L"v" + std::wstring(version.begin(), version.end()) + L" · x64";
             renderTarget_->DrawText(ver.c_str(), static_cast<UINT32>(ver.size()), monoFormat_, verRc, brush);
             monoFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         }
@@ -932,7 +938,7 @@ void SettingsWindow::onPaint() {
         renderTarget_->FillRectangle(D2D1::RectF(innerX, headerY + 6.0f, innerX + 6.0f, headerY + 12.0f), brush);
 
         if (monoFormat_) {
-            brush->SetColor(toD2DColor(colors.accent));
+            brush->SetColor(toD2DColor(labelAccent));
             renderTarget_->DrawText(monoTag.c_str(), static_cast<UINT32>(monoTag.size()), monoFormat_,
                                     D2D1::RectF(innerX + 11.0f, headerY, innerX + 110.0f, headerY + 18.0f), brush);
         }
@@ -1022,7 +1028,7 @@ void SettingsWindow::onPaint() {
             }
             float rightX = ix + iw;
             addPill(rightX - 38.0f, ry, 38.0f, 32.0f, L"+", plusAct, false, true);
-            brush->SetColor(toD2DColor(colors.accent));
+            brush->SetColor(toD2DColor(labelAccent));
             if (sectionFormat_) {
                 sectionFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
                 renderTarget_->DrawText(valueStr.c_str(), static_cast<UINT32>(valueStr.size()), sectionFormat_,

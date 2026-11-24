@@ -3,6 +3,7 @@
 #include "fangcun/ThemeConfig.hpp"
 
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,64 @@ int runKeyHandlerTests() {
         fitHorizontalCandidateWidths(widths, 300.0f);
         KH_ASSERT((widths == std::vector<float>{260, 40}),
                   "Return unused width to the first word when the other words fit");
+    }
+
+    {
+        const auto measure = [](const std::wstring& value) { return static_cast<float>(value.size()) * 10.0f; };
+        KH_ASSERT(fitPreeditTail(L"abcdefghij", 100.0f, measure) == L"abcdefghij",
+                  "Preedit that fits exactly must retain its full spelling");
+        KH_ASSERT(fitPreeditTail(L"abcdefghij", 40.0f, measure) == L"\u2026hij",
+                  "A constrained preedit keeps the typing end and a measured leading ellipsis");
+        KH_ASSERT(fitPreeditTail(L"abcdefghij", 10.0f, measure) == L"\u2026" &&
+                      fitPreeditTail(L"abcdefghij", 5.0f, measure).empty(),
+                  "A very narrow slot may show only the ellipsis or no text, never an overflowing glyph");
+        KH_ASSERT(fitPreeditTail(L"", 100.0f, measure).empty() &&
+                      fitPreeditTail(L"abc", 0.0f, measure).empty() &&
+                      fitPreeditTail(L"abc", -10.0f, measure).empty() &&
+                      fitPreeditTail(L"abc", std::numeric_limits<float>::quiet_NaN(), measure).empty(),
+                  "Empty text and invalid or nonpositive display budgets must remain empty");
+        const auto proportional = [](const std::wstring& value) {
+            float width = 0.0f;
+            for (const auto character : value) width += character == L'W' ? 12.0f : character == L'i' ? 3.0f : 7.0f;
+            return width;
+        };
+        KH_ASSERT(fitPreeditTail(L"WWWiii", 19.0f, proportional) == L"\u2026iii",
+                  "Preedit fitting must use actual font measurement rather than a character-count cutoff");
+
+        bool splitPairMeasured = false;
+        const auto measureUnicode = [&](const std::wstring& value) {
+            float width = 0.0f;
+            for (std::size_t i = 0; i < value.size(); ++i) {
+                const auto character = static_cast<unsigned int>(value[i]);
+                if (character >= 0xD800 && character <= 0xDBFF) {
+                    if (i + 1 < value.size() && static_cast<unsigned int>(value[i + 1]) >= 0xDC00 &&
+                        static_cast<unsigned int>(value[i + 1]) <= 0xDFFF) {
+                        ++i; width += 14.0f; continue;
+                    }
+                    splitPairMeasured = true;
+                } else if (character >= 0xDC00 && character <= 0xDFFF) splitPairMeasured = true;
+                width += character == 0x2026 ? 7.0f : character > 0xFFFF ? 14.0f : 8.0f;
+            }
+            return width;
+        };
+        // Explicit surrogate units exercise Windows UTF-16 boundaries even on
+        // Linux, whose wchar_t can represent a supplementary scalar directly.
+        const std::wstring pair{L'a', static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), L'b'};
+        KH_ASSERT(fitPreeditTail(pair, 29.0f, measureUnicode) == std::wstring(L"\u2026") + pair.substr(1) &&
+                      fitPreeditTail(pair, 20.0f, measureUnicode) == L"\u2026b" && !splitPairMeasured,
+                  "All measured and displayed suffixes must keep a UTF-16 surrogate pair intact");
+        for (int budget = 1; budget <= 40; ++budget) {
+            const auto result = fitPreeditTail(pair, static_cast<float>(budget), measureUnicode);
+            KH_ASSERT(measureUnicode(result) <= static_cast<float>(budget) && !splitPairMeasured,
+                      "Every narrow Unicode budget must produce a bounded suffix without orphan surrogate units");
+        }
+        KH_ASSERT(fitPreeditTail(L"\U0001F600b", 22.0f, measureUnicode) == L"\U0001F600b" &&
+                      fitPreeditTail(L"\U0001F600b", 21.0f, measureUnicode) == L"\u2026b",
+                  "Native supplementary characters must work with both UTF-16 and scalar wchar_t");
+        int measurements = 0;
+        const auto counted = [&](const std::wstring& value) { ++measurements; return measure(value); };
+        KH_ASSERT(fitPreeditTail(std::wstring(128, L'x'), 80.0f, counted) == L"\u2026xxxxxxx" && measurements <= 10,
+                  "Long input must keep its tail with logarithmic rather than per-character font measurements");
     }
 
     uint64_t lastQuerySession = 0;
@@ -179,6 +238,17 @@ int runKeyHandlerTests() {
                           contrast(colors.onCandidate, colors.pressed) >= 4.5f &&
                           contrast(colors.onAccent, colors.accent) >= 4.5f,
                           "Desktop controls must have readable text");
+                const auto label = fangcun::readableSettingsAccent(colors);
+                const auto settingsCard = ColorArgb::lerp(colors.keyboard, colors.key,
+                    colors.isDarkKeyboard() ? .35f : .55f);
+                KH_ASSERT(contrast(label, colors.keyboard) >= 4.5f && contrast(label, settingsCard) >= 4.5f,
+                          "Small native-settings labels must be readable on both the plate and translucent cards");
+                if (!dark && (preset == SkinPreset::Terminal || preset == SkinPreset::Brutal)) {
+                    KH_ASSERT(label.toColorRef() != colors.accent.toColorRef(),
+                              "A bright accent fill must not also be used as illegible text on a light settings plate");
+                }
+                KH_ASSERT(fangcun::accentForeground(colors).toColorRef() == colors.onAccent.toColorRef(),
+                          "Making small labels readable must not change emphasized-button foreground colors");
                 const auto preview = fangcun::computeGlassKeyColors(preset, colors, .4f, true, true, true);
                 KH_ASSERT(preview.cornerRadiusDp == metrics.cornerRadiusDp && preview.top.a == 255 &&
                           preview.ledgeDepthDp == (preset == SkinPreset::Brutal ? 2.0f : 0.0f),

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 export interface AppSettings {
@@ -117,6 +117,7 @@ function applySkinTheme(): void {
   });
   for (const [id, selected] of [["btn-preview-light", !(previewDarkCand ?? dark)], ["btn-preview-dark", previewDarkCand ?? dark]] as const) {
     document.getElementById(id)?.classList.toggle("is-active", selected);
+    document.getElementById(id)?.setAttribute("aria-pressed", String(selected));
   }
   const lightLabel = document.getElementById("showcase-light-label");
   const darkLabel = document.getElementById("showcase-dark-label");
@@ -125,23 +126,167 @@ function applySkinTheme(): void {
 }
 
 const appMode = new URLSearchParams(window.location.search).get("mode") ?? "main";
+const nativeApp = isTauri();
 let state: AppSettings = { ...DEFAULT_SETTINGS };
+let confirmedSettings: AppSettings = { ...DEFAULT_SETTINGS };
+let initialSettingsLoaded = !nativeApp;
+let finishInitialSettingsLoad: () => void = () => {};
+const initialSettingsReady = new Promise<void>((resolve) => { finishInitialSettingsLoad = resolve; });
+interface SettingsRequest {
+  patch: Partial<AppSettings>;
+  reset: boolean;
+  successMessage?: string;
+  resolve: (saved: boolean) => void;
+}
+const settingsQueue: SettingsRequest[] = [];
+let settingsPump: Promise<void> | null = null;
+let settingsReadSequence = 0;
+let settingsRefreshPending = false;
+let lastSettingsFailed = false;
+let closingSettings = false;
 let clipItems: ClipboardItem[] = [];
 let clipEnabled = true;
+let clipboardBusy = false;
+let clipboardEventRevision = 0;
 let clipQuery = "";
 let altvQuery = "";
 let previewDarkCand: boolean | null = null;
 let previewLangEng = false;
+let languageBusy = false;
+let englishEventRevision = 0;
 let toastTimer: number | undefined;
 let shiftToastTimer: number | undefined;
 
 function showToast(msg: string): void {
   const el = document.getElementById("toast");
   if (!el) return;
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-live", "polite");
   el.textContent = msg;
   el.classList.add("is-visible");
   if (toastTimer !== undefined) window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => el.classList.remove("is-visible"), 1600);
+}
+
+function setSettingsStatus(status: "loading" | "saving" | "saved" | "error" | "preview"): void {
+  const label = document.getElementById("sidebar-status-text");
+  if (label) {
+    label.setAttribute("role", "status");
+    label.setAttribute("aria-live", "polite");
+    label.textContent = {
+      loading: "正在读取设置…",
+      saving: "正在保存…",
+      saved: "设置已保存",
+      error: "保存失败，请重试",
+      preview: "界面预览 · 仅本页生效",
+    }[status];
+  }
+  document.querySelector<HTMLElement>(".sidebar-footer")?.setAttribute("data-status", status);
+  document.querySelector<HTMLElement>(".sync-dot")?.setAttribute("data-status", status);
+}
+
+function renderPendingSettings(): void {
+  state = settingsQueue.reduce<AppSettings>((visible, request) => ({ ...visible, ...request.patch }),
+    { ...confirmedSettings });
+  render();
+  renderFloatingStatusBar();
+}
+
+/** Read disk instead of applying event payloads which may arrive after a newer save. */
+async function refreshConfirmedSettings(): Promise<void> {
+  if (!nativeApp || !initialSettingsLoaded) return;
+  if (settingsPump || settingsQueue.length) {
+    settingsReadSequence++;
+    settingsRefreshPending = true;
+    return;
+  }
+  const sequence = ++settingsReadSequence;
+  try {
+    const loaded = await invoke<AppSettings>("load_settings");
+    if (sequence === settingsReadSequence && !settingsPump && !settingsQueue.length) {
+      confirmedSettings = loaded;
+      renderPendingSettings();
+    }
+  } catch {
+    // A failed refresh must not replace confirmed values with defaults.
+  }
+}
+
+async function runSettingsQueue(): Promise<void> {
+  await initialSettingsReady;
+  let failed = false;
+  if (!initialSettingsLoaded) {
+    try {
+      confirmedSettings = await invoke<AppSettings>("load_settings");
+      initialSettingsLoaded = true;
+    } catch { /* Never save defaults over settings which could not be read. */ }
+  }
+  do {
+    while (settingsQueue.length) {
+      const request = settingsQueue[0]!;
+      let saved = false;
+      if (initialSettingsLoaded) {
+        try {
+          const result = request.reset
+            ? await invoke<AppSettings>("reset_settings")
+            : await invoke<AppSettings>("save_settings", { settings: { ...confirmedSettings, ...request.patch } });
+          confirmedSettings = result;
+          saved = true;
+        } catch {
+          // Keep the last confirmed values, then reapply later queued edits.
+        }
+      }
+      settingsQueue.shift();
+      renderPendingSettings();
+      if (saved && request.successMessage) showToast(request.successMessage);
+      if (!saved) { failed = true; showToast("保存失败，请重试"); }
+      request.resolve(saved);
+    }
+    if (settingsRefreshPending && initialSettingsLoaded) {
+      settingsRefreshPending = false;
+      const sequence = ++settingsReadSequence;
+      try {
+        const loaded = await invoke<AppSettings>("load_settings");
+        if (sequence === settingsReadSequence) {
+          confirmedSettings = loaded;
+          renderPendingSettings();
+        }
+      } catch { /* The successful save receipt remains authoritative. */ }
+    }
+  } while (settingsQueue.length || (settingsRefreshPending && initialSettingsLoaded));
+  lastSettingsFailed = failed || !initialSettingsLoaded;
+  setSettingsStatus(lastSettingsFailed ? "error" : "saved");
+}
+
+function enqueueSettings(patch: Partial<AppSettings>, successMessage?: string, reset = false): Promise<boolean> {
+  if (!nativeApp) {
+    confirmedSettings = { ...confirmedSettings, ...patch };
+    renderPendingSettings();
+    setSettingsStatus("preview");
+    if (successMessage) showToast(`界面预览：${successMessage}（仅本页）`);
+    return Promise.resolve(true);
+  }
+  settingsReadSequence++;
+  settingsRefreshPending = true;
+  const result = new Promise<boolean>((resolve) => {
+    settingsQueue.push({ patch: { ...patch }, reset, successMessage, resolve });
+  });
+  setSettingsStatus("saving");
+  renderPendingSettings();
+  startSettingsPump();
+  return result;
+}
+
+function startSettingsPump(): void {
+  if (settingsPump) return;
+  settingsPump = runSettingsQueue().finally(() => {
+    settingsPump = null;
+    if (settingsQueue.length) startSettingsPump();
+    else if (settingsRefreshPending) {
+      settingsRefreshPending = false;
+      void refreshConfirmedSettings();
+    }
+  });
 }
 
 function showShiftCaretToast(englishMode?: boolean): void {
@@ -163,6 +308,25 @@ function showShiftCaretToast(englishMode?: boolean): void {
   }, 1150);
 }
 
+async function requestEnglishMode(english: boolean, announce = false): Promise<void> {
+  if (languageBusy) return;
+  languageBusy = true;
+  for (const id of ["fb-lang", "sb-lang"]) document.getElementById(id)?.setAttribute("aria-disabled", "true");
+  const revision = englishEventRevision;
+  try {
+    if (nativeApp) await invoke("set_english_mode", { english });
+    if (revision === englishEventRevision) previewLangEng = english;
+    showShiftCaretToast(previewLangEng);
+    renderFloatingStatusBar();
+    if (!nativeApp) showToast(`界面预览：${previewLangEng ? "英文" : "中文"}模式`);
+    else if (announce) showToast(previewLangEng ? "已切换为英文模式" : "已切换为中文模式");
+  } catch { showToast("语言切换失败，请重试"); }
+  finally {
+    languageBusy = false;
+    for (const id of ["fb-lang", "sb-lang"]) document.getElementById(id)?.setAttribute("aria-disabled", "false");
+  }
+}
+
 function formatRelativeTime(ms: number): string {
   if (!ms) return "刚刚";
   const diffSec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
@@ -175,14 +339,80 @@ function formatRelativeTime(ms: number): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/** Keep keyboard focus on the same item/action when a clipboard snapshot rebuilds the list. */
+function replaceClipboardRows(container: HTMLElement, build: () => void): void {
+  const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const oldRow = focused?.closest<HTMLElement>("[data-clipboard-id]");
+  const ownedFocus = !!focused && !!oldRow && container.contains(focused);
+  const id = oldRow?.dataset.clipboardId;
+  const action = focused?.dataset.clipboardAction;
+  const index = oldRow ? Array.from(container.children).indexOf(oldRow) : -1;
+  container.replaceChildren();
+  container.setAttribute("role", "list");
+  build();
+  if (!ownedFocus) return;
+  const rows = Array.from(container.querySelectorAll<HTMLElement>("[data-clipboard-id]"));
+  const row = rows.find((candidate) => candidate.dataset.clipboardId === id)
+    ?? rows[Math.min(Math.max(index, 0), rows.length - 1)];
+  const button = row && (Array.from(row.querySelectorAll<HTMLButtonElement>("[data-clipboard-action]"))
+    .find((candidate) => candidate.dataset.clipboardAction === action && !candidate.disabled)
+    ?? row.querySelector<HTMLButtonElement>(".clip-card-main"));
+  if (button) button.focus({ preventScroll: true });
+  else {
+    const search = document.getElementById(container.id === "altv-list" ? "altv-search" : "clip-search");
+    if (search && !search.closest("[hidden]")) search.focus({ preventScroll: true });
+  }
+}
+
+async function clipboardAction<T>(
+  operation: () => Promise<T>,
+  apply: (result: T, revision: number) => void,
+  preview: () => void,
+  errorMessage: string,
+  successMessage?: string,
+): Promise<boolean> {
+  if (clipboardBusy) return false;
+  clipboardBusy = true;
+  renderClipboard();
+  try {
+    if (nativeApp) {
+      const revision = clipboardEventRevision;
+      apply(await operation(), revision);
+      if (successMessage) showToast(successMessage);
+    } else {
+      preview();
+      showToast("界面预览 · 操作仅在本页演示");
+    }
+    return true;
+  } catch {
+    showToast(errorMessage);
+    return false;
+  } finally {
+    clipboardBusy = false;
+    renderClipboard();
+  }
+}
+
+function applyClipboardItems(items: ClipboardItem[], revision: number): void {
+  // A newer clipboard event may have arrived while this operation's receipt was in flight.
+  if (revision === clipboardEventRevision) clipItems = items;
+}
+
 function buildClipboardRow(item: ClipboardItem): HTMLElement {
   const card = document.createElement("div");
   card.className = `clip-card-item${item.pinned ? " is-pinned" : ""}`;
+  card.dataset.clipboardId = item.id;
+  card.setAttribute("role", "listitem");
 
-  const main = document.createElement("div");
+  const main = document.createElement("button");
+  main.type = "button";
   main.className = "clip-card-main";
+  main.dataset.clipboardAction = "copy";
+  main.setAttribute("aria-label", `复制剪贴板内容：${item.text.slice(0, 160)}`);
+  main.setAttribute("aria-disabled", String(clipboardBusy));
+  main.title = item.text;
 
-  const txt = document.createElement("div");
+  const txt = document.createElement("span");
   txt.className = "clip-card-text";
   txt.textContent = item.text;
   main.appendChild(txt);
@@ -197,36 +427,46 @@ function buildClipboardRow(item: ClipboardItem): HTMLElement {
   pinBtn.type = "button";
   pinBtn.className = `clip-icon-btn${item.pinned ? " is-pinned" : ""}`;
   pinBtn.title = item.pinned ? "取消置顶" : "置顶该条";
-  pinBtn.textContent = "📌";
+  pinBtn.dataset.clipboardAction = "pin";
+  pinBtn.setAttribute("aria-label", pinBtn.title);
+  pinBtn.setAttribute("aria-pressed", String(item.pinned));
+  pinBtn.setAttribute("aria-disabled", String(clipboardBusy));
+  const pinIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  pinIcon.setAttribute("viewBox", "0 0 20 20");
+  pinIcon.setAttribute("width", "16"); pinIcon.setAttribute("height", "16");
+  pinIcon.setAttribute("aria-hidden", "true");
+  const pinPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  pinPath.setAttribute("d", "M7 3h6l-1 5 3 3H5l3-3-1-5ZM10 11v6");
+  pinPath.setAttribute("fill", "none"); pinPath.setAttribute("stroke", "currentColor");
+  pinPath.setAttribute("stroke-width", "1.4"); pinIcon.appendChild(pinPath); pinBtn.appendChild(pinIcon);
   pinBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
-    try {
-      clipItems = await invoke<ClipboardItem[]>("toggle_pin_clipboard", { id: item.id });
-    } catch {
-      clipItems = clipItems.map((c) => (c.id === item.id ? { ...c, pinned: !c.pinned } : c));
-    }
-    renderClipboard();
+    await clipboardAction(() => invoke<ClipboardItem[]>("toggle_pin_clipboard", { id: item.id }),
+      applyClipboardItems,
+      () => { clipItems = clipItems.map((entry) => entry.id === item.id ? { ...entry, pinned: !entry.pinned } : entry); },
+      "置顶操作失败，请重试");
   });
 
   const delBtn = document.createElement("button");
   delBtn.type = "button";
   delBtn.className = "clip-icon-btn";
   delBtn.title = "删除";
+  delBtn.dataset.clipboardAction = "delete";
+  delBtn.setAttribute("aria-label", "删除剪贴板记录");
+  delBtn.setAttribute("aria-disabled", String(clipboardBusy));
   delBtn.textContent = "×";
   delBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
-    try {
-      clipItems = await invoke<ClipboardItem[]>("delete_clipboard_item", { id: item.id });
-    } catch {
-      clipItems = clipItems.filter((c) => c.id !== item.id);
-    }
-    renderClipboard();
+    await clipboardAction(() => invoke<ClipboardItem[]>("delete_clipboard_item", { id: item.id }),
+      applyClipboardItems, () => { clipItems = clipItems.filter((entry) => entry.id !== item.id); },
+      "删除失败，请重试");
   });
 
   const sendBtn = document.createElement("button");
   sendBtn.type = "button";
   sendBtn.className = "clip-icon-btn share-local-send";
   sendBtn.title = "发送到已配对设备";
+  sendBtn.dataset.clipboardAction = "send";
   sendBtn.setAttribute("aria-label", "发送到已配对设备");
   sendBtn.textContent = "↗";
   sendBtn.disabled = !shareState?.enabled || shareFormDirty || shareBusy;
@@ -251,16 +491,10 @@ function buildClipboardRow(item: ClipboardItem): HTMLElement {
   card.appendChild(main);
   card.appendChild(right);
 
-  card.addEventListener("click", async () => {
-    try {
-      clipItems = await invoke<ClipboardItem[]>("copy_clipboard_item", { id: item.id });
-      renderClipboard();
-      showToast("已复制到剪贴板");
-    } catch {
-      await navigator.clipboard?.writeText(item.text).catch(() => {});
-      showToast("已复制到剪贴板");
-    }
-    if (appMode === "clipboard") {
+  main.addEventListener("click", async () => {
+    const copied = await clipboardAction(() => invoke<ClipboardItem[]>("copy_clipboard_item", { id: item.id }),
+      applyClipboardItems, () => {}, "复制失败，请重试", "已复制到剪贴板");
+    if (copied && nativeApp && appMode === "clipboard") {
       void invoke("hide_clipboard_window").catch(() => {});
     }
   });
@@ -276,24 +510,24 @@ function renderListInto(container: HTMLElement | null, query: string): void {
     ? local.filter((item) => item.text.toLowerCase().includes(q))
     : local;
 
-  container.innerHTML = "";
   const remote = container.id === "altv-list" && altvShared
     ? (shareState?.items ?? []).filter((item) => !q || item.text.toLowerCase().includes(q) || item.senderName.toLowerCase().includes(q))
     : [];
-  for (const item of remote) container.appendChild(buildSharedRow(item));
-  if (filtered.length === 0 && remote.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "clip-empty-state";
-    empty.textContent = q ? "没有匹配的剪贴板内容"
-      : container.id === "altv-list" && altvShared ? "暂无共享内容，请从另一台已配对设备发送"
-      : "暂无剪贴板记录 — 复制任意文本后自动收录";
-    container.appendChild(empty);
-    return;
-  }
-
-  for (const item of filtered) {
-    container.appendChild(buildClipboardRow(item));
-  }
+  replaceClipboardRows(container, () => {
+    for (const item of remote) container.appendChild(buildSharedRow(item));
+    if (filtered.length === 0 && remote.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "clip-empty-state";
+      empty.textContent = q ? "没有匹配的剪贴板内容"
+        : container.id === "altv-list" && altvShared ? "暂无共享内容，请从另一台已配对设备发送"
+        : !nativeApp ? "界面预览：剪贴板记录会在方寸桌面伴侣中显示"
+        : clipEnabled ? "暂无剪贴板记录 — 复制文字后会自动收录"
+        : "剪贴板监听已暂停，开启后记录新复制的文字";
+      container.appendChild(empty);
+      return;
+    }
+    for (const item of filtered) container.appendChild(buildClipboardRow(item));
+  });
 }
 
 function renderClipboard(): void {
@@ -303,8 +537,11 @@ function renderClipboard(): void {
   for (const prefix of ["clip", "altv"]) {
     const txt = document.getElementById(`${prefix}-watch-text`);
     const dot = document.getElementById(`${prefix}-watch-dot`);
-    if (txt) txt.textContent = clipEnabled ? "监听中" : "已暂停";
-    if (dot) dot.classList.toggle("is-on", clipEnabled);
+    if (txt) txt.textContent = nativeApp ? (clipEnabled ? "监听中" : "已暂停") : "界面预览";
+    if (dot) dot.classList.toggle("is-on", nativeApp && clipEnabled);
+    document.getElementById(`${prefix}-toggle-watch`)?.setAttribute("aria-pressed", String(clipEnabled));
+    document.getElementById(`${prefix}-toggle-watch`)?.setAttribute("aria-disabled", String(clipboardBusy));
+    document.getElementById(`${prefix}-clear`)?.setAttribute("aria-disabled", String(clipboardBusy));
   }
 
   const swGenClip = document.getElementById("sw-gen-clip") as HTMLInputElement | null;
@@ -320,6 +557,7 @@ function render(): void {
   // Scheme cards
   document.querySelectorAll<HTMLButtonElement>("[data-scheme]").forEach((btn) => {
     btn.classList.toggle("is-selected", btn.dataset.scheme === state.scheme);
+    btn.setAttribute("aria-pressed", String(btn.dataset.scheme === state.scheme));
   });
 
   // Skin & Mode buttons
@@ -329,6 +567,7 @@ function render(): void {
   });
   document.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach((btn) => {
     btn.classList.toggle("is-selected", btn.dataset.mode === state.themeMode);
+    btn.setAttribute("aria-pressed", String(btn.dataset.mode === state.themeMode));
   });
 
   // Switches
@@ -358,20 +597,16 @@ function render(): void {
   if (genSummary) genSummary.textContent = SCHEME_LABELS[state.scheme] ?? "小鹤双拼";
 }
 
-async function save(patch: Partial<AppSettings>): Promise<void> {
-  state = { ...state, ...patch };
-  render();
-  try {
-    state = await invoke<AppSettings>("save_settings", { settings: state });
-    render();
-  } catch {
-    // Allow standalone browser preview outside Tauri.
-  }
+function save(patch: Partial<AppSettings>, successMessage?: string): Promise<boolean> {
+  return enqueueSettings(patch, successMessage);
 }
 
 function switchTab(tab: string): void {
+  if (!Array.from(document.querySelectorAll<HTMLElement>(".tab-pane")).some((pane) => pane.dataset.pane === tab)) return;
   document.querySelectorAll<HTMLButtonElement>("#sidebar-nav [data-tab]").forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.tab === tab);
+    if (btn.dataset.tab === tab) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
   });
   document.querySelectorAll<HTMLElement>(".tab-pane").forEach((pane) => {
     pane.classList.toggle("is-active", pane.dataset.pane === tab);
@@ -407,21 +642,33 @@ document.getElementById("sidebar-nav")!.addEventListener("click", (e) => {
   switchTab(btn.dataset.tab);
 });
 
-// Sidebar Search (auto-jumps to matching tab)
-document.getElementById("settings-search")!.addEventListener("input", (e) => {
+// Keep search local and navigate only when the query has a known destination.
+const settingsSearch = document.getElementById("settings-search")!;
+const searchFeedback = document.createElement("p");
+searchFeedback.id = "settings-search-feedback";
+searchFeedback.className = "settings-search-feedback";
+searchFeedback.setAttribute("role", "status");
+searchFeedback.setAttribute("aria-live", "polite");
+searchFeedback.hidden = true;
+settingsSearch.setAttribute("aria-describedby", searchFeedback.id);
+settingsSearch.parentElement?.appendChild(searchFeedback);
+settingsSearch.addEventListener("input", (e) => {
   const q = (e.target as HTMLInputElement).value.trim().toLowerCase();
+  searchFeedback.hidden = true;
+  searchFeedback.textContent = "";
   if (!q) return;
-  if (q.includes("剪贴") || q.includes("clip") || q.includes("alt")) {
-    switchTab("clipboard");
-  } else if (q.includes("皮肤") || q.includes("深色") || q.includes("浅色") || q.includes("琥珀") || q.includes("翡翠") || q.includes("机械") || q.includes("奶油")) {
-    switchTab("theme");
-  } else if (q.includes("字号") || q.includes("流光") || q.includes("透明")) {
-    switchTab("effects");
-  } else if (q.includes("状态栏") || q.includes("常规")) {
-    switchTab("general");
-  } else {
-    switchTab("input");
-  }
+  const targets: [string, string[]][] = [
+    ["clipboard", ["剪贴", "clip", "alt", "共享", "配对"]],
+    ["theme", ["皮肤", "外观", "深色", "浅色", "跟随系统", "木框", "活字", "打字机", "终端", "极客", "机械", "wood", "typewriter", "terminal", "brutal"]],
+    ["effects", ["字号", "流光", "透明", "特效", "字体"]],
+    ["general", ["状态栏", "常规"]],
+    ["about", ["关于", "版本", "配置文件"]],
+    ["ai", ["ai", "智能", "翻译", "润色"]],
+    ["input", ["输入", "方案", "小鹤", "双拼", "全拼", "九宫", "候选", "分页", "滚轮", "标点", "混输", "shift", "caps", "page", "wheel"]],
+  ];
+  const matched = targets.find(([, words]) => words.some((word) => q.includes(word)));
+  if (matched) switchTab(matched[0]);
+  else { searchFeedback.textContent = "没有找到匹配设置"; searchFeedback.hidden = false; }
 });
 
 // Preview Stage Interactions
@@ -457,8 +704,7 @@ document.getElementById("btn-open-clip-popup")!.addEventListener("click", () => 
 document.getElementById("scheme-group")!.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-scheme]");
   if (btn?.dataset.scheme) {
-    void save({ scheme: btn.dataset.scheme });
-    showToast(`已切换为${SCHEME_LABELS[btn.dataset.scheme] ?? "小鹤双拼"}`);
+    void save({ scheme: btn.dataset.scheme }, `已切换为${SCHEME_LABELS[btn.dataset.scheme] ?? "小鹤双拼"}`);
   }
 });
 
@@ -484,8 +730,7 @@ document.getElementById("sel-candidate-layout")!.addEventListener("change", (eve
 
 document.getElementById("sel-page-size")!.addEventListener("change", (e) => {
   const val = Number((e.target as HTMLSelectElement).value) || 7;
-  void save({ pageSize: val });
-  showToast(`每页候选词数量已设为 ${val}`);
+  void save({ pageSize: val }, `每页候选词数量已设为 ${val}`);
 });
 document.getElementById("sw-wheel")!.addEventListener("change", (e) => {
   void save({ wheelPaging: (e.target as HTMLInputElement).checked });
@@ -499,16 +744,13 @@ document.getElementById("sc-shift")!.addEventListener("click", () => {
   showShiftCaretToast();
 });
 document.getElementById("sc-ctrl-dot")!.addEventListener("click", () => {
-  void save({ chinesePunctuation: !state.chinesePunctuation });
-  showToast(state.chinesePunctuation ? "已切换为中文标点 (“。)" : "已切换为英文标点 (\".)");
+  const chinesePunctuation = !state.chinesePunctuation;
+  void save({ chinesePunctuation }, chinesePunctuation ? "已切换为中文标点 (“。)" : "已切换为英文标点 (\".)");
 });
 
 // Floating Status Bar Interactive Buttons
 document.getElementById("fb-lang")!.addEventListener("click", () => {
-  showShiftCaretToast();
-  void invoke("set_english_mode", { english: previewLangEng }).catch(() => {});
-  renderFloatingStatusBar();
-  showToast(previewLangEng ? "已切换为英文模式" : "已切换为中文模式");
+  void requestEnglishMode(!previewLangEng, true);
 });
 document.getElementById("fb-punct")!.addEventListener("click", () => {
   void save({ chinesePunctuation: !state.chinesePunctuation });
@@ -520,7 +762,8 @@ document.getElementById("fb-settings")!.addEventListener("click", () => {
   switchTab("input");
 });
 document.getElementById("btn-toggle-statusbar")?.addEventListener("click", () => {
-  void invoke("toggle_statusbar").catch(() => {});
+  if (!nativeApp) { showToast("界面预览：独立状态栏在方寸桌面伴侣中显示"); return; }
+  void invoke("toggle_statusbar").catch(() => showToast("状态栏操作失败，请重试"));
 });
 
 // Theme & Skin Controls
@@ -529,7 +772,7 @@ document.getElementById("skin-group")!.addEventListener("click", (e) => {
   if (btn?.dataset.skin) {
     const skin = canonicalSkin(btn.dataset.skin);
     previewDarkCand = null;
-    void save({ skin, themeMode: skin === "brutal" ? "dark" : "light" });
+    void save({ skin });
   }
 });
 document.getElementById("mode-group")!.addEventListener("click", (e) => {
@@ -557,23 +800,16 @@ document.getElementById("first-plus")!.addEventListener("click", () => {
 
 // Clipboard Controls
 async function setClipboardWatch(want: boolean): Promise<void> {
-  try {
-    clipEnabled = await invoke<boolean>("set_clipboard_enabled", { enabled: want });
-  } catch {
-    clipEnabled = want;
-  }
-  renderClipboard();
-  showToast(clipEnabled ? "已开启剪贴板监听" : "已暂停剪贴板监听");
+  const saved = await clipboardAction(() => invoke<boolean>("set_clipboard_enabled", { enabled: want }),
+    (enabled) => { clipEnabled = enabled; }, () => { clipEnabled = want; },
+    "监听设置失败，请重试");
+  if (saved && nativeApp) showToast(clipEnabled ? "已开启剪贴板监听" : "已暂停剪贴板监听");
 }
 
 async function clearUnpinnedClipboard(): Promise<void> {
-  try {
-    clipItems = await invoke<ClipboardItem[]>("clear_clipboard", { keepPinned: true });
-  } catch {
-    clipItems = clipItems.filter((c) => c.pinned);
-  }
-  renderClipboard();
-  showToast("已清空未置顶剪贴板记录");
+  await clipboardAction(() => invoke<ClipboardItem[]>("clear_clipboard", { keepPinned: true }),
+    applyClipboardItems, () => { clipItems = clipItems.filter((entry) => entry.pinned); },
+    "清空失败，请重试", "已清空未置顶剪贴板记录");
 }
 
 document.getElementById("clip-search")!.addEventListener("input", (e) => {
@@ -647,9 +883,7 @@ function renderFloatingStatusBar(): void {
 }
 
 document.getElementById("sb-lang")?.addEventListener("click", () => {
-  previewLangEng = !previewLangEng;
-  void invoke("set_english_mode", { english: previewLangEng }).catch(() => {});
-  renderFloatingStatusBar();
+  void requestEnglishMode(!previewLangEng);
 });
 document.getElementById("sb-punct")?.addEventListener("click", () => {
   void save({ chinesePunctuation: !state.chinesePunctuation }).then(() => {
@@ -667,21 +901,20 @@ document.getElementById("sb-settings")?.addEventListener("click", () => {
 });
 
 // Footer Buttons
-document.getElementById("btn-reset")!.addEventListener("click", async () => {
-  try {
-    state = await invoke<AppSettings>("reset_settings");
-  } catch {
-    state = { ...DEFAULT_SETTINGS };
-  }
-  render();
-  renderFloatingStatusBar();
-  showToast("已恢复默认设置");
+document.getElementById("btn-reset")!.addEventListener("click", () => {
+  void enqueueSettings({ ...DEFAULT_SETTINGS, systemDark: confirmedSettings.systemDark }, "已恢复默认设置", true);
 });
 
-document.getElementById("btn-close")!.addEventListener("click", () => {
-  void invoke("hide_window").catch(() => {
-    showToast("已完成保存并最小化到系统托盘");
-  });
+document.getElementById("btn-close")!.addEventListener("click", async () => {
+  if (!nativeApp) { showToast("界面预览 · 设置仅在本页生效"); return; }
+  if (closingSettings) return;
+  closingSettings = true;
+  try {
+    while (settingsPump) await settingsPump;
+    if (lastSettingsFailed || !initialSettingsLoaded) { showToast("设置未保存，请重试"); return; }
+    await invoke("hide_window");
+  } catch { showToast("关闭失败，请重试"); }
+  finally { closingSettings = false; }
 });
 
 async function init(): Promise<void> {
@@ -692,12 +925,37 @@ async function init(): Promise<void> {
     document.body.classList.add("mode-statusbar");
     document.getElementById("floating-statusbar")?.classList.remove("is-hidden");
   }
-
+  switchTab(document.querySelector<HTMLButtonElement>("#sidebar-nav .is-active")?.dataset.tab ?? "input");
+  setSettingsStatus(nativeApp ? "loading" : "preview");
+  if (!nativeApp) {
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    confirmedSettings.systemDark = systemTheme.matches;
+    systemTheme.addEventListener("change", (event) => {
+      confirmedSettings.systemDark = event.matches;
+      renderPendingSettings();
+    });
+    finishInitialSettingsLoad();
+    renderPendingSettings();
+    renderClipboard();
+    return;
+  }
   try {
-    state = await invoke<AppSettings>("load_settings");
+    confirmedSettings = await invoke<AppSettings>("load_settings");
+    initialSettingsLoaded = true;
+    renderPendingSettings();
+    setSettingsStatus(settingsQueue.length ? "saving" : "saved");
+  } catch {
+    lastSettingsFailed = true;
+    setSettingsStatus("error");
+    showToast("无法读取设置，请重试");
+  } finally { finishInitialSettingsLoad(); }
+  try {
     clipItems = await invoke<ClipboardItem[]>("list_clipboard");
     clipEnabled = await invoke<boolean>("get_clipboard_enabled");
+  } catch { showToast("剪贴板暂时不可用，请重试"); }
+  try {
     await listen<ClipboardItem[]>("clipboard://changed", (event) => {
+      clipboardEventRevision++;
       clipItems = event.payload;
       renderClipboard();
     });
@@ -705,12 +963,9 @@ async function init(): Promise<void> {
       clipEnabled = event.payload;
       renderClipboard();
     });
-    await listen<AppSettings>("settings://changed", (event) => {
-      state = event.payload;
-      render();
-      renderFloatingStatusBar();
-    });
+    await listen<AppSettings>("settings://changed", () => { void refreshConfirmedSettings(); });
     await listen<boolean>("ime://english-changed", (event) => {
+      englishEventRevision++;
       previewLangEng = event.payload;
       renderFloatingStatusBar();
     });
@@ -730,7 +985,7 @@ async function init(): Promise<void> {
       }
     });
   } catch {
-    // Standalone web preview fallback
+    showToast("界面同步暂时不可用，请重新打开方寸设置");
   }
   render();
   renderClipboard();
@@ -803,27 +1058,34 @@ function renderShare(): void {
   (document.getElementById("share-export") as HTMLButtonElement).disabled ||= !shareState?.keySaved || shareFormDirty;
   (document.getElementById("share-new-key") as HTMLButtonElement).disabled ||= shareFormDirty || !!shareState?.needsReset;
   const list = document.getElementById("share-list")!;
-  list.replaceChildren();
-  for (const item of shareState?.items ?? []) list.appendChild(buildSharedRow(item));
-  if (!list.childElementCount) {
-    const empty = document.createElement("div"); empty.className = "clip-empty-state";
-    empty.textContent = "暂无共享内容。配对并开启后，可从另一台设备发送文字。"; list.appendChild(empty);
-  }
+  replaceClipboardRows(list, () => {
+    for (const item of shareState?.items ?? []) list.appendChild(buildSharedRow(item));
+    if (!list.childElementCount) {
+      const empty = document.createElement("div"); empty.className = "clip-empty-state";
+      empty.textContent = "暂无共享内容。配对并开启后，可从另一台设备发送文字。"; list.appendChild(empty);
+    }
+  });
 }
 function buildSharedRow(item: SharedItem): HTMLElement {
   const card = document.createElement("div"); card.className = "clip-card-item";
-  const main = document.createElement("div"); main.className = "clip-card-main";
-  const text = document.createElement("div"); text.className = "clip-card-text"; text.textContent = item.text;
-  const source = document.createElement("div"); source.className = "share-source";
+  card.dataset.clipboardId = item.id; card.setAttribute("role", "listitem");
+  const main = document.createElement("button"); main.type = "button"; main.className = "clip-card-main";
+  main.dataset.clipboardAction = "copy";
+  main.setAttribute("aria-label", `复制共享内容：${item.text.slice(0, 160)}`);
+  main.setAttribute("aria-disabled", String(shareBusy)); main.title = item.text;
+  const text = document.createElement("span"); text.className = "clip-card-text"; text.textContent = item.text;
+  const source = document.createElement("span"); source.className = "share-source";
   source.textContent = `${item.senderName} · 共享 · ${formatRelativeTime(item.createdAt)}`;
   main.append(text, source);
   const remove = document.createElement("button"); remove.type = "button"; remove.className = "clip-icon-btn";
+  remove.dataset.clipboardAction = "remove-share";
+  remove.setAttribute("aria-disabled", String(shareBusy));
   remove.textContent = "×"; remove.title = "删除本机共享记录"; remove.setAttribute("aria-label", "删除本机共享记录");
   remove.addEventListener("click", async (event) => {
     event.stopPropagation(); await shareAction(() => invoke<ShareSnapshot>("clipboard_share_remove", { id: item.id }));
   });
   card.append(main, remove);
-  card.addEventListener("click", async () => {
+  main.addEventListener("click", async () => {
     if (await shareAction(() => invoke("clipboard_share_copy", { id: item.id }))) {
       showToast("已复制共享内容");
       if (appMode === "clipboard") void invoke("hide_clipboard_window").catch(() => {});
@@ -913,6 +1175,11 @@ async function initClipboardShare(): Promise<void> {
       shareFormDirty = false; clearShareSecrets(); renderShare();
     }
   });
+  if (!nativeApp) {
+    shareUiError = "界面预览：跨设备共享需在方寸桌面伴侣中使用";
+    renderShare();
+    return;
+  }
   try {
     await listen<ShareSnapshot>("clipboard-share://changed", (event) => applyShareSnapshot(event.payload));
     applyShareSnapshot(await invoke<ShareSnapshot>("clipboard_share_snapshot"));

@@ -2,6 +2,8 @@
 
 > 合仓说明：正式源码入口为 [ZhaoHaiBln/FangCunIME](https://github.com/ZhaoHaiBln/FangCunIME)，本目录是 `windows/` 工程根。根 CI 入口与历史来源见 [根 README](../README.md) 和 [迁移记录](../MIGRATION.md)。原独立 Windows 仓库与旧 CI 链接保留为历史证据；构建、安装命令从本目录执行。
 
+> 2026-11-24 当前工作分支为 `codex/windows-goodui-polish`，版本0.6.5。其Windows基准与公开Build的0.6.4提交 `7090a92` 一致；当前两库main较旧，不能覆盖本分支。完整Windows验证沿用公开Build同名分支的现有手动工作流，避免使用私有配额。当前范围与实际核验见 [界面细化记录](docs/goodui-ui-polish.md)；下文最初交接的版本、main与CI描述保留作历史来源。
+
 这是一份可独立打开的 Windows 源码工程。请在 Antigravity 中打开本仓库下包含 `CMakeLists.txt` 的 `windows/` 目录。
 
 下载源码 ZIP 后可直接解压打开、修改和构建。若需要由 Antigravity 提交修改到 GitHub，建议在它的终端克隆仓库后打开该目录，保留远端和提交历史：

@@ -230,6 +230,8 @@ void CandidateWindow::destroy() {
     } else {
         releaseFactories();
     }
+    visibleCode_.clear();
+    visibleCodeWidthDp_ = 0.0f;
 }
 
 int CandidateWindow::scaleForDpi(int px) const {
@@ -403,6 +405,8 @@ void CandidateWindow::computePageBounds(
 void CandidateWindow::recalculateSize() {
     if (!hwnd_) return;
     ensureFactories();
+    visibleCode_.clear();
+    visibleCodeWidthDp_ = 0.0f;
 
     if (toastActive_ && composing_.empty()) {
         int newW = static_cast<int>(std::ceil(dpToPx(92.0f)));
@@ -480,6 +484,19 @@ void CandidateWindow::recalculateSize() {
                 static_cast<UINT32>(std::max(1, height_))));
         }
     }
+
+    // Use the same post-DPI-rounded plate and reserved label areas as onPaint.
+    // This is display-only; the original code still determines all layout sizes.
+    const float plateWidth = static_cast<float>(width_) * 96.0f / static_cast<float>(dpi_) - shadow;
+    const float codeRight = single ? border + singleCodeWidth_ : plateWidth - border;
+    const float ledWidth = skin_ == SkinPreset::Terminal && !single ? 30.0f : 0.0f;
+    const bool showPageCount = !isReference || pages > 1;
+    const float labelRight = codeRight - (single ? 9.0f : (showPageCount ? 43.0f : 8.0f) + ledWidth);
+    const float caretWidth = skin_ == SkinPreset::Typewriter ? 2.6f : (skin_ == SkinPreset::WoodType ? 1.2f : 2.0f);
+    const float caretSpace = skin_ == SkinPreset::Terminal ? 0.0f : 4.0f + caretWidth;
+    visibleCode_ = fitPreeditTail(code, labelRight - (border + 9.0f) - caretSpace,
+        [this](const std::wstring& value) { return measureTextWidthDip(dwriteFactory_, codeFormat_, value); });
+    visibleCodeWidthDp_ = measureTextWidthDip(dwriteFactory_, codeFormat_, visibleCode_);
     updateWindowRegion();
 }
 
@@ -936,13 +953,12 @@ void CandidateWindow::onPaint() {
             const float labelRight = codeRight - (single ? 9.0f : (showPageCount ? 43.0f : 8.0f) + ledWidth);
             const float codeX = left + 9;
             const std::wstring preedit = utf8ToWide(composing_);
-            const std::wstring displayCode = skin_ == SkinPreset::Brutal ? preedit : L"> " + preedit;
             const auto codeInk = skin_ == SkinPreset::Terminal ? palette.accent : argb(chrome.text);
             const auto secondaryInk = skin_ == SkinPreset::Terminal ? palette.textSecondary : argb(chrome.secondary);
-            text(displayCode, codeFormat_, rect(codeX, codeTop, labelRight, headerBottom), codeInk);
+            text(visibleCode_, codeFormat_, rect(codeX, codeTop, labelRight, headerBottom), codeInk);
             if (skin_ != SkinPreset::Terminal) {
                 const float caretW = skin_ == SkinPreset::Typewriter ? 2.6f : (skin_ == SkinPreset::WoodType ? 1.2f : 2.0f);
-                const float caret = std::min(labelRight, codeX + measureTextWidthDip(dwriteFactory_, codeFormat_, displayCode) + 4.0f);
+                const float caret = std::min(labelRight - caretW, codeX + visibleCodeWidthDp_ + 4.0f);
                 fill(rect(caret, (headerBottom + codeTop - 15) / 2, caret + caretW, (headerBottom + codeTop + 15) / 2), palette.accent);
             }
             if (!single && showPageCount) {
