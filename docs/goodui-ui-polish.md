@@ -29,4 +29,10 @@ python3 tests/ui_regression.py --base-url http://127.0.0.1:5173/ --output ./ui-r
 
 保存队列保护同一窗口的连续编辑及迟到通知，不声称解决所有进程同时全量写同一INI的冲突。剪贴板前端以既有IPC回执为准；原生监听命令现有的偏好写盘错误未透传，本轮不重写该后端协议，也不把运行中监听状态等同磁盘持久化证明。
 
-Windows完整编译、安装包和直链仍待下一步实际核验，不把浏览器预览或源码审查当作Windows实机验收。
+正式源码提交 `27c8fc74283d380afe2e32e83791c09da3c57780`，公开Build投影提交 `7e3c4c31f7f390f47759067874628302fd7b4d29`。108个Windows跟踪文件对应，全部96个冻结输入逐字一致；工作流、安装AppId、Tauri标识、窗口/CSP、安装脚本、词库和材质资产保持原样。仅对公开同名分支手动运行一次既有工作流，不改main、计费或私有CI。
+
+[Windows实际构建45314215886](https://github.com/ZhaoHaiBln/FangCunIME-Windows-Build/actions/runs/45314215886)成功，包含MSVC x64 Release、完整Core/KeyHandler CTest、Rust/Tauri、Inno Setup及两份artifact上传。实际artifact经过哈希、PE架构、版本和词库/安装脚本检查；安装器本身为正常的PE32 Inno引导程序，真实TSF DLL与设置程序为x64，设置程序版本0.6.5.0。Windows checkout使JSON和三份PowerShell脚本使用CRLF；仅将CRLF归一到LF后与源码逐字比较，二进制词库与dbz仍按原始字节严格核对。检查完整安装包身份与数据目录不变，不把此检查冒充在用户机器安装成功。
+
+正式 `FangCunIME-0.6.5-win64-setup.exe` 为47,611,827字节，SHA256 `6487227ad16495e03398cba7b320c40502d297562c744ec13188796d197ee28c`。按既有直链偏好仅上传本次核验的安装器到tmpfiles.org，从真实下载页解析直链并完整回下载；HTTP200、字节数与SHA256一致，回执在上述本地目录 `roundtrip.json`。临时服务未上传源码、密钥或用户数据；测试与构建产物不进入Git。
+
+本轮没有Windows桌面、WebView2、Direct2D/TSF和宿主输入实机验收；19项界面验证使用真实前端与模拟IPC。延迟保存完成后的关闭和剪贴板事件/回执优先级另经源码复核，没有把未执行的延迟fixture计为测试。安装后需要关闭并重新打开使用输入法的宿主软件，使新DLL加载；升级沿用原安装身份并保留原数据目录。
