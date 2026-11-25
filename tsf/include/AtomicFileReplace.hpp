@@ -27,12 +27,16 @@ inline bool replaceFlushedFile(const std::filesystem::path& source,
     const auto& name = absoluteDestination.native();
     constexpr auto nameOffset = offsetof(FILE_RENAME_INFO, FileName);
     constexpr auto maximum = (std::numeric_limits<DWORD>::max)();
-    if (name.empty() || name.size() > (maximum - nameOffset) / sizeof(wchar_t)) {
+    if (name.empty() || name.size() > (maximum - nameOffset - sizeof(wchar_t)) / sizeof(wchar_t)) {
         SetLastError(ERROR_FILENAME_EXCED_RANGE);
         return false;
     }
     const auto nameBytes = name.size() * sizeof(wchar_t);
-    auto bufferBytes = nameOffset + nameBytes;
+    // Match Rust 1.100's Windows rename fallback: FileNameLength excludes the
+    // terminator, but the allocated buffer and copied name include it. The
+    // Win32 wrapper may inspect the NUL while translating the absolute path.
+    // https://github.com/rust-lang/rust/blob/1.100.0/library/std/src/sys/fs/windows.rs
+    auto bufferBytes = nameOffset + nameBytes + sizeof(wchar_t);
     if (bufferBytes < sizeof(FILE_RENAME_INFO)) bufferBytes = sizeof(FILE_RENAME_INFO);
     // FILE_RENAME_INFO has an aligned header followed by a variable UTF-16 tail.
     // Plain operator new provides header alignment and room for its trailing
@@ -47,7 +51,8 @@ inline bool replaceFlushedFile(const std::filesystem::path& source,
     std::memcpy(information, &replaceAndPosix, sizeof(replaceAndPosix));
     information->RootDirectory = nullptr;
     information->FileNameLength = static_cast<DWORD>(nameBytes);
-    std::memcpy(reinterpret_cast<std::byte*>(information) + nameOffset, name.data(), nameBytes);
+    std::memcpy(reinterpret_cast<std::byte*>(information) + nameOffset,
+        name.c_str(), nameBytes + sizeof(wchar_t));
 
     const HANDLE file = CreateFileW(source.c_str(), DELETE | SYNCHRONIZE,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,

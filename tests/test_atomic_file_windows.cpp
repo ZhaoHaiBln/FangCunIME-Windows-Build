@@ -84,8 +84,8 @@ std::string readFile(const std::filesystem::path& path) {
 
 void an_open_reader_keeps_the_old_snapshot_while_new_opens_see_the_new_file() {
     Fixture fixture;
-    const auto destination = fixture.file(L"settings.ini");
-    const auto temporary = fixture.file(L"settings.ini.owned.tmp");
+    const auto destination = fixture.file(L"设置-方寸.ini");
+    const auto temporary = fixture.file(L"设置-方寸.ini.owned.tmp");
     const std::string oldBytes = "scheme=flypy\nfuture=old complete snapshot\n";
     const std::string newBytes = "scheme=pinyin\nfuture=new complete snapshot\n";
     writeFile(destination, oldBytes);
