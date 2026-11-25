@@ -98,6 +98,14 @@ MOCK = r"""
       }
       if (command === 'plugin:event|unlisten') return null;
       if (command === 'load_settings') return clone(fixture.settings);
+      if (command === 'skin_library_snapshot' || command === 'skin_select') {
+        if (command === 'skin_select') {
+          fixture.settings.skin=args.id.slice('builtin:'.length);
+          fixture.emit('settings://changed',fixture.settings);
+        }
+        return {revision:'fixture-skins-1',importEnabled:true,hiddenBuiltins:[],packs:[],activeId:'builtin:'+fixture.settings.skin,active:null,
+          builtins:Object.entries({wood_type:'木框活字',typewriter:'经典打字机',terminal:'绿屏终端',brutal:'极客机械'}).map(([id,label])=>({id,label,hidden:false}))};
+      }
       if (command === 'save_settings' || command === 'patch_settings') {
         if (fixture.deferSaves) {
           return await new Promise((resolve,reject) => fixture.pendingSaves.push({command,args:clone(args),resolve,reject}));
@@ -352,9 +360,9 @@ def serial_saves_and_stale_event(browser):
 def save_rejection(browser):
     with app(browser,mode="dark") as page:
         tab(page,"theme")
-        page.evaluate("window.__fixture.fail('patch_settings')")
+        page.evaluate("window.__fixture.fail('skin_select')")
         page.locator('button[data-skin="terminal"]').click()
-        expect(page.locator("#sidebar-status-text")).to_contain_text("保存失败")
+        expect(page.locator("#skin-library-error")).to_contain_text("原皮肤与列表已保留")
         page.wait_for_function("document.documentElement.dataset.imeTheme==='wood_type'")
         check(page.evaluate("window.__fixture.settings.skin")=="wood_type","Rejected theme must not be committed")
         check(page.locator("html").get_attribute("data-ime-mode")=="dark","Rejected save reset mode")

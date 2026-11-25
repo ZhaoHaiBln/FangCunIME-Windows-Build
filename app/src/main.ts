@@ -10,6 +10,8 @@ export interface AppSettings {
   pageSize: number;
   wheelPaging: boolean;
   skin: string;
+  customSkinId?: string;
+  customSkinHash?: string;
   themeMode: string;
   darkMode: boolean;
   systemDark: boolean;
@@ -597,6 +599,10 @@ function render(): void {
 
   const genSummary = document.getElementById("gen-scheme-summary");
   if (genSummary) genSummary.textContent = SCHEME_LABELS[state.scheme] ?? "小鹤双拼";
+  window.dispatchEvent(new CustomEvent("fangcun:theme-applied", { detail: {
+    skin: state.skin, dark: effectiveDark(), themeMode: state.themeMode,
+    customSkinId: state.customSkinId, customSkinHash: state.customSkinHash,
+  } }));
 }
 
 function save(patch: Partial<AppSettings>, successMessage?: string): Promise<boolean> {
@@ -772,6 +778,8 @@ document.getElementById("btn-toggle-statusbar")?.addEventListener("click", () =>
 document.getElementById("skin-group")!.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-skin]");
   if (btn?.dataset.skin) {
+    const selection = new CustomEvent("fangcun:skin-select", { cancelable: true, detail: { id: "builtin:" + btn.dataset.skin } });
+    if (!window.dispatchEvent(selection)) return;
     const skin = canonicalSkin(btn.dataset.skin);
     previewDarkCand = null;
     void save({ skin });

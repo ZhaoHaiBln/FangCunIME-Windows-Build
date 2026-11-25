@@ -210,6 +210,9 @@ MOCK = r"""
       }
       if (command === 'ai_cancel' || command === 'ai_copy_result') return null;
       if (command === 'load_settings') return clone(fixture.settings);
+      if (command === 'skin_library_snapshot') return {
+        revision:'fixture-skins-1',importEnabled:true,hiddenBuiltins:[],packs:[],activeId:'builtin:'+fixture.settings.skin,active:null,
+        builtins:Object.entries({wood_type:'木框活字',typewriter:'经典打字机',terminal:'绿屏终端',brutal:'极客机械'}).map(([id,label])=>({id,label,hidden:false}))};
       if (command === 'patch_settings') {
         fixture.settings={...fixture.settings,...clone(args.patch),revision:'fixture-settings-'+(++serial)};
         fixture.emit('settings://changed',fixture.settings); return clone(fixture.settings);

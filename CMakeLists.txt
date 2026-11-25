@@ -100,6 +100,7 @@ if(FANGCUN_BUILD_TSF)
         tsf/src/CandidateWindow.cpp
         tsf/src/SettingsStore.cpp
         tsf/src/SettingsWindow.cpp
+        tsf/src/CustomSkinCache.cpp
         tsf/src/FangCunTSF.def
     )
 
@@ -123,6 +124,7 @@ if(FANGCUN_BUILD_TSF)
         dwrite
         shlwapi
         shell32
+        windowscodecs
     )
 
     if(MSVC)
@@ -170,6 +172,15 @@ if(FANGCUN_BUILD_TESTS)
     endif()
     add_test(NAME fangcun_settings_merge_tests COMMAND fangcun_settings_tests)
 
+    add_executable(fangcun_resolved_skin_tests tests/test_resolved_skin.cpp)
+    target_include_directories(fangcun_resolved_skin_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/core/include")
+    if(MSVC)
+        target_compile_options(fangcun_resolved_skin_tests PRIVATE /W4 /utf-8)
+    else()
+        target_compile_options(fangcun_resolved_skin_tests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME fangcun_resolved_skin_tests COMMAND fangcun_resolved_skin_tests)
+
     if(WIN32)
         add_executable(fangcun_atomic_file_tests tests/test_atomic_file_windows.cpp)
         target_include_directories(fangcun_atomic_file_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tsf/include")
@@ -178,5 +189,14 @@ if(FANGCUN_BUILD_TESTS)
             target_compile_options(fangcun_atomic_file_tests PRIVATE /W4 /utf-8)
         endif()
         add_test(NAME fangcun_windows_atomic_file_tests COMMAND fangcun_atomic_file_tests)
+
+        add_executable(fangcun_custom_skin_tests tests/test_custom_skin_windows.cpp tsf/src/CustomSkinCache.cpp)
+        target_include_directories(fangcun_custom_skin_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tsf/include" "${CMAKE_CURRENT_SOURCE_DIR}/core/include")
+        target_compile_definitions(fangcun_custom_skin_tests PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+        target_link_libraries(fangcun_custom_skin_tests PRIVATE ole32 windowscodecs user32 uuid)
+        if(MSVC)
+            target_compile_options(fangcun_custom_skin_tests PRIVATE /W4 /utf-8)
+        endif()
+        add_test(NAME fangcun_windows_custom_skin_tests COMMAND fangcun_custom_skin_tests)
     endif()
 endif()

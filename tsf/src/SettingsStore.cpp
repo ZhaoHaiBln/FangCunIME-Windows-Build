@@ -1,6 +1,7 @@
 #include "SettingsStore.hpp"
 #include "DllMain.hpp"
 #include "AtomicFileReplace.hpp"
+#include "fangcun/ResolvedSkin.hpp"
 
 #include <shlobj.h>
 #include <windows.h>
@@ -138,7 +139,7 @@ fangcun::settings::Values knownValues(const AppSettings& s) {
     opacity << std::fixed << std::setprecision(2) << std::clamp(s.keyOpacity, .4f, 1.f);
     return {
         {"scheme", scheme}, {"mixed_input", bit(s.mixedInput)}, {"chinese_punctuation", bit(s.chinesePunctuation)},
-        {"skin", skinMetrics(s.skin).id}, {"theme_mode", mode},
+        {"skin", skinMetrics(s.skin).id}, {"custom_skin_id", s.customSkinId}, {"custom_skin_hash", s.customSkinHash}, {"theme_mode", mode},
         {"dark", bit(SettingsStore::effectiveDarkMode(s))}, {"dark_mode", bit(SettingsStore::effectiveDarkMode(s))},
         {"first_candidate_size", std::to_string(std::clamp(s.firstCandidateSize, 16, 30))}, {"key_opacity", opacity.str()},
         {"typing_glow", bit(s.typingGlow)}, {"key_letter_size", std::to_string(std::clamp(s.keyLetterSize, 14, 30))},
@@ -163,6 +164,8 @@ AppSettings fromValues(const fangcun::settings::Values& values) {
             else if (key == "mixed_input") s.mixedInput = boolean(val, s.mixedInput);
             else if (key == "chinese_punctuation") s.chinesePunctuation = boolean(val, s.chinesePunctuation);
             else if (key == "skin") s.skin = parseSkinPreset(val);
+            else if (key == "custom_skin_id") s.customSkinId = val;
+            else if (key == "custom_skin_hash") s.customSkinHash = val;
             else if (key == "theme_mode") s.themeMode = val == "light" ? ThemeMode::Light : val == "dark" ? ThemeMode::Dark : ThemeMode::System;
             else if (!hasThemeMode && (key == "dark" || key == "dark_mode")) s.themeMode = boolean(val, false) ? ThemeMode::Dark : ThemeMode::Light;
             else if (key == "first_candidate_size") s.firstCandidateSize = std::clamp(std::stoi(val), 16, 30);
@@ -179,6 +182,9 @@ AppSettings fromValues(const fangcun::settings::Values& values) {
             else if (key == "traditional") s.traditional = boolean(val, s.traditional);
             else if (key == "clipboard_enabled") s.clipboardEnabled = boolean(val, s.clipboardEnabled);
         } catch (...) { /* Keep the bounded legacy default for an invalid known value. */ }
+    }
+    if (!skin::validId(s.customSkinId) || !skin::validHash(s.customSkinHash)) {
+        s.customSkinId.clear(); s.customSkinHash.clear();
     }
     s.darkMode = SettingsStore::effectiveDarkMode(s);
     s.savedValues = knownValues(s);

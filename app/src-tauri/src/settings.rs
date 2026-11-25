@@ -20,6 +20,10 @@ pub struct AppSettings {
     #[serde(default = "default_true")]
     pub wheel_paging: bool,
     pub skin: String,
+    #[serde(default)]
+    pub custom_skin_id: String,
+    #[serde(default)]
+    pub custom_skin_hash: String,
     pub theme_mode: String,
     pub dark_mode: bool,
     pub system_dark: bool,
@@ -64,6 +68,8 @@ impl Default for AppSettings {
             page_size: 7,
             wheel_paging: true,
             skin: "wood_type".to_string(),
+            custom_skin_id: String::new(),
+            custom_skin_hash: String::new(),
             theme_mode: "system".to_string(),
             dark_mode: sys_dark,
             system_dark: sys_dark,
@@ -120,6 +126,16 @@ fn normalize(mut s: AppSettings) -> AppSettings {
         s.scheme = "flypy".to_string();
     }
     s.skin = canonical_skin(&s.skin).to_string();
+    if !crate::skin_pack::valid_id(&s.custom_skin_id)
+        || s.custom_skin_hash.len() != 64
+        || !s
+            .custom_skin_hash
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        s.custom_skin_id.clear();
+        s.custom_skin_hash.clear();
+    }
     if !matches!(s.theme_mode.as_str(), "system" | "light" | "dark") {
         s.theme_mode = "system".to_string();
     }
@@ -178,7 +194,7 @@ fn load_from_path(path: &Path) -> AppSettings {
     try_load_from_path(path).unwrap()
 }
 
-fn parse_content(content: &str) -> AppSettings {
+pub(crate) fn parse_content(content: &str) -> AppSettings {
     let mut s = AppSettings::default();
     let mut has_theme_mode = false;
     let mut has_legacy_dark = false;
@@ -212,6 +228,8 @@ fn parse_content(content: &str) -> AppSettings {
                 }
                 "wheel_paging" => s.wheel_paging = val == "1" || val.eq_ignore_ascii_case("true"),
                 "skin" => s.skin = val.to_string(),
+                "custom_skin_id" => s.custom_skin_id = val.to_string(),
+                "custom_skin_hash" => s.custom_skin_hash = val.to_string(),
                 "theme_mode" => {
                     has_theme_mode = true;
                     s.theme_mode = val.to_string();
@@ -281,10 +299,14 @@ fn known_values(s: &AppSettings) -> BTreeMap<String, String> {
         bool_int(s.traditional),
     );
 
-    body.lines()
+    let mut values: BTreeMap<String, String> = body
+        .lines()
         .filter_map(|line| line.split_once('='))
         .map(|(key, value)| (key.to_string(), value.to_string()))
-        .collect()
+        .collect();
+    values.insert("custom_skin_id".into(), s.custom_skin_id.clone());
+    values.insert("custom_skin_hash".into(), s.custom_skin_hash.clone());
+    values
 }
 
 fn merge_document(content: &str, updates: &BTreeMap<String, String>) -> String {
@@ -360,6 +382,27 @@ pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
     save_to_disk_and(input, |_| {})
 }
 
+pub fn reset_to_disk_and(committed: impl FnOnce(&AppSettings)) -> Result<AppSettings, String> {
+    let path = settings_path();
+    let saved = write_transaction(
+        &path,
+        |_| {
+            let document = settings_io::read(&path)?.unwrap_or_default();
+            let fallback = crate::skin_library::visible_fallback(&document)?;
+            Ok((
+                AppSettings {
+                    skin: fallback.into(),
+                    ..AppSettings::default()
+                },
+                None,
+            ))
+        },
+        committed,
+    )?;
+    notify_tsf_settings_changed();
+    Ok(saved)
+}
+
 pub fn save_to_disk_and(
     input: AppSettings,
     committed: impl FnOnce(&AppSettings),
@@ -381,8 +424,19 @@ fn save_to_path_and(
     write_transaction(
         path,
         |latest| {
+            let mut input = input;
             if !input.revision.is_empty() && input.revision != latest.revision {
                 return Err("设置已由其他窗口修改，请重新读取后重试".to_string());
+            }
+            // Only the skin-library API can apply a validated local package.
+            // Legacy full saves preserve its selection while unrelated fields
+            // change; selecting a different built-in clears the pair.
+            if canonical_skin(&input.skin) == latest.skin {
+                input.custom_skin_id = latest.custom_skin_id.clone();
+                input.custom_skin_hash = latest.custom_skin_hash.clone();
+            } else {
+                input.custom_skin_id.clear();
+                input.custom_skin_hash.clear();
             }
             Ok((input, None))
         },
@@ -461,6 +515,7 @@ impl SettingsPatch {
     fn apply(self, current: &AppSettings) -> (AppSettings, Option<Vec<&'static str>>) {
         let mut saved = current.clone();
         let mut changed = Vec::new();
+        let selects_builtin = self.skin.is_some();
         macro_rules! field {
             ($name:ident, $key:literal) => {
                 if let Some(value) = self.$name {
@@ -487,8 +542,41 @@ impl SettingsPatch {
         field!(candidate_layout, "candidate_layout");
         field!(full_width, "full_width");
         field!(traditional, "traditional");
+        if selects_builtin {
+            saved.custom_skin_id.clear();
+            saved.custom_skin_hash.clear();
+            changed.extend(["custom_skin_id", "custom_skin_hash"]);
+        }
         (saved, Some(changed))
     }
+}
+
+/// Private skin-library transaction. Callers cannot submit these fields through
+/// the public generic settings patch. Other preferences and unknown lines stay
+/// untouched, and publication follows the durable replacement under one lock.
+pub(crate) fn skin_transaction(
+    path: &Path,
+    change: impl FnOnce(&str, &AppSettings) -> Result<BTreeMap<String, String>, String>,
+    committed: impl FnOnce(&AppSettings),
+) -> Result<AppSettings, String> {
+    let _lock = settings_io::lock(path)?;
+    let original = settings_io::read(path)?.unwrap_or_default();
+    let current = parse_content(&original);
+    let values = change(&original, &current)?;
+    if values.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "skin_library_v1" | "skin" | "custom_skin_id" | "custom_skin_hash"
+        )
+    }) {
+        return Err("皮肤设置字段无效，未保存".into());
+    }
+    let body = merge_document(&original, &values);
+    settings_io::replace(path, &body)?;
+    let mut saved = parse_content(&body);
+    saved.revision = revision(Some(&body));
+    committed(&saved);
+    Ok(saved)
 }
 
 pub fn publish_current(committed: impl FnOnce(&AppSettings)) -> Result<(), String> {
@@ -907,5 +995,55 @@ mod tests {
         assert!(fs::read_to_string(&file.0)
             .unwrap()
             .contains("theme_mode=system\n"));
+    }
+
+    #[test]
+    fn ordinary_edits_preserve_local_skin_but_explicit_builtin_patch_clears_it() {
+        let file = IniFixture::new();
+        let hash = "a".repeat(64);
+        fs::write(&file.0, format!("skin=brutal\ncustom_skin_id=fangcun.sample\ncustom_skin_hash={hash}\ntheme_mode=dark\nfuture=keep\n")).unwrap();
+        let saved = patch_to_path(
+            &file.0,
+            serde_json::json!({"mixedInput":false,"keyLetterSize":25}),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(saved.custom_skin_id, "fangcun.sample");
+        assert_eq!(saved.custom_skin_hash, hash);
+        let saved = patch_to_path(&file.0, serde_json::json!({"skin":"brutal"}), |_| {}).unwrap();
+        assert!(saved.custom_skin_id.is_empty() && saved.custom_skin_hash.is_empty());
+        assert_eq!(saved.theme_mode, "dark");
+        assert_eq!(saved.key_letter_size, 25);
+        assert!(!saved.mixed_input);
+        assert!(fs::read_to_string(&file.0)
+            .unwrap()
+            .contains("future=keep\n"));
+    }
+
+    #[test]
+    fn public_generic_settings_cannot_forge_a_local_skin_selection() {
+        let file = IniFixture::new();
+        let hash = "a".repeat(64);
+        fs::write(
+            &file.0,
+            format!("skin=brutal\ncustom_skin_id=fangcun.sample\ncustom_skin_hash={hash}\n"),
+        )
+        .unwrap();
+        let before = fs::read(&file.0).unwrap();
+        assert!(patch_to_path(
+            &file.0,
+            serde_json::json!({"customSkinId":"fangcun.forged","customSkinHash":"b".repeat(64)}),
+            |_| {}
+        )
+        .is_err());
+        assert_eq!(fs::read(&file.0).unwrap(), before);
+        let mut forged = try_load_from_path(&file.0).unwrap();
+        forged.custom_skin_id = "fangcun.forged".into();
+        forged.custom_skin_hash = "b".repeat(64);
+        forged.mixed_input = false;
+        let saved = save_to_path(&file.0, forged).unwrap();
+        assert_eq!(saved.custom_skin_id, "fangcun.sample");
+        assert_eq!(saved.custom_skin_hash, hash);
+        assert!(!saved.mixed_input);
     }
 }

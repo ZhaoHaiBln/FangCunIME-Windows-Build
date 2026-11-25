@@ -274,6 +274,7 @@ void SettingsWindow::showOrActivate(HWND owner) {
     glowEngine_.setMotionAllowed(isClientAreaAnimationEnabled());
 
     if (hwnd_ && IsWindow(hwnd_)) {
+        refreshCustomSkin();
         ShowWindow(hwnd_, SW_RESTORE);
         SetForegroundWindow(hwnd_);
         InvalidateRect(hwnd_, nullptr, FALSE);
@@ -328,6 +329,7 @@ void SettingsWindow::showOrActivate(HWND owner) {
         preferSquareWindow(hwnd_);
         dpi_ = queryDpiForWindow(hwnd_);
         createTianzigeIcons();
+        refreshCustomSkin();
         ShowWindow(hwnd_, SW_SHOW);
         UpdateWindow(hwnd_);
     }
@@ -357,6 +359,7 @@ void SettingsWindow::destroyTianzigeIcons() {
 }
 
 void SettingsWindow::destroy() {
+    customCache_.reset(); customSkin_.reset(); customId_.clear(); customHash_.clear();
     if (hwnd_) {
         if (glowTimerActive_) {
             KillTimer(hwnd_, kGlowTimerId);
@@ -406,6 +409,13 @@ LRESULT CALLBACK SettingsWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
 
     if (self) {
         switch (msg) {
+            case CustomSkinCache::ReadyMessage:
+                if (self->customCache_) {
+                    self->customSkin_ = self->customCache_->takeReady();
+                    if (self->customSkin_ && (self->customSkin_->spec.id != self->customId_ || self->customSkin_->spec.hash != self->customHash_ || self->customSkin_->dark != self->customDark_)) self->customSkin_.reset();
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+                return 0;
             case WM_PAINT:
                 self->onPaint();
                 return 0;
@@ -440,7 +450,14 @@ LRESULT CALLBACK SettingsWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             }
+            case WM_SETTINGCHANGE:
+            case WM_THEMECHANGED:
+                self->refreshCustomSkin();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                break;
             case WM_DESTROY:
+                self->customCache_.reset(); self->customSkin_.reset();
+                self->customId_.clear(); self->customHash_.clear();
                 if (self->glowTimerActive_) {
                     KillTimer(hwnd, kGlowTimerId);
                     self->glowTimerActive_ = false;
@@ -497,10 +514,12 @@ void SettingsWindow::saveAndNotify() {
     if (!SettingsStore::save(settings_)) {
         const auto latest = SettingsStore::load();
         settings_ = latest.readSucceeded ? latest : SettingsStore::confirmed(settings_);
+        refreshCustomSkin();
         MessageBoxW(hwnd_, L"设置未保存。其他窗口可能正在保存，或文件暂时不可写，请重试。", L"方寸输入法", MB_OK | MB_ICONWARNING);
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
+    refreshCustomSkin();
     broadcastSettingsChanged();
     if (onChanged_) {
         onChanged_(settings_);
@@ -579,7 +598,8 @@ void SettingsWindow::applyAction(ActionId action) {
     }
     if (action == ActionId::SkinTerminal || action == ActionId::SkinWoodType ||
         action == ActionId::SkinTypewriter || action == ActionId::SkinBrutal) {
-        settings_.themeMode = skinMetrics(settings_.skin).defaultThemeMode;
+        settings_.customSkinId.clear();
+        settings_.customSkinHash.clear();
     }
     saveAndNotify();
 }
@@ -621,6 +641,11 @@ void SettingsWindow::drawGlassButton(
     bool bold) {
     GlassKeyColors gc = computeGlassKeyColors(
         skin, colors, settings_.keyOpacity, false, functional, emphasized, selected);
+    if (customSkin_) {
+        const auto& theme = customSkin_->theme();
+        gc.top = theme.color(selected ? fangcun::skin::ColorRole::Selection : emphasized ? fangcun::skin::ColorRole::Accent : functional ? fangcun::skin::ColorRole::Function : fangcun::skin::ColorRole::Surface);
+        gc.edge = theme.color(fangcun::skin::ColorRole::Border); gc.ledgeDepthDp = 0;
+    }
 
     const auto face = D2D1::RectF(rect.left, rect.top, rect.right - gc.ledgeDepthDp, rect.bottom - gc.ledgeDepthDp);
     ID2D1SolidColorBrush* solid = nullptr;
@@ -667,6 +692,16 @@ void SettingsWindow::drawGlassButton(
     }
 }
 
+void SettingsWindow::refreshCustomSkin() {
+    if (!hwnd_) return;
+    const bool dark = SettingsStore::effectiveDarkMode(settings_);
+    if (customId_ == settings_.customSkinId && customHash_ == settings_.customSkinHash && customDark_ == dark) return;
+    customId_ = settings_.customSkinId; customHash_ = settings_.customSkinHash; customDark_ = dark;
+    customSkin_.reset();
+    if (!customId_.empty() && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
+    if (customCache_) customCache_->request(hwnd_, SettingsStore::getDataDirectory(), customId_, customHash_, dark, false);
+}
+
 void SettingsWindow::onPaint() {
     PAINTSTRUCT ps = {};
     BeginPaint(hwnd_, &ps);
@@ -675,11 +710,14 @@ void SettingsWindow::onPaint() {
         return;
     }
 
-    const bool dark = SettingsStore::effectiveDarkMode(settings_);
-    const FangCunColors colors = skinColors(settings_.skin, dark);
+    // Settings/show/system events refresh identity and mode before invalidating.
+    // Painting never looks up or creates the skin installation directory.
+    const bool dark = customDark_;
+    const FangCunColors colors = customSkin_ ? skin::colors(customSkin_->theme()) : skinColors(settings_.skin, dark);
     const auto labelAccent = readableSettingsAccent(colors);
     const SkinMetrics metrics = skinMetrics(settings_.skin);
-    const BackdropGradientColors backdrop = computeBackdropGradient(settings_.skin, colors);
+    auto backdrop = computeBackdropGradient(settings_.skin, colors);
+    if (customSkin_) backdrop.isFlat = true;
 
     RECT rc = {};
     GetClientRect(hwnd_, &rc);
@@ -821,7 +859,7 @@ void SettingsWindow::onPaint() {
         renderTarget_->PushLayer(D2D1::LayerParameters(previewRc, prevGeo), nullptr);
         auto circles = glowEngine_.buildRenderCircles(
             previewRc.right - previewRc.left, previewRc.bottom - previewRc.top,
-            1.0f, colors.isDarkKeyboard(), metrics.glowColors);
+            1.0f, colors.isDarkKeyboard(), customSkin_ ? customSkin_->theme().glow : metrics.glowColors);
         for (const auto& c : circles) {
             D2D1_GRADIENT_STOP gStops[3] = {};
             UINT32 cnt = c.isTrailing ? 2 : 3;

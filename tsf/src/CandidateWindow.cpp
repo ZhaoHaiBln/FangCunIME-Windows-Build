@@ -176,12 +176,14 @@ bool CandidateWindow::ensureDeviceResources() {
         &renderTarget_);
     if (SUCCEEDED(hr) && renderTarget_) {
         renderTarget_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+        rebuildCustomBitmaps();
         return true;
     }
     return false;
 }
 
 void CandidateWindow::releaseDeviceResources() {
+    releaseCustomBitmaps();
     safeRelease(renderTarget_);
 }
 
@@ -218,6 +220,7 @@ bool CandidateWindow::create(HWND parentOwner) {
 }
 
 void CandidateWindow::destroy() {
+    customCache_.reset(); customSkin_.reset(); customId_.clear(); customHash_.clear(); releaseCustomBitmaps();
     if (hwnd_) {
         if (glowTimerActive_) {
             KillTimer(hwnd_, kGlowTimerId);
@@ -240,6 +243,79 @@ int CandidateWindow::scaleForDpi(int px) const {
 
 float CandidateWindow::dpToPx(float dp) const {
     return dp * static_cast<float>(dpi_) / 96.0f;
+}
+
+void CandidateWindow::setCustomSkin(const std::filesystem::path& root, const std::string& id, const std::string& hash, bool dark) {
+    if (customDataRoot_ == root && customId_ == id && customHash_ == hash && customDark_ == dark) return;
+    customDataRoot_ = root; customId_ = id; customHash_ = hash; customDark_ = dark;
+    customSkin_.reset(); releaseCustomBitmaps(); lastBudgetFirstSize_ = -1;
+    if (!id.empty() && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
+    if (customCache_) customCache_->request(hwnd_, root, id, hash, dark);
+    if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void CandidateWindow::consumeCustomSkin() {
+    if (!customCache_) return;
+    auto ready = customCache_->takeReady();
+    if (ready && ready == customSkin_ && renderTarget_) {
+        bool uploaded = true;
+        for (size_t i = 0; i < customBitmaps_.size(); ++i) {
+            if (ready->pixels[i] && !customBitmaps_[i]) { uploaded = false; break; }
+        }
+        // Multiple pointer-free notifications can refer to the same latest
+        // snapshot. Keep its GPU textures unless device loss left them absent.
+        if (uploaded) return;
+    }
+    customSkin_ = std::move(ready);
+    releaseCustomBitmaps();
+    if (customSkin_ && (customSkin_->spec.id != customId_ || customSkin_->spec.hash != customHash_ || customSkin_->dark != customDark_)) customSkin_.reset();
+    rebuildCustomBitmaps();
+    lastBudgetFirstSize_ = -1;
+    recomputeHeaderBudget(); recalculateSize();
+    if (hasCaretRect_) moveNearCaret(lastCaretRect_);
+    if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void CandidateWindow::releaseCustomBitmaps() {
+    for (auto*& image : customBitmaps_) safeRelease(image);
+}
+void CandidateWindow::rebuildCustomBitmaps() {
+    if (!renderTarget_ || !customSkin_) return;
+    for (size_t i = 0; i < customBitmaps_.size(); ++i) {
+        const auto& image = customSkin_->pixels[i]; if (!image || customBitmaps_[i]) continue;
+        for (size_t j = 0; j < i; ++j) if (customSkin_->pixels[j] == image && customBitmaps_[j]) {
+            customBitmaps_[i] = customBitmaps_[j]; customBitmaps_[i]->AddRef(); break;
+        }
+        if (customBitmaps_[i]) continue;
+        const auto properties = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
+        renderTarget_->CreateBitmap(D2D1::SizeU(image->width, image->height), image->bgra.data(), image->width * 4, &properties, &customBitmaps_[i]);
+    }
+}
+void CandidateWindow::drawCustomImage(skin::ImageRole role, D2D1_RECT_F bounds) {
+    if (!customSkin_ || !renderTarget_) return;
+    const auto index = static_cast<size_t>(role); auto* bitmap = customBitmaps_[index];
+    const auto& spec = customSkin_->theme().images[index]; const auto& image = customSkin_->pixels[index];
+    if (!bitmap || !spec || !image || bounds.right <= bounds.left || bounds.bottom <= bounds.top) return;
+    if (spec->scale == skin::ImageScale::Tile) {
+        ID2D1BitmapBrush* tiled = nullptr;
+        const auto properties = D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP, D2D1_EXTEND_MODE_WRAP, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+        const float scale = 1.0f / customSkin_->spec.assetScale;
+        const auto brushProperties = D2D1::BrushProperties(1.0f, D2D1::Matrix3x2F::Scale(scale, scale) * D2D1::Matrix3x2F::Translation(bounds.left, bounds.top));
+        if (SUCCEEDED(renderTarget_->CreateBitmapBrush(bitmap, &properties, &brushProperties, &tiled)) && tiled) {
+            renderTarget_->PushAxisAlignedClip(bounds, D2D1_ANTIALIAS_MODE_ALIASED);
+            renderTarget_->FillRectangle(bounds, tiled);
+            renderTarget_->PopAxisAlignedClip(); tiled->Release();
+        }
+        return;
+    }
+    const auto slices = skin::imageSlices(*spec, image->width, image->height, customSkin_->spec.assetScale, bounds.right - bounds.left, bounds.bottom - bounds.top);
+    renderTarget_->PushAxisAlignedClip(bounds, D2D1_ANTIALIAS_MODE_ALIASED);
+    for (const auto& slice : slices) {
+        const auto source = D2D1::RectF(slice.sl, slice.st, slice.sr, slice.sb);
+        const auto destination = D2D1::RectF(bounds.left + slice.dl, bounds.top + slice.dt, bounds.left + slice.dr, bounds.top + slice.db);
+        renderTarget_->DrawBitmap(bitmap, &destination, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &source);
+    }
+    renderTarget_->PopAxisAlignedClip();
 }
 
 void CandidateWindow::update(
@@ -266,6 +342,7 @@ void CandidateWindow::update(
     scheme_ = scheme;
     skin_ = skin;
     darkMode_ = darkMode;
+    if (!customId_.empty() && customDark_ != darkMode) setCustomSkin(customDataRoot_, customId_, customHash_, darkMode);
     firstCandidateSize_ = std::clamp(firstCandidateSize, HeaderMetricsSpec::kFirstCandidateMinSp, HeaderMetricsSpec::kFirstCandidateMaxSp);
     typingGlow_ = typingGlow;
 
@@ -299,6 +376,7 @@ void CandidateWindow::showModeToast(bool englishMode, SkinPreset skin, bool dark
     toastEnglish_ = englishMode;
     skin_ = skin;
     darkMode_ = darkMode;
+    if (!customId_.empty() && customDark_ != darkMode) setCustomSkin(customDataRoot_, customId_, customHash_, darkMode);
 
     dpi_ = queryDpiForWindow(hwnd_);
     recomputeHeaderBudget();
@@ -321,7 +399,7 @@ void CandidateWindow::showModeToast(bool englishMode, SkinPreset skin, bool dark
 
 void CandidateWindow::recomputeHeaderBudget() {
     if (!ensureFactories()) return;
-    const bool mono = sharpTheme(skin_).metrics.useMonospaceCode;
+    const bool mono = customSkin_ ? customSkin_->spec.fontFamily == "mono" : sharpTheme(skin_).metrics.useMonospaceCode;
     if (lastBudgetSkin_ == skin_ && lastBudgetFirstSize_ == firstCandidateSize_ && lastBudgetDpi_ == dpi_ && primaryFormat_) {
         return;
     }
@@ -343,8 +421,8 @@ void CandidateWindow::recomputeHeaderBudget() {
         }
     };
 
-    const bool serif = skin_ == SkinPreset::WoodType || skin_ == SkinPreset::Typewriter;
-    const wchar_t* candidateFont = serif ? L"SimSun" : kUiFontFamily;
+    const bool serif = customSkin_ ? customSkin_->spec.fontFamily == "serif" : skin_ == SkinPreset::WoodType || skin_ == SkinPreset::Typewriter;
+    const wchar_t* candidateFont = customSkin_ && mono ? L"Consolas" : serif ? L"SimSun" : kUiFontFamily;
     const wchar_t* codeFont = mono ? L"Consolas" : serif ? L"Georgia" : kUiFontFamily;
     makeFormat(static_cast<float>(HeaderMetricsSpec::kCodeSp + 1), DWRITE_FONT_WEIGHT_MEDIUM, &codeFormat_, codeFont);
     makeFormat(static_cast<float>(firstCandidateSize_), DWRITE_FONT_WEIGHT_MEDIUM, &primaryFormat_, candidateFont);
@@ -658,6 +736,9 @@ LRESULT CALLBACK CandidateWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
 
     if (self) {
         switch (msg) {
+        case CustomSkinCache::ReadyMessage:
+            if (self) self->consumeCustomSkin();
+            return 0;
             case WM_PAINT:
                 self->onPaint();
                 return 0;
@@ -755,7 +836,9 @@ void CandidateWindow::onPaint() {
     }
 
     const auto& metrics = sharpTheme(skin_).metrics;
-    const auto& palette = sharpPalette(skin_, darkMode_);
+    const auto* custom = customSkin_ ? &customSkin_->theme() : nullptr;
+    const bool customDrawing = custom || !customId_.empty();
+    const auto palette = custom ? skin::palette(*custom) : sharpPalette(skin_, darkMode_);
     const bool vertical = layout_ == CandidateLayout::Vertical;
     const bool single = layout_ == CandidateLayout::SingleRow;
     const float shadow = toastActive_ ? 0.0f : static_cast<float>(metrics.hardShadowOffsetPx);
@@ -775,7 +858,7 @@ void CandidateWindow::onPaint() {
         : (skin_ == SkinPreset::Typewriter ? 4.0f : (skin_ == SkinPreset::Terminal ? 3.5f : 2.5f));
     const auto rect = [](float l, float t, float r, float b) { return D2D1::RectF(l, t, r, b); };
     const auto color = ColorArgb::fromHex;
-    const auto chrome = skinColors(skin_, darkMode_);
+    const auto chrome = custom ? skin::colors(*custom) : skinColors(skin_, darkMode_);
 
     candidateRects_.clear();
     candidateIndices_.clear();
@@ -838,6 +921,11 @@ void CandidateWindow::onPaint() {
         };
 
         if (shadow > 0) fill(rect(shadow, shadow, w + shadow, h + shadow), palette.hardShadowColor);
+        if (customDrawing) {
+            const auto c = custom ? custom->color(skin::ColorRole::Background) : chrome.keyboard;
+            fill(rect(0, 0, w, h), argb(c));
+            drawCustomImage(skin::ImageRole::Deck, rect(0, 0, w, h));
+        } else {
         if (skin_ == SkinPreset::Brutal) {
             fill(rect(0, 0, w, h), palette.windowOuterBorder);
         } else if (skin_ == SkinPreset::WoodType) {
@@ -867,6 +955,7 @@ void CandidateWindow::onPaint() {
 
         if (skin_ == SkinPreset::Brutal) fill(rect(edge, edge, right, bottom), palette.windowBg);
         else fillRound(rect(edge, edge, right, bottom), innerR, palette.windowBg);
+        }
 
         if (toastActive_ && composing_.empty()) {
             drawTianzigeLogoD2D(left + 8, (h - 20) * .5f, 20);
@@ -878,7 +967,15 @@ void CandidateWindow::onPaint() {
             const float codeRight = single ? left + singleCodeWidth_ : right;
             const auto candidateArea = rect(left, edge, right, bottom);
             const auto material = color(palette.windowBg);
-            if (skin_ == SkinPreset::Terminal) {
+            if (customDrawing) {
+                fill(candidateArea, palette.windowBg);
+                drawCustomImage(skin::ImageRole::Candidates, candidateArea);
+                const auto header = rect(left, edge, single ? codeRight : right, headerBottom);
+                fill(header, custom ? argb(custom->color(skin::ColorRole::Toolbar)) : palette.windowHeaderBg);
+                drawCustomImage(skin::ImageRole::Toolbar, header);
+                const auto codeArea = rect(left, codeTop, codeRight, headerBottom);
+                drawCustomImage(skin::ImageRole::Code, codeArea);
+            } else if (skin_ == SkinPreset::Terminal) {
                 gradientRound(candidateArea, innerR,
                     argb(ColorArgb::lerp(material, color(0xFF000000), .20f)),
                     palette.windowBg,
@@ -912,9 +1009,9 @@ void CandidateWindow::onPaint() {
                     }
                 }
             }
-            if (skin_ == SkinPreset::Brutal) fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
+            if (!customDrawing && skin_ == SkinPreset::Brutal) fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
 
-            const auto pulses = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, skinMetrics(skin_).glowColors);
+            const auto pulses = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, custom ? custom->glow : skinMetrics(skin_).glowColors);
             if (!pulses.empty()) {
                 const auto surface = rect(left, edge, right, bottom);
                 renderTarget_->PushAxisAlignedClip(surface, D2D1_ANTIALIAS_MODE_ALIASED);
@@ -947,13 +1044,13 @@ void CandidateWindow::onPaint() {
                 fill(rect(left + divInset, headerBottom - 1, right - divInset, headerBottom), palette.innerDivider);
             }
 
-            const bool terminalLeds = skin_ == SkinPreset::Terminal && !single;
+            const bool terminalLeds = !customDrawing && skin_ == SkinPreset::Terminal && !single;
             const float ledWidth = terminalLeds ? 30.0f : 0.0f;
             const bool showPageCount = !isReference || pages > 1;
             const float labelRight = codeRight - (single ? 9.0f : (showPageCount ? 43.0f : 8.0f) + ledWidth);
             const float codeX = left + 9;
             const std::wstring preedit = utf8ToWide(composing_);
-            const auto codeInk = skin_ == SkinPreset::Terminal ? palette.accent : argb(chrome.text);
+            const auto codeInk = custom ? argb(custom->color(skin::ColorRole::CodeText)) : skin_ == SkinPreset::Terminal ? palette.accent : argb(chrome.text);
             const auto secondaryInk = skin_ == SkinPreset::Terminal ? palette.textSecondary : argb(chrome.secondary);
             text(visibleCode_, codeFormat_, rect(codeX, codeTop, labelRight, headerBottom), codeInk);
             if (skin_ != SkinPreset::Terminal) {
@@ -989,7 +1086,10 @@ void CandidateWindow::onPaint() {
                 const float y = vertical ? headerBottom + local * rowHeight : (single ? edge : headerBottom);
                 const auto cell = rect(vertical ? left : x, y, (vertical ? left : x) + width, std::min(bottom, y + rowHeight));
                 const bool active = !pending_ && static_cast<int>(index) == selectedIndex_;
-                if (active && skin_ == SkinPreset::Brutal) {
+                if (active && customDrawing) {
+                    fill(cell, palette.candidateActiveBg);
+                    drawCustomImage(skin::ImageRole::Selection, cell);
+                } else if (active && skin_ == SkinPreset::Brutal) {
                     fill(cell, palette.candidateActiveBg);
                 } else if (active && cell.right - cell.left > 7.0f) {
                     const float hPad = vertical ? 8.0f : 3.0f;
@@ -1036,6 +1136,7 @@ void CandidateWindow::onPaint() {
                     const bool enabled = !pending_ && (direction < 0 ? page > 0 : page + 1 < pages);
                     const float startX = pagerLeft + (direction > 0 ? 20 : 0);
                     const auto cell = rect(startX, footerTop, startX + 20, bottom);
+                    if (custom) drawCustomImage(skin::ImageRole::KeyFunction, cell);
                     fill(rect(startX, footerTop, startX + 1, bottom), palette.innerDivider);
                     // Geometry of the pack's chevron-left/right icons, centered in the page cell.
                     const float cx = startX + 10, cy = (footerTop + bottom) * .5f;

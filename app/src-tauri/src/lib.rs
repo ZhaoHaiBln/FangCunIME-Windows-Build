@@ -4,6 +4,9 @@ mod clipboard;
 mod clipboard_history;
 mod settings;
 mod settings_io;
+mod skin_commands;
+mod skin_library;
+mod skin_pack;
 mod sync_manager;
 mod sync_protocol;
 mod sync_transport;
@@ -147,6 +150,8 @@ fn publish_settings(app: &AppHandle, clipboard: &Arc<Mutex<ClipboardState>>, sav
     apply_window_appearance(app, saved);
     let _ = app.emit("settings://changed", saved);
     let _ = app.emit("clipboard://enabled-changed", saved.clipboard_enabled);
+    // Generic built-in selection/reset also changes the active library item.
+    let _ = app.emit("skin-library://changed", ());
 }
 
 #[tauri::command]
@@ -181,9 +186,7 @@ async fn patch_settings(
 async fn reset_settings(app: AppHandle, state: State<'_, AppState>) -> Result<AppSettings, String> {
     let clipboard = Arc::clone(&state.clipboard);
     tauri::async_runtime::spawn_blocking(move || {
-        settings::save_to_disk_and(AppSettings::default(), |saved| {
-            publish_settings(&app, &clipboard, saved)
-        })
+        settings::reset_to_disk_and(|saved| publish_settings(&app, &clipboard, saved))
     })
     .await
     .map_err(|_| "恢复设置未完成，请重试".to_string())?
@@ -396,7 +399,14 @@ fn apply_window_appearance(app: &AppHandle, settings: &AppSettings) {
         };
         let _ = window.set_theme(theme);
         if let Ok(hwnd) = window.hwnd() {
-            apply_native_chrome(hwnd.0 as windows_sys::Win32::Foundation::HWND, settings);
+            let custom = app
+                .try_state::<Arc<skin_library::SkinLibrary>>()
+                .and_then(|library| library.chrome_colors(settings));
+            apply_native_chrome(
+                hwnd.0 as windows_sys::Win32::Foundation::HWND,
+                settings,
+                custom,
+            );
             if window.label() == "statusbar" {
                 use windows_sys::Win32::UI::WindowsAndMessaging::{
                     GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
@@ -414,13 +424,17 @@ fn apply_window_appearance(app: &AppHandle, settings: &AppSettings) {
 }
 
 #[cfg(target_os = "windows")]
-fn apply_native_chrome(hwnd: windows_sys::Win32::Foundation::HWND, settings: &AppSettings) {
+fn apply_native_chrome(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    settings: &AppSettings,
+    custom: Option<(u32, u32)>,
+) {
     use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
     // These Windows 11 attributes safely return E_INVALIDARG on older Windows.
     // They affect only FangCun's own HWNDs; editor windows are never touched.
     const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
     const DWMWCP_DONOTROUND: i32 = 1;
-    let (background, text): (u32, u32) = match (settings.skin.as_str(), settings.dark_mode) {
+    let fallback: (u32, u32) = match (settings.skin.as_str(), settings.dark_mode) {
         ("typewriter", false) => (0xEBDDCA, 0x272019),
         ("typewriter", true) => (0x302923, 0xF6E8D1),
         ("terminal", false) => (0xD7CDBA, 0x252722),
@@ -430,6 +444,7 @@ fn apply_native_chrome(hwnd: windows_sys::Win32::Foundation::HWND, settings: &Ap
         (_, true) => (0x3C2D24, 0xF5E3CC),
         _ => (0xE8D6BA, 0x251B14),
     };
+    let (background, text) = custom.unwrap_or(fallback);
     let color_ref = |rgb: u32| ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
     let caption = color_ref(background);
     let foreground = color_ref(text);
@@ -443,6 +458,22 @@ fn apply_native_chrome(hwnd: windows_sys::Win32::Foundation::HWND, settings: &Ap
         let _ = DwmSetWindowAttribute(hwnd, 35, (&caption as *const u32).cast(), 4);
         let _ = DwmSetWindowAttribute(hwnd, 36, (&foreground as *const u32).cast(), 4);
     }
+}
+
+fn refresh_skin_chrome(app: &AppHandle) {
+    #[cfg(target_os = "windows")]
+    let _ = settings::publish_current(|settings| {
+        let custom = app
+            .try_state::<Arc<skin_library::SkinLibrary>>()
+            .and_then(|library| library.chrome_colors(settings));
+        for window in app.webview_windows().values() {
+            if let Ok(hwnd) = window.hwnd() {
+                apply_native_chrome(hwnd.0 as _, settings, custom);
+            }
+        }
+    });
+    #[cfg(not(target_os = "windows"))]
+    let _ = app;
 }
 
 fn show_main_window(app: &AppHandle) {
@@ -594,8 +625,39 @@ pub fn run() {
     let share_watcher = Arc::clone(&share);
     let start_in_tray = std::env::args().any(|a| a == "--tray");
     let start_in_clipboard = std::env::args().any(|a| a == "--clipboard");
+    let skin_library = Arc::new(skin_library::SkinLibrary::new(settings::data_dir()));
+    let skin_resources = Arc::clone(&skin_library);
 
     tauri::Builder::default()
+        .manage(skin_library)
+        .register_asynchronous_uri_scheme_protocol("fcskin", move |_context, request, responder| {
+            let library = Arc::clone(&skin_resources);
+            tauri::async_runtime::spawn_blocking(move || {
+                let result = if request.method() == tauri::http::Method::GET
+                    && request.uri().query().is_none()
+                {
+                    library.image(request.uri().path())
+                } else {
+                    Err("无效的皮肤资源请求".into())
+                };
+                let response = match result {
+                    Ok(bytes) => tauri::http::Response::builder()
+                        .status(200)
+                        .header("Content-Type", "image/png")
+                        .header("X-Content-Type-Options", "nosniff")
+                        .header("Cache-Control", "public, max-age=31536000, immutable")
+                        .body(bytes),
+                    Err(_) => tauri::http::Response::builder()
+                        .status(404)
+                        .header("X-Content-Type-Options", "nosniff")
+                        .header("Cache-Control", "no-store")
+                        .body(Vec::new()),
+                };
+                if let Ok(response) = response {
+                    responder.respond(response);
+                }
+            });
+        })
         .manage(Arc::new(ai::AiManager::new(settings::data_dir())))
         .manage(AppState {
             clipboard: clipboard_state,
@@ -662,6 +724,10 @@ pub fn run() {
                             apply_native_chrome(
                                 hwnd.0 as windows_sys::Win32::Foundation::HWND,
                                 saved,
+                                window
+                                    .app_handle()
+                                    .try_state::<Arc<skin_library::SkinLibrary>>()
+                                    .and_then(|library| library.chrome_colors(saved)),
                             );
                         }
                         let _ = window.emit("settings://changed", saved);
@@ -687,6 +753,12 @@ pub fn run() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
+            skin_commands::skin_library_snapshot,
+            skin_commands::skin_set_import_enabled,
+            skin_commands::skin_set_builtin_hidden,
+            skin_commands::skin_select,
+            skin_commands::skin_delete,
+            skin_commands::skin_import_pick,
             ai_commands::ai_get_config,
             ai_commands::ai_save_config,
             ai_commands::ai_generate,

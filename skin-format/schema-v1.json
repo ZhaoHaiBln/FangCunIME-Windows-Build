@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fangcun:skin:schema:v1",
+  "title": "方寸 .fcskin v1 manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "$comment": "This structural schema cannot detect duplicate JSON keys, lexical integer-vs-float tokens, PNG dimensions or ZIP metadata. Run tools/fcskin.py validate for complete wire validation.",
+  "required": [
+    "format",
+    "schemaVersion",
+    "id",
+    "name",
+    "version",
+    "baseSkin",
+    "assetScale",
+    "fontFamily",
+    "pressOffsetDp",
+    "preview",
+    "themes"
+  ],
+  "properties": {
+    "format": {
+      "const": "fangcun.skin"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "allOf": [
+        {
+          "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z0-9][a-z0-9_-]*)+$"
+        },
+        {
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]*$"
+        }
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "allOf": [
+        {
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]*$"
+        },
+        {
+          "pattern": "\\S"
+        }
+      ]
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 48,
+      "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]*$"
+    },
+    "license": {
+      "type": "string",
+      "maxLength": 120,
+      "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]*$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "baseSkin": {
+      "enum": [
+        "mechanical",
+        "typewriter",
+        "mahjong",
+        "brutal"
+      ]
+    },
+    "assetScale": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4
+    },
+    "fontFamily": {
+      "enum": [
+        "sans",
+        "serif",
+        "mono"
+      ]
+    },
+    "pressOffsetDp": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "preview": {
+      "$ref": "#/$defs/imagePath"
+    },
+    "themes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "light",
+        "dark"
+      ],
+      "properties": {
+        "light": {
+          "$ref": "#/$defs/theme"
+        },
+        "dark": {
+          "$ref": "#/$defs/theme"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "minLength": 7,
+      "maxLength": 7
+    },
+    "imagePath": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 96,
+      "$comment": "Each component also excludes Windows device names so the same pack remains portable.",
+      "allOf": [
+        {
+          "pattern": "^(?:[a-z0-9_-]+/)*[a-z0-9_-]+\\.png$"
+        },
+        {
+          "pattern": "^(?!(?:[a-z0-9_-]+/)*(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:/|\\.png$))"
+        },
+        {
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]*$"
+        }
+      ]
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "scale",
+        "insets"
+      ],
+      "properties": {
+        "file": {
+          "$ref": "#/$defs/imagePath"
+        },
+        "scale": {
+          "enum": [
+            "stretch",
+            "contain",
+            "tile",
+            "nineSlice"
+          ]
+        },
+        "insets": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "scale": {
+            "const": "nineSlice"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "insets": {
+            "const": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    },
+    "colors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "background",
+        "surface",
+        "border",
+        "function",
+        "text",
+        "muted",
+        "accent",
+        "onAccent",
+        "pressed",
+        "toolbar",
+        "candidateBackground",
+        "candidateText",
+        "selection",
+        "onSelection",
+        "keyText",
+        "keyHint",
+        "functionText",
+        "codeText"
+      ],
+      "properties": {
+        "background": {
+          "$ref": "#/$defs/color"
+        },
+        "surface": {
+          "$ref": "#/$defs/color"
+        },
+        "border": {
+          "$ref": "#/$defs/color"
+        },
+        "function": {
+          "$ref": "#/$defs/color"
+        },
+        "text": {
+          "$ref": "#/$defs/color"
+        },
+        "muted": {
+          "$ref": "#/$defs/color"
+        },
+        "accent": {
+          "$ref": "#/$defs/color"
+        },
+        "onAccent": {
+          "$ref": "#/$defs/color"
+        },
+        "pressed": {
+          "$ref": "#/$defs/color"
+        },
+        "toolbar": {
+          "$ref": "#/$defs/color"
+        },
+        "candidateBackground": {
+          "$ref": "#/$defs/color"
+        },
+        "candidateText": {
+          "$ref": "#/$defs/color"
+        },
+        "selection": {
+          "$ref": "#/$defs/color"
+        },
+        "onSelection": {
+          "$ref": "#/$defs/color"
+        },
+        "keyText": {
+          "$ref": "#/$defs/color"
+        },
+        "keyHint": {
+          "$ref": "#/$defs/color"
+        },
+        "functionText": {
+          "$ref": "#/$defs/color"
+        },
+        "codeText": {
+          "$ref": "#/$defs/color"
+        }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "colors",
+        "glow",
+        "images"
+      ],
+      "properties": {
+        "colors": {
+          "$ref": "#/$defs/colors"
+        },
+        "glow": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/color"
+          }
+        },
+        "images": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "deck": {
+              "$ref": "#/$defs/image"
+            },
+            "toolbar": {
+              "$ref": "#/$defs/image"
+            },
+            "code": {
+              "$ref": "#/$defs/image"
+            },
+            "candidates": {
+              "$ref": "#/$defs/image"
+            },
+            "selection": {
+              "$ref": "#/$defs/image"
+            },
+            "keyNormal": {
+              "$ref": "#/$defs/image"
+            },
+            "keyFunction": {
+              "$ref": "#/$defs/image"
+            },
+            "keyAction": {
+              "$ref": "#/$defs/image"
+            }
+          }
+        }
+      }
+    }
+  }
+}

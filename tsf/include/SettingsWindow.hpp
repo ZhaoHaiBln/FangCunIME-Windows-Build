@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SettingsStore.hpp"
+#include "CustomSkinCache.hpp"
 #include "fangcun/ThemeConfig.hpp"
 
 #include <d2d1.h>
@@ -8,6 +9,7 @@
 #include <windows.h>
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -90,6 +92,7 @@ private:
     void syncGlowTimer();
     void applyAction(ActionId action);
     void saveAndNotify();
+    void refreshCustomSkin();
 
     float dpToPx(float dp) const;
     bool ensureFactories();
@@ -113,6 +116,10 @@ private:
         bool bold = false);
 
     HWND hwnd_ = nullptr;
+    std::unique_ptr<CustomSkinCache> customCache_;
+    std::shared_ptr<const LoadedCustomSkin> customSkin_;
+    std::string customId_, customHash_;
+    bool customDark_ = false;
     ChangeCallback onChanged_;
     AppSettings settings_;
     CategoryTab activeTab_ = CategoryTab::All;

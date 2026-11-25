@@ -1,0 +1,41 @@
+/* Package textures are scoped to an installed local skin; builtin appearance remains unchanged. */
+.skin-library-heading,.skin-local-heading { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+.skin-local-heading { margin-top:20px; }
+.skin-library-note { font-size:12px;line-height:1.65;color:var(--text-secondary);overflow-wrap:anywhere;margin:8px 0; }
+.skin-management { border-top:1px solid var(--border);padding-top:12px;margin-top:14px; }
+.skin-management summary { cursor:pointer;font-size:13px;color:var(--text); }
+.skin-builtin-row,.skin-import-toggle { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px; }
+.skin-import-toggle small { display:block;font-size:12px;color:var(--text-secondary);line-height:1.6;margin-top:4px; }
+.skin-local-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px; }
+.skin-local-card { min-width:0;border:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:8px; }
+.skin-local-select { width:100%;min-width:0;text-align:left;color:var(--text);background:var(--surface-elevated);border:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:7px;font:inherit;cursor:pointer; }
+.skin-local-select strong { overflow-wrap:anywhere;font-size:14px; }
+.skin-local-select.is-selected { border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent); }
+.skin-local-preview { width:100%;height:112px;object-fit:contain;background:var(--surface-subtle); }
+.skin-local-use { font-size:12px;color:var(--text-secondary); }
+.skin-local-delete { align-self:flex-end; }
+.skin-library-error { margin-top:12px;color:var(--danger);font-size:13px;line-height:1.65; }
+.skin-local-select:focus-visible { outline:2px solid var(--text);outline-offset:2px; }
+#skin-group [hidden],#skin-local-empty[hidden],#skin-library-error[hidden] { display:none!important; }
+.fc-skin-surface { position:relative;isolation:isolate; }
+.fc-skin-image { position:absolute;inset:0;display:block;pointer-events:none;z-index:-1;border-radius:inherit;overflow:hidden; }
+:root[data-local-skin] { font-family:var(--fc-font); }
+:root[data-local-skin] body,:root[data-local-skin] .win-shell { background:var(--fc-background);font-family:var(--fc-font); }
+:root[data-local-skin] .sidebar,:root[data-local-skin] .workspace-footer,:root[data-local-skin] .floating-statusbar { background:var(--ime-toolbar-bg);color:var(--ime-text); }
+:root[data-local-skin] .altv-popup { background:var(--fc-surface);border-color:var(--ime-border); }
+:root[data-local-skin] :is(.section-card,.settings-list-card,.clip-card-item,.ai-state) { background:var(--fc-surface); }
+:root[data-local-skin] :is(.stepper-btn,.scheme-card,.shortcut-row) { background:var(--ime-key-bg);color:var(--fc-key-text);border-color:var(--ime-border); }
+:root[data-local-skin] :is(.mini-pill,.mode-pill,.btn-restore,.clip-icon-btn,.fb-tool-btn,.fb-lang-badge,.sb-btn,.ai-secondary,.ai-modes button) { background:var(--ime-fn-key-bg);color:var(--fc-function-text);border-color:var(--ime-border); }
+:root[data-local-skin] :is(.btn-finish,.ai-primary,.skin-action-primary) { background:var(--ime-accent);color:var(--ime-accent-text); }
+:root[data-local-skin] :is(.nav-item.is-active,.clip-view-tabs button[aria-selected=true]) { background:var(--ime-cand-active-bg);color:var(--ime-cand-active-text); }
+:root[data-local-skin] .mode-statusbar .sb-btn { background:var(--ime-fn-key-bg);color:var(--fc-function-text); }
+:root[data-local-skin] .cand-window[data-local-skin] { background:var(--fc-candidate-background);border-color:var(--ime-border);color:var(--fc-candidate-text);font-family:var(--fc-font);box-shadow:none; }
+:root[data-local-skin] .cand-window[data-local-skin]::before { display:none; }
+:root[data-local-skin] .cand-window[data-local-skin] .cand-top-row { background:var(--ime-toolbar-bg);border-color:var(--ime-border);color:var(--fc-code-text); }
+:root[data-local-skin] .cand-window[data-local-skin] .cand-composing { color:var(--fc-code-text);font-family:var(--fc-font); }
+:root[data-local-skin] .cand-window[data-local-skin] .cand-caret { background:var(--ime-accent); }
+:root[data-local-skin] .cand-window[data-local-skin] :is(.cand-num,.cand-word) { font-family:var(--fc-font); }
+:root[data-local-skin] .cand-window[data-local-skin] :is(.cand-bottom-strip,.cand-arrows .sharp-icon),:root[data-local-skin] .cand-window[data-local-skin] .cand-pill:not(.is-selected) :is(.cand-num,.cand-word) { color:var(--fc-candidate-text); }
+:root[data-local-skin] .cand-window[data-local-skin] .cand-pill.is-selected { background:var(--ime-cand-active-bg);color:var(--ime-cand-active-text);box-shadow:none; }
+:root[data-local-skin] :is(.mini-pill,.mode-pill,.btn-restore,.clip-icon-btn,.fb-tool-btn,.sb-btn,.ai-secondary,.ai-primary):active:not(:disabled) { translate:var(--fc-press-offset) var(--fc-press-offset); }
+@media(max-width:860px) { .skin-local-grid { grid-template-columns:1fr; } }

@@ -1,0 +1,74 @@
+{
+  "format": "fangcun.skin",
+  "schemaVersion": 1,
+  "id": "fangcun.template",
+  "name": "皮肤制作模板",
+  "version": 1,
+  "author": "方寸",
+  "license": "模板素材仅为占位",
+  "baseSkin": "mechanical",
+  "assetScale": 3,
+  "fontFamily": "sans",
+  "pressOffsetDp": 1,
+  "preview": "preview.png",
+  "themes": {
+    "light": {
+      "colors": {
+        "background": "#EEEDE9",
+        "surface": "#FFFFFF",
+        "border": "#8A9389",
+        "function": "#51743B",
+        "text": "#172017",
+        "muted": "#596356",
+        "accent": "#51743B",
+        "onAccent": "#FFFFFF",
+        "pressed": "#D9E4D1",
+        "toolbar": "#F4F3EF",
+        "candidateBackground": "#F4F3EF",
+        "candidateText": "#172017",
+        "selection": "#51743B",
+        "onSelection": "#FFFFFF",
+        "keyText": "#172017",
+        "keyHint": "#596356",
+        "functionText": "#FFFFFF",
+        "codeText": "#172017"
+      },
+      "glow": [
+        "#8ABE78",
+        "#A2C9D2",
+        "#D8B9CE",
+        "#D7C59A"
+      ],
+      "images": {}
+    },
+    "dark": {
+      "colors": {
+        "background": "#172019",
+        "surface": "#29382B",
+        "border": "#8BA383",
+        "function": "#406239",
+        "text": "#F0F4EC",
+        "muted": "#B8C8AE",
+        "accent": "#A6D591",
+        "onAccent": "#152710",
+        "pressed": "#3B5037",
+        "toolbar": "#213024",
+        "candidateBackground": "#213024",
+        "candidateText": "#F0F4EC",
+        "selection": "#A6D591",
+        "onSelection": "#152710",
+        "keyText": "#F0F4EC",
+        "keyHint": "#B8C8AE",
+        "functionText": "#FFFFFF",
+        "codeText": "#F0F4EC"
+      },
+      "glow": [
+        "#8ABE78",
+        "#A2C9D2",
+        "#D8B9CE",
+        "#D7C59A"
+      ],
+      "images": {}
+    }
+  }
+}

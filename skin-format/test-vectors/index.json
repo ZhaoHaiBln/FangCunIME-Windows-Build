@@ -1,0 +1,702 @@
+{
+  "format": "fangcun.skin-test-vectors",
+  "version": 1,
+  "vectors": [
+    {
+      "name": "valid_stored",
+      "file": "valid_stored.fcskin",
+      "valid": true,
+      "reason": "Standard STORE ZIP",
+      "sha256": "bd17d812955eeabf19d907707eed4bc32a5c4e7c02eee3707eec5c7a3322ec09",
+      "bytes": 1511
+    },
+    {
+      "name": "valid_deflated",
+      "file": "valid_deflated.fcskin",
+      "valid": true,
+      "reason": "Standard DEFLATE ZIP",
+      "sha256": "a7fa0d5cc54d5f0b3324a3c8c15e257d2a1df7fefe4aa67842cb83f3828281f1",
+      "bytes": 845
+    },
+    {
+      "name": "valid_deflated_descriptor",
+      "file": "valid_deflated_descriptor.fcskin",
+      "valid": true,
+      "reason": "Streaming DEFLATE with signed data descriptors",
+      "sha256": "2a357b0a77c75297b5645b22101bee6da20a46c734d874bc9d58f5bd9fd0e364",
+      "bytes": 877
+    },
+    {
+      "name": "valid_stored_descriptor",
+      "file": "valid_stored_descriptor.fcskin",
+      "valid": true,
+      "reason": "Seekable readers support streaming STORE with descriptors",
+      "sha256": "c843f6a7d8ecce097c53ac2ed52a2536371630c57f98d92be88a702d9fcefa6e",
+      "bytes": 1543
+    },
+    {
+      "name": "valid_unsigned_descriptor",
+      "file": "valid_unsigned_descriptor.fcskin",
+      "valid": true,
+      "reason": "Descriptor signature is optional in standard ZIP",
+      "sha256": "074ee8620ec0ba0674fcf12bd2072a965cace8d33e554b0a3e5ffc886c8cd4df",
+      "bytes": 869
+    },
+    {
+      "name": "valid_archive_comment",
+      "file": "valid_archive_comment.fcskin",
+      "valid": true,
+      "reason": "Standard ZIP archive comment",
+      "sha256": "cf78e2598009321407a870d46f92635b8fc1879e770bac0fdd828375a604179c",
+      "bytes": 859
+    },
+    {
+      "name": "valid_deflate_options",
+      "file": "valid_deflate_options.fcskin",
+      "valid": true,
+      "reason": "DEFLATE option flags are not encryption",
+      "sha256": "8b38f7e03efa546b23538e03fa197dce957469f794d8974683189aad5d36243a",
+      "bytes": 845
+    },
+    {
+      "name": "valid_shared_image",
+      "file": "valid_shared_image.fcskin",
+      "valid": true,
+      "reason": "One image can supply all roles and both modes without duplicate pixel charges",
+      "sha256": "1d787138977826cd21c81eafc5144047722682020ee5929aebc7fcea3c8388e6",
+      "bytes": 931
+    },
+    {
+      "name": "valid_directories_and_all_roles",
+      "file": "valid_directories_and_all_roles.fcskin",
+      "valid": true,
+      "reason": "Declared parent directories and every scale/role",
+      "sha256": "3444da4650f6956b5049d5a52379713539c3282ba335a9eb15783c1ed4f64367",
+      "bytes": 1550
+    },
+    {
+      "name": "valid_64_entries",
+      "file": "valid_64_entries.fcskin",
+      "valid": true,
+      "reason": "The 64-entry limit includes legitimate parent directories",
+      "sha256": "eeac33a5605fcba24335dce2cf142f34a25d88dece586e590a87c86b2f1f7a8b",
+      "bytes": 9889
+    },
+    {
+      "name": "zip_entry_limit",
+      "file": "zip_entry_limit.fcskin",
+      "valid": false,
+      "reason": "65 entries exceed the v1 maximum",
+      "sha256": "9519d0b8834d0afc184050beb331465de0d049f7f022b395683bc6ae9ee46625",
+      "bytes": 10095
+    },
+    {
+      "name": "manifest_unknown_field",
+      "file": "manifest_unknown_field.fcskin",
+      "valid": false,
+      "reason": "Unknown manifest fields are forbidden",
+      "sha256": "b96e08920e0a3ee8d286ecf4db6dfb7320656aefe8ac33edda7e021637450ab0",
+      "bytes": 861
+    },
+    {
+      "name": "manifest_missing_dark",
+      "file": "manifest_missing_dark.fcskin",
+      "valid": false,
+      "reason": "Both Light and Dark are required",
+      "sha256": "e10fa8b8cb421cca07bcb02ba60facd63c06e7319f58b70c47ed83d502ac28b6",
+      "bytes": 741
+    },
+    {
+      "name": "manifest_extra_mode",
+      "file": "manifest_extra_mode.fcskin",
+      "valid": false,
+      "reason": "There is no pack-defined system mode",
+      "sha256": "e3693888a017393d682ec2062083cbdea2e4da2a9caa33ef5ac32295c8219974",
+      "bytes": 859
+    },
+    {
+      "name": "manifest_missing_color",
+      "file": "manifest_missing_color.fcskin",
+      "valid": false,
+      "reason": "All 18 color roles are required",
+      "sha256": "9969dfccb09a8b0ee24feb5810c0e6505843fa8ab76b6194edb2b5b04a881fc5",
+      "bytes": 841
+    },
+    {
+      "name": "manifest_unknown_color",
+      "file": "manifest_unknown_color.fcskin",
+      "valid": false,
+      "reason": "Unknown color roles are forbidden",
+      "sha256": "60df40319c3a9dcbf97664be1d7d0f27e410e32526d242396544bef0d9d09666",
+      "bytes": 857
+    },
+    {
+      "name": "manifest_color_url",
+      "file": "manifest_color_url.fcskin",
+      "valid": false,
+      "reason": "Colors cannot contain URLs",
+      "sha256": "cc90b42efc075391cb5f99589b3b40f6662dd078216e71332a9b6fb7bf33a5f5",
+      "bytes": 866
+    },
+    {
+      "name": "manifest_boolean_schema",
+      "file": "manifest_boolean_schema.fcskin",
+      "valid": false,
+      "reason": "A boolean is not an integer schema token",
+      "sha256": "dd992d34282635233ee745e7f7d4f136dddb888eadfc7a3323ebc0adb427fbc4",
+      "bytes": 850
+    },
+    {
+      "name": "manifest_float_schema",
+      "file": "manifest_float_schema.fcskin",
+      "valid": false,
+      "reason": "Integer fields require integer JSON tokens",
+      "sha256": "d79d71ad3b01e0d26f9ede36e847a5bbd0d2ecad2341ae60fe1da88480d5a6c5",
+      "bytes": 848
+    },
+    {
+      "name": "manifest_boolean_version",
+      "file": "manifest_boolean_version.fcskin",
+      "valid": false,
+      "reason": "A boolean is not an integer version",
+      "sha256": "dc4c916d3a666ee17497edbd72f92aed43c6dacf917d5a79a721719cf5b0ebf4",
+      "bytes": 849
+    },
+    {
+      "name": "manifest_float_version",
+      "file": "manifest_float_version.fcskin",
+      "valid": false,
+      "reason": "Integral floats are not integer JSON tokens",
+      "sha256": "7749d33c0403d759103c33e1a1c4c0129c727331e121ced57040a9e7c5e578a3",
+      "bytes": 848
+    },
+    {
+      "name": "manifest_boolean_scale",
+      "file": "manifest_boolean_scale.fcskin",
+      "valid": false,
+      "reason": "Asset scale cannot be boolean",
+      "sha256": "e256e810244d89659efa516aecc7af65fab8a09706a4454f78046b68b3761200",
+      "bytes": 847
+    },
+    {
+      "name": "manifest_float_scale",
+      "file": "manifest_float_scale.fcskin",
+      "valid": false,
+      "reason": "Asset scale requires an integer token",
+      "sha256": "f09304c26a6620b327732a3676c7e37e141b0160019110c49ccd8cbda88869f1",
+      "bytes": 847
+    },
+    {
+      "name": "manifest_boolean_press",
+      "file": "manifest_boolean_press.fcskin",
+      "valid": false,
+      "reason": "Press offset cannot be boolean",
+      "sha256": "550e2b38129867f87325e4f2a1d6cb322594131a7130e2817ee034e02e39238e",
+      "bytes": 848
+    },
+    {
+      "name": "manifest_nan_press",
+      "file": "manifest_nan_press.fcskin",
+      "valid": false,
+      "reason": "NaN is not a finite JSON number",
+      "sha256": "134baf1ae0353a967dcdf021789067a0881b69f6ec6501bc7b7a0b2fc6db55e1",
+      "bytes": 848
+    },
+    {
+      "name": "manifest_blank_name",
+      "file": "manifest_blank_name.fcskin",
+      "valid": false,
+      "reason": "Names cannot be whitespace only",
+      "sha256": "5f71e8380e5717afe73ed19801674a290a0d22c1227ca6a6336492120d842b64",
+      "bytes": 830
+    },
+    {
+      "name": "manifest_control_name",
+      "file": "manifest_control_name.fcskin",
+      "valid": false,
+      "reason": "Display strings cannot contain control characters",
+      "sha256": "f0f08d284046b26910ea941644c1c691dccdde368250ca6c27a9c756a61edab0",
+      "bytes": 828
+    },
+    {
+      "name": "manifest_preview_url",
+      "file": "manifest_preview_url.fcskin",
+      "valid": false,
+      "reason": "External images are forbidden",
+      "sha256": "23623a9f05c8d2a7b7e70dec4de443c51a6b5865bc839a91f291aa212d9c8c80",
+      "bytes": 864
+    },
+    {
+      "name": "manifest_preview_traversal",
+      "file": "manifest_preview_traversal.fcskin",
+      "valid": false,
+      "reason": "Image paths cannot traverse parents",
+      "sha256": "09dfdf60f69b031ed94cdae8da22c0f4388c19c6cf75b5f8fd5a1fdbe37495d6",
+      "bytes": 848
+    },
+    {
+      "name": "manifest_preview_absolute",
+      "file": "manifest_preview_absolute.fcskin",
+      "valid": false,
+      "reason": "Image paths must be relative",
+      "sha256": "e3b1ea063a81e88b2ef4a0bad7e659377b374268243860fc0cb6dd3d3f164de5",
+      "bytes": 846
+    },
+    {
+      "name": "manifest_preview_wrong_type",
+      "file": "manifest_preview_wrong_type.fcskin",
+      "valid": false,
+      "reason": "Only PNG assets are supported",
+      "sha256": "55e3951b91faa4fe00a84630aea8e2fb645eb9f92b434776950912c181c609e7",
+      "bytes": 846
+    },
+    {
+      "name": "manifest_android_nine_patch",
+      "file": "manifest_android_nine_patch.fcskin",
+      "valid": false,
+      "reason": "Android source nine-patch files are not ordinary pack PNGs",
+      "sha256": "529af30f03a84956e884a8c9825ec64bcd37ed73d9df28999b6f6949cda3a67d",
+      "bytes": 846
+    },
+    {
+      "name": "path_reserved_preview",
+      "file": "path_reserved_preview.fcskin",
+      "valid": false,
+      "reason": "Windows device names are not portable PNG asset names",
+      "sha256": "8a2e9f3579439c40f0b1a677e986dcefee9ee5c857c3f8ca29be81e4506ac87f",
+      "bytes": 837
+    },
+    {
+      "name": "path_reserved_role",
+      "file": "path_reserved_role.fcskin",
+      "valid": false,
+      "reason": "Reserved device names are forbidden for image roles too",
+      "sha256": "37188c0f3bffe6d1a0cb83dd251fa57315c5a1923427d0c6195700e5b71a1c7b",
+      "bytes": 1050
+    },
+    {
+      "name": "path_reserved_parent",
+      "file": "path_reserved_parent.fcskin",
+      "valid": false,
+      "reason": "Every image path component must work on Android and Windows",
+      "sha256": "f13f6d9aa625b15a436242280bc694a0a8069e7f7d60dc85ff1b0b8ff6dbfbef",
+      "bytes": 849
+    },
+    {
+      "name": "manifest_duplicate_key",
+      "file": "manifest_duplicate_key.fcskin",
+      "valid": false,
+      "reason": "Duplicate JSON keys are rejected even when values match",
+      "sha256": "e949b04626ba62a1f1580d5cfd19ed042b32c3f1a3a9960fed608902982b6c1a",
+      "bytes": 846
+    },
+    {
+      "name": "manifest_nested_duplicate_key",
+      "file": "manifest_nested_duplicate_key.fcskin",
+      "valid": false,
+      "reason": "Nested duplicate JSON keys are rejected",
+      "sha256": "8a316cc219fe36231724910c26593080791b6d81730111e252df029c6505146c",
+      "bytes": 847
+    },
+    {
+      "name": "manifest_utf8_bom",
+      "file": "manifest_utf8_bom.fcskin",
+      "valid": false,
+      "reason": "v1 manifest is UTF-8 without a BOM",
+      "sha256": "3ac91d2cfa5bcb304a744c065f130640d28336aefaacc023c25569f2b3f59fc9",
+      "bytes": 850
+    },
+    {
+      "name": "manifest_invalid_utf8",
+      "file": "manifest_invalid_utf8.fcskin",
+      "valid": false,
+      "reason": "Invalid UTF-8 cannot be replaced silently",
+      "sha256": "9377e0fd778b32a9f4895a8d6f7f66b502813c300af7c5384963471ee6db40ee",
+      "bytes": 846
+    },
+    {
+      "name": "manifest_unicode_surrogate",
+      "file": "manifest_unicode_surrogate.fcskin",
+      "valid": false,
+      "reason": "Unpaired Unicode surrogates are not valid display text",
+      "sha256": "290dc14acc7263b0058c8f7cc94c529fa41d2960a8a7345f7d9ebf2baab8a18a",
+      "bytes": 828
+    },
+    {
+      "name": "manifest_unknown_role",
+      "file": "manifest_unknown_role.fcskin",
+      "valid": false,
+      "reason": "Image role names are fixed",
+      "sha256": "00b7cac39f5877255519e93de53bcf272d030de055538678e279631632f2f319",
+      "bytes": 885
+    },
+    {
+      "name": "manifest_boolean_insets",
+      "file": "manifest_boolean_insets.fcskin",
+      "valid": false,
+      "reason": "Insets cannot contain booleans",
+      "sha256": "174cfb7aa482360175731ac746c831d243eb8afd884594c57426322e9dfc3ce6",
+      "bytes": 888
+    },
+    {
+      "name": "manifest_float_insets",
+      "file": "manifest_float_insets.fcskin",
+      "valid": false,
+      "reason": "Insets require integer tokens",
+      "sha256": "828a41714e95ee880f9773dcf7a49e537297d97f620fd09dc3c44fa3267a7024",
+      "bytes": 887
+    },
+    {
+      "name": "manifest_non_slice_insets",
+      "file": "manifest_non_slice_insets.fcskin",
+      "valid": false,
+      "reason": "Only nineSlice accepts nonzero insets",
+      "sha256": "9ea00b7c6626d5a42ba9f58968b7a6ea3531d7bcc261b5bbf6d883f2090181ba",
+      "bytes": 885
+    },
+    {
+      "name": "image_slice_out_of_bounds",
+      "file": "image_slice_out_of_bounds.fcskin",
+      "valid": false,
+      "reason": "Opposing borders must leave a nonempty image center",
+      "sha256": "98c253dcb7e17d9ac74a07727a7ba2a6f12a241c739e243fb69fa64a27501588",
+      "bytes": 886
+    },
+    {
+      "name": "zip_undeclared_png",
+      "file": "zip_undeclared_png.fcskin",
+      "valid": false,
+      "reason": "Unreferenced image files are forbidden",
+      "sha256": "e21fe5ba1b0fd389192b2170668e59a3de2ac8c2df2730587835c5270082c367",
+      "bytes": 1013
+    },
+    {
+      "name": "zip_extra_file",
+      "file": "zip_extra_file.fcskin",
+      "valid": false,
+      "reason": "Only manifest and declared PNGs are allowed",
+      "sha256": "6b6ec369d1fd84b7f349c6fe4987a5f191e22b837d5697c57ad90f51b7513af9",
+      "bytes": 955
+    },
+    {
+      "name": "zip_traversal",
+      "file": "zip_traversal.fcskin",
+      "valid": false,
+      "reason": "ZIP paths cannot escape their private skin directory",
+      "sha256": "84ebb76a36dbf224436c7997079a0cb058863ee274a042492cc250252e63a240",
+      "bytes": 1019
+    },
+    {
+      "name": "zip_absolute",
+      "file": "zip_absolute.fcskin",
+      "valid": false,
+      "reason": "ZIP paths cannot escape their private skin directory",
+      "sha256": "6426a05ff6ae572981bb9c55c8c91f4a4d34cbebf224cf86b8562d56983d79b7",
+      "bytes": 1015
+    },
+    {
+      "name": "zip_backslash",
+      "file": "zip_backslash.fcskin",
+      "valid": false,
+      "reason": "ZIP paths cannot escape their private skin directory",
+      "sha256": "b42a3ae00f7857e8b1a926c3416c545ed652787bbc708388ec406f975ecb2ef6",
+      "bytes": 1019
+    },
+    {
+      "name": "zip_symlink",
+      "file": "zip_symlink.fcskin",
+      "valid": false,
+      "reason": "Unix links are forbidden",
+      "sha256": "1f07ec3b1244d407d7b60f692ea62b31157b95a9e02ed9c650c22f9352c7fb72",
+      "bytes": 845
+    },
+    {
+      "name": "zip_reparse",
+      "file": "zip_reparse.fcskin",
+      "valid": false,
+      "reason": "Windows reparse attributes are forbidden",
+      "sha256": "c68337f46f80f50b2efda04745a74731d5f0f7bca419549913230d01ecb37c9d",
+      "bytes": 845
+    },
+    {
+      "name": "zip_orphan_directory",
+      "file": "zip_orphan_directory.fcskin",
+      "valid": false,
+      "reason": "Directory entries must be parents of declared regular files",
+      "sha256": "bbaf7a65d827e2137603983146fe045b772b39523ea63352cd1cc8f33a6e47f8",
+      "bytes": 937
+    },
+    {
+      "name": "zip_duplicate_file",
+      "file": "zip_duplicate_file.fcskin",
+      "valid": false,
+      "reason": "Duplicate ZIP entries are forbidden",
+      "sha256": "9b5605372041ab702271c9f8d84de6cb8f15bb8b09b968dd95ef8e88924a2aad",
+      "bytes": 1015
+    },
+    {
+      "name": "zip_local_name_mismatch",
+      "file": "zip_local_name_mismatch.fcskin",
+      "valid": false,
+      "reason": "Local and central path bytes must match",
+      "sha256": "06795a07a24571b1045b8b1aef3f09c839880884949f6714598940aa5885ae85",
+      "bytes": 845
+    },
+    {
+      "name": "zip_local_method_mismatch",
+      "file": "zip_local_method_mismatch.fcskin",
+      "valid": false,
+      "reason": "Local and central compression methods must match",
+      "sha256": "f0512c9a64178a99ea3f96a31d03d260dc48bedf34ca6ea68ce160e306f1d4ff",
+      "bytes": 845
+    },
+    {
+      "name": "zip_local_flags_mismatch",
+      "file": "zip_local_flags_mismatch.fcskin",
+      "valid": false,
+      "reason": "Local and central flags must match",
+      "sha256": "c0f2c51ad0eb560e8bfdb69929f6fc805f385083348a7c910196c00bf1ff5912",
+      "bytes": 845
+    },
+    {
+      "name": "zip_encrypted_flag",
+      "file": "zip_encrypted_flag.fcskin",
+      "valid": false,
+      "reason": "Encrypted archives are unsupported",
+      "sha256": "dace16757624eb1faa7b1e81d5497a80ec5f582c466557fe965fff5477cfef11",
+      "bytes": 845
+    },
+    {
+      "name": "zip_unsupported_flag",
+      "file": "zip_unsupported_flag.fcskin",
+      "valid": false,
+      "reason": "Unsupported ZIP processing flags are rejected",
+      "sha256": "ab61177d39560a1548890b7a16c778227c9567552c8dd522cae5dd4428fde607",
+      "bytes": 845
+    },
+    {
+      "name": "zip_unsupported_compression",
+      "file": "zip_unsupported_compression.fcskin",
+      "valid": false,
+      "reason": "Only STORE and DEFLATE are supported",
+      "sha256": "3f2bb5b0920b0f38e8f1ed140cbb9901dd51f5940ee0d5b4885e1470315d45ba",
+      "bytes": 971
+    },
+    {
+      "name": "zip64_extra",
+      "file": "zip64_extra.fcskin",
+      "valid": false,
+      "reason": "ZIP64 extra fields are not part of v1",
+      "sha256": "4bc1ea8387e3f92dcd8b7de88be796e4ce91e2b9b1731057a36df7759318772a",
+      "bytes": 925
+    },
+    {
+      "name": "zip_multivolume",
+      "file": "zip_multivolume.fcskin",
+      "valid": false,
+      "reason": "Multi-volume EOCD is forbidden",
+      "sha256": "bb1175c88d7f65629be3f1c6a7961101bc02c99c1b015744a56bd5289a1e37b5",
+      "bytes": 845
+    },
+    {
+      "name": "zip_entry_other_disk",
+      "file": "zip_entry_other_disk.fcskin",
+      "valid": false,
+      "reason": "Every central entry belongs to disk zero",
+      "sha256": "9e01648085b1d72dbeaee342800a867e8db01b30cfee3139135e8687eff00a0b",
+      "bytes": 845
+    },
+    {
+      "name": "zip_overlapping_records",
+      "file": "zip_overlapping_records.fcskin",
+      "valid": false,
+      "reason": "Local entries cannot alias or overlap",
+      "sha256": "614df66133f1a08135f96f372cb0dab55bbccffcaad473df5ae4fb6d6ef7c51c",
+      "bytes": 845
+    },
+    {
+      "name": "zip_malformed_extra",
+      "file": "zip_malformed_extra.fcskin",
+      "valid": false,
+      "reason": "Extra field lengths must remain inside their metadata record",
+      "sha256": "f8ab1fab503a875ba003e78353feb39a245c5371808ed7a0a5eaa4b3c3e0773a",
+      "bytes": 855
+    },
+    {
+      "name": "zip_truncated",
+      "file": "zip_truncated.fcskin",
+      "valid": false,
+      "reason": "Truncated EOCD is rejected",
+      "sha256": "e9f59a939766e54b12593f60d39578db1ed387788d2458fd080c527e211e785c",
+      "bytes": 836
+    },
+    {
+      "name": "zip_self_extracting_prefix",
+      "file": "zip_self_extracting_prefix.fcskin",
+      "valid": false,
+      "reason": "Self-extracting prefixes are not v1 ZIPs",
+      "sha256": "7620012f9adc869ce76ae3b0d8be0e1a3bd043065e12136c5686efeba5ff13f5",
+      "bytes": 848
+    },
+    {
+      "name": "zip_trailing_bytes",
+      "file": "zip_trailing_bytes.fcskin",
+      "valid": false,
+      "reason": "EOCD must cover the end of the archive",
+      "sha256": "db3e67d490e8381b94a4a292e3ea393f5a76013140236d0c609e48fff650fa8d",
+      "bytes": 853
+    },
+    {
+      "name": "zip_crc_failure",
+      "file": "zip_crc_failure.fcskin",
+      "valid": false,
+      "reason": "CRC is checked while reading an entry",
+      "sha256": "ae49c6b691e4d6455087a2763400c673cfbf5c70bd11cc7db58d6b329d3f51e5",
+      "bytes": 1511
+    },
+    {
+      "name": "png_crc_failure",
+      "file": "png_crc_failure.fcskin",
+      "valid": false,
+      "reason": "PNG chunk CRCs are checked",
+      "sha256": "530c3b98e853a8ab558d9d089ee8c6f5090751d6fe4db410334834e582ac650d",
+      "bytes": 845
+    },
+    {
+      "name": "png_truncated",
+      "file": "png_truncated.fcskin",
+      "valid": false,
+      "reason": "PNG IEND must be complete",
+      "sha256": "1473a5c8304e0706c907bbadc69d8e33eabf93f2a549c7df372a043ef856a471",
+      "bytes": 839
+    },
+    {
+      "name": "png_invalid_zlib",
+      "file": "png_invalid_zlib.fcskin",
+      "valid": false,
+      "reason": "IDAT must contain a complete zlib stream",
+      "sha256": "21aefcfa5b308d06664b3a4093b506e151c01df812dea3f665f6e1d0da7da311",
+      "bytes": 834
+    },
+    {
+      "name": "png_inflated_extra",
+      "file": "png_inflated_extra.fcskin",
+      "valid": false,
+      "reason": "Extra decoded scanline data is rejected",
+      "sha256": "4a562d4b5176dc4b901e83f26f2ea9331aa1405808401ea25d1c97586d59841a",
+      "bytes": 844
+    },
+    {
+      "name": "png_inflated_short",
+      "file": "png_inflated_short.fcskin",
+      "valid": false,
+      "reason": "Decoded pixel data must match the declared dimensions",
+      "sha256": "4f5ae173490db3e7755e82e383bbd13dae59ee0713e69794280b664dee89ca59",
+      "bytes": 836
+    },
+    {
+      "name": "png_invalid_filter",
+      "file": "png_invalid_filter.fcskin",
+      "valid": false,
+      "reason": "PNG row filters must be 0 through 4",
+      "sha256": "65ca5d494fe423046069fb073a25a2edcc6660dd7890bd9e25bc920a5ee719ca",
+      "bytes": 845
+    },
+    {
+      "name": "png_sixteen_bit",
+      "file": "png_sixteen_bit.fcskin",
+      "valid": false,
+      "reason": "Only eight-bit PNG is supported",
+      "sha256": "a128cccab24eed47b10aa89518eb978e0dabe067c85d5010f3947aee678af994",
+      "bytes": 845
+    },
+    {
+      "name": "png_indexed",
+      "file": "png_indexed.fcskin",
+      "valid": false,
+      "reason": "Only RGB and RGBA PNG is supported",
+      "sha256": "1f375034adb7a55708ae8b887f9a404adf9fe568c0e4bfd437f4cb469a78cc9d",
+      "bytes": 845
+    },
+    {
+      "name": "png_interlaced",
+      "file": "png_interlaced.fcskin",
+      "valid": false,
+      "reason": "Interlaced PNG is unsupported",
+      "sha256": "35e31f2eb0b8e0e50cc8d7edab118d0ea5ffad79cc52ee9c84a30b27c75bf496",
+      "bytes": 846
+    },
+    {
+      "name": "png_animated",
+      "file": "png_animated.fcskin",
+      "valid": false,
+      "reason": "APNG control chunks are forbidden",
+      "sha256": "f54547d6be93f8f7506fe12466bd8a3cd4662e86611678981aea6ac8c5ae0dab",
+      "bytes": 859
+    },
+    {
+      "name": "png_unknown_critical_chunk",
+      "file": "png_unknown_critical_chunk.fcskin",
+      "valid": false,
+      "reason": "Unknown critical PNG chunks are rejected",
+      "sha256": "547fd7ffdf90263a6a17298aa243325d5e6c60db891032f6ba268a12536d45eb",
+      "bytes": 855
+    },
+    {
+      "name": "png_trailing_bytes",
+      "file": "png_trailing_bytes.fcskin",
+      "valid": false,
+      "reason": "The image must end at IEND",
+      "sha256": "d77daa158a2d4edc839756ecc88ac32ef6704d695ce0ab5305d3df1ec9fa8618",
+      "bytes": 850
+    },
+    {
+      "name": "png_dimension_limit",
+      "file": "png_dimension_limit.fcskin",
+      "valid": false,
+      "reason": "Dimensions are capped before pixel decoding",
+      "sha256": "aa6a72d66660b1b675f95df2f9603aa74b38af445ff96fe22cb1f5e55777b7b5",
+      "bytes": 858
+    },
+    {
+      "name": "png_duplicate_header",
+      "file": "png_duplicate_header.fcskin",
+      "valid": false,
+      "reason": "IHDR must appear exactly once at the start",
+      "sha256": "e80d95a894b9408b0d03e1d18615501a61f8411b8db8c8964d45d4f581da8deb",
+      "bytes": 845
+    },
+    {
+      "name": "png_preview_file_limit",
+      "file": "png_preview_file_limit.fcskin",
+      "valid": false,
+      "reason": "Each image and preview has its own byte budget",
+      "sha256": "6c77317bf75f6d123c6befbfc084ba47faf2a20448cf9241c54333edecf4ffa7",
+      "bytes": 1929
+    },
+    {
+      "name": "png_asset_file_limit",
+      "file": "png_asset_file_limit.fcskin",
+      "valid": false,
+      "reason": "Each image and preview has its own byte budget",
+      "sha256": "c6f5905c6451bcba6888446e98133ed63d198065aa8bc4d7ce259357ad8a8d78",
+      "bytes": 5192
+    },
+    {
+      "name": "png_total_pixel_budget",
+      "file": "png_total_pixel_budget.fcskin",
+      "valid": false,
+      "reason": "Five compressible 2048-square images exceed the aggregate decoded budget",
+      "sha256": "de046a4904f58acb1b67998348cb7a79b3848abe0450452daac08f6ef0944c1f",
+      "bytes": 3138
+    },
+    {
+      "name": "zip_expanded_budget",
+      "file": "zip_expanded_budget.fcskin",
+      "valid": false,
+      "reason": "Individually small compressed entries cannot exceed the total expanded byte budget",
+      "sha256": "5d40e617acdc38f6149e9573f54a18195ef96f9c75dd6cf3f3e74560ff92982b",
+      "bytes": 54668
+    }
+  ]
+}

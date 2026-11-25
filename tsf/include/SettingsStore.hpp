@@ -14,6 +14,8 @@ struct AppSettings {
     bool mixedInput = true;
     bool chinesePunctuation = true;
     SkinPreset skin = SkinPreset::WoodType;
+    std::string customSkinId;
+    std::string customSkinHash;
     ThemeMode themeMode = ThemeMode::System;
     bool darkMode = false; // legacy / explicit override when themeMode != System
     int firstCandidateSize = 20;

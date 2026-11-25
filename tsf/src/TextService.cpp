@@ -264,6 +264,8 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* ptim, TfClientId tid, DWORD) 
     candidateWindow_->setWheelPaging(settings_.wheelPaging);
     candidateWindow_->setLayout(parseCandidateLayout(settings_.candidateLayout));
     candidateWindow_->create(nullptr);
+    candidateWindow_->setCustomSkin(SettingsStore::getDataDirectory(), settings_.customSkinId, settings_.customSkinHash,
+                                    SettingsStore::effectiveDarkMode(settings_));
 
     keyHandler_ = std::make_unique<KeyHandler>(
         [this](uint64_t sessionGen, std::string input, InputScheme scheme, bool mixed) -> uint64_t {
@@ -520,6 +522,8 @@ void TextService::applySettings(const AppSettings& newSettings) {
         keyHandler_->setPageSize(static_cast<size_t>(settings_.pageSize));
     }
     if (candidateWindow_) {
+        candidateWindow_->setCustomSkin(SettingsStore::getDataDirectory(), settings_.customSkinId, settings_.customSkinHash,
+                                        SettingsStore::effectiveDarkMode(settings_));
         candidateWindow_->setPageSize(static_cast<size_t>(settings_.pageSize));
         candidateWindow_->setWheelPaging(settings_.wheelPaging);
         candidateWindow_->setLayout(parseCandidateLayout(settings_.candidateLayout));

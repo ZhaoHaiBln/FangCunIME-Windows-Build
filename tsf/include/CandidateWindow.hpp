@@ -2,12 +2,14 @@
 
 #include "fangcun/InputScheme.hpp"
 #include "fangcun/ThemeConfig.hpp"
+#include "CustomSkinCache.hpp"
 
 #include <d2d1.h>
 #include <dwrite.h>
 #include <windows.h>
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -54,6 +56,7 @@ public:
         int firstCandidateSize,
         bool typingGlow = true);
 
+    void setCustomSkin(const std::filesystem::path& dataRoot, const std::string& id, const std::string& hash, bool dark);
     void moveNearCaret(const RECT& caretRect);
     void show();
     void hide();
@@ -86,8 +89,18 @@ private:
     bool ensureDeviceResources();
     void releaseDeviceResources();
     void drawTianzigeLogoD2D(float x, float y, float size);
+    void consumeCustomSkin();
+    void rebuildCustomBitmaps();
+    void releaseCustomBitmaps();
+    void drawCustomImage(skin::ImageRole role, D2D1_RECT_F bounds);
 
     HWND hwnd_ = nullptr;
+    std::unique_ptr<CustomSkinCache> customCache_;
+    std::shared_ptr<const LoadedCustomSkin> customSkin_;
+    std::array<ID2D1Bitmap*,8> customBitmaps_{};
+    std::filesystem::path customDataRoot_;
+    std::string customId_, customHash_;
+    bool customDark_ = false;
     SelectCallback onSelect_;
     SettingsCallback onOpenSettings_;
     PageCallback onPageChange_;
