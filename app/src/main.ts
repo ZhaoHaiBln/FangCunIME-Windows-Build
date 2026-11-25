@@ -22,6 +22,7 @@ export interface AppSettings {
   candidateLayout: "double" | "single" | "vertical";
   fullWidth: boolean;
   traditional: boolean;
+  readonly revision?: string;
 }
 
 export interface ClipboardItem {
@@ -148,6 +149,7 @@ let clipItems: ClipboardItem[] = [];
 let clipEnabled = true;
 let clipboardBusy = false;
 let clipboardEventRevision = 0;
+let clipboardEnabledReadSequence = 0;
 let clipQuery = "";
 let altvQuery = "";
 let previewDarkCand: boolean | null = null;
@@ -229,7 +231,7 @@ async function runSettingsQueue(): Promise<void> {
         try {
           const result = request.reset
             ? await invoke<AppSettings>("reset_settings")
-            : await invoke<AppSettings>("save_settings", { settings: { ...confirmedSettings, ...request.patch } });
+            : await invoke<AppSettings>("patch_settings", { patch: request.patch });
           confirmedSettings = result;
           saved = true;
         } catch {
@@ -799,11 +801,28 @@ document.getElementById("first-plus")!.addEventListener("click", () => {
 });
 
 // Clipboard Controls
+/** Ignore delayed boolean event payloads; read the current committed runtime. */
+async function refreshClipboardEnabled(): Promise<boolean> {
+  if (!nativeApp) return true;
+  const sequence = ++clipboardEnabledReadSequence;
+  try {
+    const enabled = await invoke<boolean>("get_clipboard_enabled");
+    if (sequence !== clipboardEnabledReadSequence) return false;
+    clipEnabled = enabled;
+    confirmedSettings = { ...confirmedSettings, clipboardEnabled: enabled };
+    renderClipboard();
+    return true;
+  } catch {
+    if (sequence === clipboardEnabledReadSequence) showToast("无法读取监听状态，请重试");
+    return false;
+  }
+}
+
 async function setClipboardWatch(want: boolean): Promise<void> {
   const saved = await clipboardAction(() => invoke<boolean>("set_clipboard_enabled", { enabled: want }),
-    (enabled) => { clipEnabled = enabled; }, () => { clipEnabled = want; },
+    () => {}, () => { clipEnabled = want; confirmedSettings = { ...confirmedSettings, clipboardEnabled: want }; },
     "监听设置失败，请重试");
-  if (saved && nativeApp) showToast(clipEnabled ? "已开启剪贴板监听" : "已暂停剪贴板监听");
+  if (saved && nativeApp && await refreshClipboardEnabled()) showToast(clipEnabled ? "已开启剪贴板监听" : "已暂停剪贴板监听");
 }
 
 async function clearUnpinnedClipboard(): Promise<void> {
@@ -951,7 +970,7 @@ async function init(): Promise<void> {
   } finally { finishInitialSettingsLoad(); }
   try {
     clipItems = await invoke<ClipboardItem[]>("list_clipboard");
-    clipEnabled = await invoke<boolean>("get_clipboard_enabled");
+    await refreshClipboardEnabled();
   } catch { showToast("剪贴板暂时不可用，请重试"); }
   try {
     await listen<ClipboardItem[]>("clipboard://changed", (event) => {
@@ -959,9 +978,12 @@ async function init(): Promise<void> {
       clipItems = event.payload;
       renderClipboard();
     });
-    await listen<boolean>("clipboard://enabled-changed", (event) => {
-      clipEnabled = event.payload;
-      renderClipboard();
+    await listen<boolean>("clipboard://enabled-changed", () => {
+      void refreshClipboardEnabled();
+      void refreshConfirmedSettings();
+    });
+    await listen("clipboard://persistence-error", () => {
+      showToast("剪贴板历史保存失败，请检查存储后重试");
     });
     await listen<AppSettings>("settings://changed", () => { void refreshConfirmedSettings(); });
     await listen<boolean>("ime://english-changed", (event) => {
@@ -987,6 +1009,14 @@ async function init(): Promise<void> {
   } catch {
     showToast("界面同步暂时不可用，请重新打开方寸设置");
   }
+  // Catch changes between the initial snapshot and listener registration.
+  await refreshConfirmedSettings();
+  await refreshClipboardEnabled();
+  try {
+    if (await invoke<string | null>("clipboard_persistence_status")) {
+      showToast("剪贴板历史保存失败，请检查存储后重试");
+    }
+  } catch { /* Existing operation/status messages remain visible. */ }
   render();
   renderClipboard();
   renderFloatingStatusBar();

@@ -462,24 +462,58 @@
           </section>
 
           <!-- TAB: AI 助手 -->
-          <section class="tab-pane" data-pane="ai">
-            <h2 class="pane-title">AI 助手与跨端协同</h2>
-            <div class="settings-list-card">
-              <div class="setting-row">
-                <div>
-                  <div class="setting-label">手机与电脑剪贴板共享</div>
-                  <div class="muted-sub">跨网络加密互传文字，在剪贴板中配对和管理</div>
-                </div>
-                <button id="share-open-settings" class="mini-pill" type="button">前往设置</button>
-              </div>
-              <div class="setting-row">
-                <div>
-                  <div class="setting-label">候选词智能润色与快捷翻译</div>
-                  <div class="muted-sub">在候选栏按 Tab 触发中英互译与公文润色</div>
-                </div>
-                <span class="setting-value-tag">即将推出</span>
-              </div>
+          <section id="ai-workbench" class="tab-pane" data-pane="ai">
+            <div class="pane-header-row">
+              <h2 class="pane-title">AI 助手</h2>
+              <button id="ai-open-config" class="mini-pill" type="button" aria-controls="ai-config">服务设置</button>
             </div>
+            <p id="ai-config-state" class="ai-state" role="status" aria-live="polite">正在读取 AI 设置…</p>
+            <details id="ai-config" class="section-card ai-config">
+              <summary>AI 服务与密钥 <span id="ai-config-summary">默认关闭</span></summary>
+              <form id="ai-config-form" autocomplete="off">
+                <label class="ai-enable-row"><span><strong>启用 AI 助手</strong><small>只在你点击生成或开始录音后发送内容</small></span><input id="ai-enabled" class="ui-switch" type="checkbox" /></label>
+                <div class="ai-config-grid">
+                  <fieldset><legend>文字服务</legend>
+                    <label>服务商<select id="ai-text-provider"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="volcengine">火山豆包</option><option value="siliconflow">硅基流动</option><option value="compatible">自定义兼容服务</option></select></label>
+                    <label>文字 API Key <span id="ai-text-key-state" class="ai-field-note">未保存</span><input id="ai-text-key" type="password" maxlength="8192" autocomplete="new-password" placeholder="填新 Key；留空保留当前地址的已保存 Key" /></label>
+                    <label class="ai-delete-key"><input id="ai-clear-text-key" type="checkbox" />删除当前所选服务地址的文字 Key</label>
+                    <details id="ai-text-advanced" class="ai-advanced"><summary>高级：地址与模型</summary>
+                      <label>文字服务地址<input id="ai-text-url" type="url" maxlength="2048" spellcheck="false" /></label>
+                      <label>文字模型<input id="ai-text-model" type="text" maxlength="256" spellcheck="false" /></label>
+                      <p>Gemini 默认使用 Flash-Lite；复杂内容可手动选 Flash。自定义服务按服务商提供的模型填写。</p>
+                    </details>
+                  </fieldset>
+                  <fieldset><legend>语音识别</legend>
+                    <label>服务商<select id="ai-speech-provider"><option value="openai">OpenAI</option><option value="gemini">Gemini</option></select></label>
+                    <label>语音 API Key <span id="ai-speech-key-state" class="ai-field-note">未保存</span><input id="ai-speech-key" type="password" maxlength="8192" autocomplete="new-password" placeholder="与文字 Key 独立保存，不会回填" /></label>
+                    <label class="ai-delete-key"><input id="ai-clear-speech-key" type="checkbox" />删除当前所选服务地址的语音 Key</label>
+                    <details id="ai-speech-advanced" class="ai-advanced"><summary>高级：地址与模型</summary>
+                      <label>语音服务地址<input id="ai-speech-url" type="url" maxlength="2048" spellcheck="false" /></label>
+                      <label>语音模型<input id="ai-speech-model" type="text" maxlength="256" spellcheck="false" /></label>
+                      <p>录音结束后识别；单次最多 60 秒。支持录音转写，不会冒充实时转写。</p>
+                    </details>
+                  </fieldset>
+                </div>
+                <p class="ai-field-note">密钥由本机账户加密保护。换服务或地址后，保存会检查该地址自己的 Key；不会把旧地址的 Key 发到新站点。</p>
+                <div class="ai-actions"><button id="ai-save" class="ai-primary" type="submit" disabled>保存 AI 设置</button><button id="ai-reload" class="ai-secondary" type="button" disabled>重新载入已保存设置</button></div>
+                <p id="ai-save-status" class="ai-feedback" role="status" aria-live="polite"></p>
+              </form>
+            </details>
+            <div class="section-card ai-studio">
+              <div id="ai-modes" class="ai-modes" role="tablist" aria-label="AI 功能">
+                <button type="button" data-ai-mode="voice" role="tab" aria-selected="true">语音转文字</button><button type="button" data-ai-mode="write" role="tab" aria-selected="false">帮写</button><button type="button" data-ai-mode="rewrite" role="tab" aria-selected="false">改写</button><button type="button" data-ai-mode="translate" role="tab" aria-selected="false">快译</button><button type="button" data-ai-mode="ask" role="tab" aria-selected="false">问 AI</button>
+              </div>
+              <div id="ai-service-note" class="ai-service-note">先保存服务设置，再开始使用</div>
+              <div id="ai-source-block" hidden><label for="ai-source" id="ai-source-label">输入内容</label><textarea id="ai-source" maxlength="8000" rows="4" placeholder="输入要处理的内容，或点击口述输入" spellcheck="false"></textarea><p id="ai-source-count" class="ai-field-note">0 / 8000 字</p></div>
+              <label id="ai-language-row" hidden>翻译为<select id="ai-target-language"><option value="英语">英语</option><option value="中文">中文</option><option value="日语">日语</option><option value="韩语">韩语</option><option value="法语">法语</option><option value="德语">德语</option></select></label>
+              <p id="ai-recording-note" class="ai-field-note">音频在结束录音后发送至所选语音服务，结果先留在本页。</p>
+              <div class="ai-record-state"><span id="ai-status-light" aria-hidden="true"></span><span id="ai-operation-state" role="status" aria-live="polite">待开始</span><span id="ai-record-time" hidden>0 / 60 秒</span></div>
+              <div id="ai-meter" class="ai-meter" role="meter" aria-label="实时麦克风输入强度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span></span></div>
+              <div class="ai-actions"><button id="ai-record" class="ai-secondary" type="button" disabled>开始录音</button><button id="ai-generate" class="ai-primary" type="button" hidden disabled>生成文字</button><button id="ai-cancel" class="ai-secondary" type="button" disabled>取消</button></div>
+              <p id="ai-operation-error" class="ai-error" role="alert" hidden></p>
+              <section class="ai-result-panel" aria-labelledby="ai-result-label"><div class="ai-result-header"><h3 id="ai-result-label">识别结果</h3><button id="ai-copy" class="ai-secondary" type="button" disabled>复制结果</button></div><pre id="ai-result" tabindex="0">识别结果会显示在这里</pre><p id="ai-copy-status" class="ai-feedback" role="status" aria-live="polite"></p><p class="ai-field-note">结果留在此页；复制后请到目标输入框手动粘贴，不会自动发送到聊天。</p></section>
+            </div>
+            <div class="settings-list-card ai-share-card"><div class="setting-row"><div><div class="setting-label">手机与电脑剪贴板共享</div><div class="muted-sub">跨网络加密互传文字，在剪贴板中配对和管理</div></div><button id="share-open-settings" class="mini-pill" type="button">前往设置</button></div></div>
           </section>
 
           <!-- TAB: 关于 -->
@@ -565,5 +599,6 @@
 
     <div id="toast" class="toast"></div>
     <script type="module" src="./src/main.ts"></script>
+    <script type="module" src="./src/ai.ts"></script>
   </body>
 </html>

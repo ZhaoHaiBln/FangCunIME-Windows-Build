@@ -456,7 +456,8 @@ LRESULT CALLBACK TextService::msgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
         return 0;
     }
     if (self && msg == SettingsWindow::settingsChangedMessage()) {
-        self->applySettings(SettingsStore::load());
+        const auto loaded = SettingsStore::load();
+        if (loaded.readSucceeded) self->applySettings(loaded);
         return 0;
     }
     if (self && msg == setEnglishMessage()) {
@@ -538,9 +539,9 @@ void TextService::applySettings(const AppSettings& newSettings) {
 }
 
 void TextService::setComposition(ITfComposition* comp) {
+    if (comp) comp->AddRef();
     if (composition_) composition_->Release();
     composition_ = comp;
-    if (composition_) composition_->AddRef();
 }
 
 void TextService::updateCandidateWindowPosition(const RECT& caretRect) {
@@ -559,6 +560,9 @@ void TextService::resetAllState(ITfContext* context) {
         KeyAction act = keyHandler_->resetContext();
         if (context && composition_) {
             auto* session = new (std::nothrow) UpdateCompositionEditSession(this, context, L"", false, true);
+            // Detach before scheduling: the next document must never reuse
+            // this range with its own edit cookie, even if cleanup is delayed.
+            setComposition(nullptr);
             if (session) {
                 HRESULT hrSession = S_OK;
                 context->RequestEditSession(clientId_, session, TF_ES_ASYNCDONTCARE | TF_ES_READWRITE, &hrSession);
@@ -573,6 +577,8 @@ void TextService::resetAllState(ITfContext* context) {
 }
 
 void TextService::applyKeyAction(ITfContext* context, const KeyAction& action) {
+    KeyAction visible = action;
+    bool editRejected = action.commitText && !context;
     if (context) {
         if (activeContext_ != context) {
             if (activeContext_) activeContext_->Release();
@@ -580,34 +586,68 @@ void TextService::applyKeyAction(ITfContext* context, const KeyAction& action) {
             activeContext_->AddRef();
         }
         if (action.commitText) {
+            std::optional<std::wstring> followup;
+            if (action.updateComposition && !action.compositionText.empty()) {
+                followup = utf8ToWide(action.compositionText);
+            }
             auto* session = new (std::nothrow) UpdateCompositionEditSession(
-                this, context, applyOutputStyle(utf8ToWide(action.textToCommit), settings_), true, false);
+                this, context, applyOutputStyle(utf8ToWide(action.textToCommit), settings_), true, false, std::move(followup));
+            bool committed = false;
+            bool followupApplied = false;
             if (session) {
-                HRESULT hrSession = S_OK;
-                context->RequestEditSession(clientId_, session, TF_ES_SYNC | TF_ES_READWRITE, &hrSession);
+                HRESULT hrSession = E_FAIL;
+                const HRESULT requested = context->RequestEditSession(
+                    clientId_, session, TF_ES_SYNC | TF_ES_READWRITE, &hrSession);
+                // A failed followup may leave the prefix committed. Inspect the
+                // edit's receipt instead of retrying based only on HRESULT.
+                const bool synchronous = SUCCEEDED(requested) && hrSession != TF_S_ASYNC;
+                committed = synchronous && session->commitAccepted();
+                followupApplied = synchronous && session->followupApplied();
                 session->Release();
+            }
+            editRejected = !committed || !followupApplied;
+            if (keyHandler_ && action.commitReceipt) {
+                auto recovery = keyHandler_->acknowledgeCommit(action.commitReceipt, committed, followupApplied);
+                if (recovery.handled) {
+                    visible = std::move(recovery);
+                    // Restore once, synchronously. Never queue the failed
+                    // commit for automatic retry: Space/Enter can retry it.
+                    auto* restore = new (std::nothrow) UpdateCompositionEditSession(
+                        this, context, utf8ToWide(visible.compositionText), false, visible.compositionText.empty());
+                    if (restore) {
+                        HRESULT hrRestore = E_FAIL;
+                        context->RequestEditSession(clientId_, restore, TF_ES_SYNC | TF_ES_READWRITE, &hrRestore);
+                        restore->Release();
+                    }
+                }
             }
         } else if (action.updateComposition) {
             bool cancelOnly = action.compositionText.empty();
             auto* session = new (std::nothrow) UpdateCompositionEditSession(
                 this, context, utf8ToWide(action.compositionText), false, cancelOnly);
             if (session) {
-                HRESULT hrSession = S_OK;
-                context->RequestEditSession(clientId_, session, TF_ES_SYNC | TF_ES_READWRITE, &hrSession);
+                HRESULT hrSession = E_FAIL;
+                const HRESULT requested = context->RequestEditSession(
+                    clientId_, session, TF_ES_SYNC | TF_ES_READWRITE, &hrSession);
+                editRejected = FAILED(requested) || FAILED(hrSession) || hrSession == TF_S_ASYNC;
                 session->Release();
-            }
+            } else editRejected = true;
         }
+    } else if (keyHandler_ && action.commitReceipt) {
+        const auto recovery = keyHandler_->acknowledgeCommit(action.commitReceipt, false);
+        if (recovery.handled) visible = recovery;
     }
+    if (editRejected || action.inputLimitReached) MessageBeep(MB_ICONWARNING);
 
     if (candidateWindow_) {
-        if (action.hideCandidates) {
+        if (visible.hideCandidates) {
             candidateWindow_->hide();
-        } else if (action.showCandidates && keyHandler_) {
+        } else if (visible.showCandidates && keyHandler_ && !keyHandler_->composing().empty()) {
             candidateWindow_->update(
-                keyHandler_->composing(),
-                action.candidates,
-                action.selectedIndex,
-                action.candidatesPending,
+                keyHandler_->displayComposing(),
+                visible.candidates,
+                visible.selectedIndex,
+                visible.candidatesPending,
                 keyHandler_->scheme(),
                 settings_.skin,
                 SettingsStore::effectiveDarkMode(settings_),
@@ -755,11 +795,16 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* pic, WPARAM wParam, LPARAM lPara
         return S_OK;
     }
     if (ki.ctrl && !ki.alt && !ki.win && !ki.shift && (wParam == VK_OEM_PERIOD || ki.ascii == '.')) {
-        settings_.chinesePunctuation = !settings_.chinesePunctuation;
-        keyHandler_->setChinesePunctuation(settings_.chinesePunctuation);
-        SettingsStore::save(settings_);
-        SettingsWindow::broadcastSettingsChanged();
-        postToCompanion(2, 0);
+        auto next = settings_;
+        next.chinesePunctuation = !next.chinesePunctuation;
+        if (SettingsStore::save(next)) {
+            applySettings(next);
+            SettingsWindow::broadcastSettingsChanged();
+            postToCompanion(2, 0);
+        } else {
+            // Do not change the running mode when persistence did not succeed.
+            MessageBeep(MB_ICONWARNING);
+        }
         *pfEaten = TRUE;
         return S_OK;
     }
@@ -819,9 +864,10 @@ STDMETHODIMP TextService::OnPreservedKey(ITfContext*, REFGUID, BOOL* pfEaten) {
 
 // ITfCompositionSink
 STDMETHODIMP TextService::OnCompositionTerminated(TfEditCookie, ITfComposition* pComposition) {
-    if (pComposition && pComposition == composition_) {
-        setComposition(nullptr);
-    }
+    // Intentional EndComposition detaches the old object first. Its delayed
+    // callback must not clear the following draft or a different document.
+    if (!pComposition || pComposition != composition_) return S_OK;
+    setComposition(nullptr);
     resetAllState();
     return S_OK;
 }

@@ -2,6 +2,7 @@
 
 #include "fangcun/InputScheme.hpp"
 #include "fangcun/ThemeConfig.hpp"
+#include "fangcun/SettingsIni.hpp"
 
 #include <filesystem>
 #include <string>
@@ -28,6 +29,9 @@ struct AppSettings {
     bool fullWidth = false;
     bool traditional = false;
     bool clipboardEnabled = true; // Preserve the companion listener preference on fallback edits.
+    // Loaded snapshot metadata stays in memory; never serialized as preferences.
+    fangcun::settings::Values savedValues;
+    bool readSucceeded = true;
 };
 
 class SettingsStore {
@@ -38,7 +42,8 @@ public:
     static bool isSystemDarkMode();
     static bool effectiveDarkMode(const AppSettings& settings);
     static AppSettings load();
-    static void save(const AppSettings& settings);
+    static bool save(AppSettings& settings);
+    static AppSettings confirmed(const AppSettings& settings);
 };
 
 } // namespace fangcun::tsf

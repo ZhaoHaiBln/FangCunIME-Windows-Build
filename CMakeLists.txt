@@ -160,4 +160,13 @@ if(FANGCUN_BUILD_TESTS)
     endif()
 
     add_test(NAME fangcun_core_and_keyhandler_tests COMMAND fangcun_tests)
+
+    add_executable(fangcun_settings_tests tests/test_settings_ini.cpp)
+    target_include_directories(fangcun_settings_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/core/include")
+    if(MSVC)
+        target_compile_options(fangcun_settings_tests PRIVATE /W4 /utf-8)
+    else()
+        target_compile_options(fangcun_settings_tests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME fangcun_settings_merge_tests COMMAND fangcun_settings_tests)
 endif()

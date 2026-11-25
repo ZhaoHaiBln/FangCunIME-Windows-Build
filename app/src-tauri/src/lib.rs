@@ -1,5 +1,9 @@
+mod ai;
+mod ai_commands;
 mod clipboard;
+mod clipboard_history;
 mod settings;
+mod settings_io;
 mod sync_manager;
 mod sync_protocol;
 mod sync_transport;
@@ -129,28 +133,74 @@ async fn clipboard_share_reset(
 }
 
 #[tauri::command]
-fn load_settings() -> AppSettings {
-    settings::load_from_disk()
+async fn load_settings() -> Result<AppSettings, String> {
+    tauri::async_runtime::spawn_blocking(settings::try_load_from_disk)
+        .await
+        .map_err(|_| "读取设置未完成，请重试".to_string())?
+}
+
+fn publish_settings(app: &AppHandle, clipboard: &Arc<Mutex<ClipboardState>>, saved: &AppSettings) {
+    // Release the clipboard mutex before dispatching any window operations.
+    if let Ok(mut guard) = clipboard.lock() {
+        guard.enabled = saved.clipboard_enabled;
+    }
+    apply_window_appearance(app, saved);
+    let _ = app.emit("settings://changed", saved);
+    let _ = app.emit("clipboard://enabled-changed", saved.clipboard_enabled);
 }
 
 #[tauri::command]
-fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
-    let saved = settings::save_to_disk(settings)?;
-    apply_window_appearance(&app, &saved);
-    let _ = app.emit("settings://changed", &saved);
-    Ok(saved)
+async fn save_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: AppSettings,
+) -> Result<AppSettings, String> {
+    let clipboard = Arc::clone(&state.clipboard);
+    tauri::async_runtime::spawn_blocking(move || {
+        settings::save_to_disk_and(settings, |saved| publish_settings(&app, &clipboard, saved))
+    })
+    .await
+    .map_err(|_| "保存设置未完成，请重新读取后重试".to_string())?
 }
 
 #[tauri::command]
-fn reset_settings(app: AppHandle) -> Result<AppSettings, String> {
-    let saved = settings::save_to_disk(AppSettings::default())?;
-    apply_window_appearance(&app, &saved);
-    let _ = app.emit("settings://changed", &saved);
-    Ok(saved)
+async fn patch_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    patch: serde_json::Value,
+) -> Result<AppSettings, String> {
+    let clipboard = Arc::clone(&state.clipboard);
+    tauri::async_runtime::spawn_blocking(move || {
+        settings::patch_to_disk(patch, |saved| publish_settings(&app, &clipboard, saved))
+    })
+    .await
+    .map_err(|_| "保存设置未完成，请重新读取后重试".to_string())?
+}
+
+#[tauri::command]
+async fn reset_settings(app: AppHandle, state: State<'_, AppState>) -> Result<AppSettings, String> {
+    let clipboard = Arc::clone(&state.clipboard);
+    tauri::async_runtime::spawn_blocking(move || {
+        settings::save_to_disk_and(AppSettings::default(), |saved| {
+            publish_settings(&app, &clipboard, saved)
+        })
+    })
+    .await
+    .map_err(|_| "恢复设置未完成，请重试".to_string())?
+}
+
+fn cancel_ai_window(app: &AppHandle, label: &str) {
+    if let Some(manager) = app.try_state::<Arc<ai::AiManager>>() {
+        manager.cancel_window(label);
+    }
+    if let Some(window) = app.get_webview_window(label) {
+        let _ = window.emit("ai://window-hidden", ());
+    }
 }
 
 #[tauri::command]
 fn hide_window(app: AppHandle) {
+    cancel_ai_window(&app, "main");
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.hide();
     }
@@ -158,6 +208,7 @@ fn hide_window(app: AppHandle) {
 
 #[tauri::command]
 fn hide_clipboard_window(app: AppHandle) {
+    cancel_ai_window(&app, "clipboard");
     if let Some(win) = app.get_webview_window("clipboard") {
         let _ = win.hide();
     }
@@ -218,58 +269,82 @@ fn copy_clipboard_item(
     Ok(ordered)
 }
 
-#[tauri::command]
-fn toggle_pin_clipboard(
+async fn change_clipboard(
     app: AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-) -> Vec<ClipboardItem> {
-    let ordered = {
-        let mut guard = state.clipboard.lock().unwrap();
-        if let Some(item) = guard.items.iter_mut().find(|i| i.id == id) {
-            item.pinned = !item.pinned;
+    clipboard: Arc<Mutex<ClipboardState>>,
+    change: impl FnOnce(&mut ClipboardState) -> Result<(), String> + Send + 'static,
+) -> Result<Vec<ClipboardItem>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut guard = clipboard
+            .lock()
+            .map_err(|_| "剪贴板状态不可用，请重试".to_string())?;
+        let previous = guard.items.clone();
+        if let Err(message) = change(&mut guard) {
+            guard.items = previous;
+            return Err(message);
         }
-        guard.persist();
-        guard.ordered_items()
-    };
-    let _ = app.emit("clipboard://changed", &ordered);
-    ordered
+        if guard.persist().is_err() {
+            guard.items = previous;
+            return Err("剪贴板历史保存失败，原记录已保留".to_string());
+        }
+        let ordered = guard.ordered_items();
+        drop(guard);
+        let _ = app.emit("clipboard://changed", &ordered);
+        Ok(ordered)
+    })
+    .await
+    .map_err(|_| "剪贴板操作未完成，请重试".to_string())?
 }
 
 #[tauri::command]
-fn delete_clipboard_item(
+async fn toggle_pin_clipboard(
     app: AppHandle,
     state: State<'_, AppState>,
     id: String,
-) -> Vec<ClipboardItem> {
-    let ordered = {
-        let mut guard = state.clipboard.lock().unwrap();
-        guard.items.retain(|i| i.id != id);
-        guard.persist();
-        guard.ordered_items()
-    };
-    let _ = app.emit("clipboard://changed", &ordered);
-    ordered
+) -> Result<Vec<ClipboardItem>, String> {
+    change_clipboard(app, Arc::clone(&state.clipboard), move |clipboard| {
+        let item = clipboard
+            .items
+            .iter_mut()
+            .find(|item| item.id == id)
+            .ok_or_else(|| "未找到该剪贴板条目".to_string())?;
+        item.pinned = !item.pinned;
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
-fn clear_clipboard(
+async fn delete_clipboard_item(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<Vec<ClipboardItem>, String> {
+    change_clipboard(app, Arc::clone(&state.clipboard), move |clipboard| {
+        if !clipboard.items.iter().any(|item| item.id == id) {
+            return Err("未找到该剪贴板条目".to_string());
+        }
+        clipboard.items.retain(|item| item.id != id);
+        Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
+async fn clear_clipboard(
     app: AppHandle,
     state: State<'_, AppState>,
     keep_pinned: bool,
-) -> Vec<ClipboardItem> {
-    let ordered = {
-        let mut guard = state.clipboard.lock().unwrap();
+) -> Result<Vec<ClipboardItem>, String> {
+    change_clipboard(app, Arc::clone(&state.clipboard), move |clipboard| {
         if keep_pinned {
-            guard.items.retain(|i| i.pinned);
+            clipboard.items.retain(|item| item.pinned);
         } else {
-            guard.items.clear();
+            clipboard.items.clear();
         }
-        guard.persist();
-        guard.ordered_items()
-    };
-    let _ = app.emit("clipboard://changed", &ordered);
-    ordered
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -278,18 +353,30 @@ fn get_clipboard_enabled(state: State<'_, AppState>) -> bool {
 }
 
 #[tauri::command]
-fn set_clipboard_enabled(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> bool {
-    {
-        let mut guard = state.clipboard.lock().unwrap();
-        guard.enabled = enabled;
-    }
-    let mut s = settings::load_from_disk();
-    s.clipboard_enabled = enabled;
-    if let Ok(saved) = settings::save_to_disk(s) {
-        let _ = app.emit("settings://changed", &saved);
-    }
-    let _ = app.emit("clipboard://enabled-changed", enabled);
-    enabled
+fn clipboard_persistence_status(state: State<'_, AppState>) -> Option<String> {
+    state
+        .clipboard
+        .lock()
+        .ok()
+        .and_then(|guard| guard.persistence_error().map(str::to_string))
+}
+
+#[tauri::command]
+async fn set_clipboard_enabled(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<bool, String> {
+    let clipboard = Arc::clone(&state.clipboard);
+    tauri::async_runtime::spawn_blocking(move || {
+        settings::patch_to_disk(
+            serde_json::json!({ "clipboardEnabled": enabled }),
+            |saved| publish_settings(&app, &clipboard, saved),
+        )
+        .map(|saved| saved.clipboard_enabled)
+    })
+    .await
+    .map_err(|_| "监听设置未保存，请重试".to_string())?
 }
 
 #[tauri::command]
@@ -347,7 +434,12 @@ fn apply_native_chrome(hwnd: windows_sys::Win32::Foundation::HWND, settings: &Ap
     let caption = color_ref(background);
     let foreground = color_ref(text);
     unsafe {
-        let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, (&DWMWCP_DONOTROUND as *const i32).cast(), 4);
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            (&DWMWCP_DONOTROUND as *const i32).cast(),
+            4,
+        );
         let _ = DwmSetWindowAttribute(hwnd, 35, (&caption as *const u32).cast(), 4);
         let _ = DwmSetWindowAttribute(hwnd, 36, (&foreground as *const u32).cast(), 4);
     }
@@ -463,8 +555,13 @@ fn start_hotkey_listener(app: AppHandle) {
                             let _ = app.emit("ime://english-changed", english);
                         }
                         2 => {
-                            let fresh = settings::load_from_disk();
-                            let _ = app.emit("settings://changed", &fresh);
+                            let clipboard = Arc::clone(&app.state::<AppState>().clipboard);
+                            let app = app.clone();
+                            tauri::async_runtime::spawn_blocking(move || {
+                                let _ = settings::publish_current(|fresh| {
+                                    publish_settings(&app, &clipboard, fresh)
+                                });
+                            });
                         }
                         4 => {
                             toggle_clipboard_window(&app);
@@ -499,6 +596,7 @@ pub fn run() {
     let start_in_clipboard = std::env::args().any(|a| a == "--clipboard");
 
     tauri::Builder::default()
+        .manage(Arc::new(ai::AiManager::new(settings::data_dir())))
         .manage(AppState {
             clipboard: clipboard_state,
             share,
@@ -522,7 +620,8 @@ pub fn run() {
             let open_item = MenuItem::with_id(app, "open", "打开方寸设置", true, None::<&str>)?;
             let clip_item =
                 MenuItem::with_id(app, "clipboard", "打开剪贴板 (Alt+V)", true, None::<&str>)?;
-            let status_item = MenuItem::with_id(app, "statusbar", "显示或隐藏状态栏", true, None::<&str>)?;
+            let status_item =
+                MenuItem::with_id(app, "statusbar", "显示或隐藏状态栏", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出方寸伴侣", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open_item, &clip_item, &status_item, &quit_item])?;
 
@@ -555,16 +654,27 @@ pub fn run() {
         })
         .on_window_event(|window, event| match event {
             WindowEvent::ThemeChanged(_) => {
-                let saved = settings::load_from_disk();
-                #[cfg(target_os = "windows")]
-                if let Ok(hwnd) = window.hwnd() {
-                    apply_native_chrome(hwnd.0 as windows_sys::Win32::Foundation::HWND, &saved);
-                }
-                let _ = window.emit("settings://changed", saved);
+                let window = window.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let _ = settings::publish_current(|saved| {
+                        #[cfg(target_os = "windows")]
+                        if let Ok(hwnd) = window.hwnd() {
+                            apply_native_chrome(
+                                hwnd.0 as windows_sys::Win32::Foundation::HWND,
+                                saved,
+                            );
+                        }
+                        let _ = window.emit("settings://changed", saved);
+                    });
+                });
             }
             WindowEvent::CloseRequested { api, .. } => {
+                cancel_ai_window(window.app_handle(), window.label());
                 api.prevent_close();
                 let _ = window.hide();
+            }
+            WindowEvent::Destroyed => {
+                cancel_ai_window(window.app_handle(), window.label());
             }
             WindowEvent::Focused(false) if window.label() == "clipboard" => {
                 let since_show = now_epoch_ms().saturating_sub(
@@ -577,8 +687,15 @@ pub fn run() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
+            ai_commands::ai_get_config,
+            ai_commands::ai_save_config,
+            ai_commands::ai_generate,
+            ai_commands::ai_transcribe,
+            ai_commands::ai_cancel,
+            ai_commands::ai_copy_result,
             load_settings,
             save_settings,
+            patch_settings,
             reset_settings,
             hide_window,
             hide_clipboard_window,
@@ -590,6 +707,7 @@ pub fn run() {
             delete_clipboard_item,
             clear_clipboard,
             get_clipboard_enabled,
+            clipboard_persistence_status,
             set_clipboard_enabled,
             set_english_mode,
             clipboard_share_snapshot,

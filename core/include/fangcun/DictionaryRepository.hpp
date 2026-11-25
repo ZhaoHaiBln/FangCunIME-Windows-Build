@@ -156,6 +156,9 @@ private:
 
     mutable std::mutex queryMutex_;
     bool closed_ = false;
+    // Protected by queryMutex_. A canceled/failed statement is not a valid
+    // negative dictionary result and must never populate any lookup cache.
+    bool queryFailed_ = false;
     sqlite3* flypyDb_ = nullptr;
     sqlite3* pinyinDb_ = nullptr;
 

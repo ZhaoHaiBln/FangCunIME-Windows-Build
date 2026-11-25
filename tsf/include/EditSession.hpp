@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace fangcun::tsf {
@@ -38,14 +39,25 @@ public:
         ITfContext* context,
         std::wstring text,
         bool commit,
-        bool cancelOnly);
+        bool cancelOnly,
+        std::optional<std::wstring> followup = std::nullopt);
+    ~UpdateCompositionEditSession() override;
 
     STDMETHODIMP DoEditSession(TfEditCookie ec) override;
+
+    // A committed prefix must never be retried when only its following draft
+    // failed. RequestEditSession's HRESULT alone cannot express that outcome.
+    bool commitAccepted() const { return commitAccepted_; }
+    bool followupApplied() const { return followupApplied_; }
 
 private:
     std::wstring text_;
     bool commit_;
     bool cancelOnly_;
+    std::optional<std::wstring> followup_;
+    bool commitAccepted_ = false;
+    bool followupApplied_ = false;
+    ITfComposition* expectedCancellation_ = nullptr;
 };
 
 /**
@@ -54,7 +66,11 @@ private:
 class GetCaretRectEditSession : public EditSessionBase {
 public:
     GetCaretRectEditSession(TextService* service, ITfContext* context);
+    ~GetCaretRectEditSession() override;
     STDMETHODIMP DoEditSession(TfEditCookie ec) override;
+
+private:
+    ITfComposition* expectedComposition_ = nullptr;
 };
 
 } // namespace fangcun::tsf

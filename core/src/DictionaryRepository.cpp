@@ -159,6 +159,7 @@ DictionaryLookup DictionaryRepository::lookup(
 
     std::lock_guard<std::mutex> lock(queryMutex_);
     if (closed_ || isCanceled(cancelFlag)) return {};
+    queryFailed_ = false;
 
     std::string cacheKey = makeCacheKey(normalized, scheme);
     DictionaryLookup cached;
@@ -175,7 +176,7 @@ DictionaryLookup DictionaryRepository::lookup(
     if (code.size() <= maximumWordCode(scheme)) {
         words = wholeWords(db, normalized, code, scheme, cancelFlag);
     }
-    if (isCanceled(cancelFlag)) return {};
+    if (queryFailed_ || isCanceled(cancelFlag)) return {};
 
     bool exactWord = std::any_of(words.begin(), words.end(), [&](const DictionaryEntry& e) {
         return e.code == code;
@@ -185,7 +186,7 @@ DictionaryLookup DictionaryRepository::lookup(
     if (!exactWord && code.size() >= 4) {
         sentences = compose(db, normalized, code, scheme, !words.empty(), cancelFlag);
     }
-    if (isCanceled(cancelFlag)) return {};
+    if (queryFailed_ || isCanceled(cancelFlag)) return {};
 
     DictionaryLookup result{std::move(words), std::move(sentences)};
     resultCache_.put(cacheKey, result);
@@ -392,6 +393,7 @@ std::vector<DictionaryEntry> DictionaryRepository::wholeWords(
     std::string exactSql = "SELECT " + cols + " FROM entries WHERE " + col + " = ?" + boundarySql +
                            " ORDER BY weight DESC,len ASC LIMIT 80";
     auto exact = queryWords(db, exactSql, exactArgs, scheme, cancelFlag);
+    if (queryFailed_ || isCanceled(cancelFlag)) return {};
 
     std::vector<std::string> prefixArgs;
     prefixArgs.emplace_back(code);
@@ -400,6 +402,7 @@ std::vector<DictionaryEntry> DictionaryRepository::wholeWords(
     std::string prefixSql = "SELECT " + cols + " FROM entries WHERE " + col + " >= ? AND " + col + " < ?" +
                             boundarySql + " ORDER BY weight DESC,len ASC LIMIT 120";
     auto prefixWords = queryWords(db, prefixSql, prefixArgs, scheme, cancelFlag);
+    if (queryFailed_ || isCanceled(cancelFlag)) return {};
 
     std::vector<DictionaryEntry> out;
     out.reserve(exact.size() + prefixWords.size());
@@ -463,13 +466,18 @@ std::vector<DictionaryEntry> DictionaryRepository::compose(
         }
 
         auto segs = segments(db, codes, scheme, cancelFlag);
+        if (queryFailed_ || isCanceled(cancelFlag)) return {};
         for (const auto& word : segs) {
             if (isCanceled(cancelFlag)) return {};
             size_t end = offset + word.entry.code.size();
             if (end > code.size()) continue;
             if (!boundaryMatches(word.spelling, offset, end, explicitBoundaries)) continue;
             double sc = wordScore(word.entry);
-            std::vector<Path> combined = paths[end];
+            // Every arc consumes nonempty code, so end is later than offset.
+            // Reuse the destination beam instead of copying all previous long
+            // strings for each homophone; order and scoring remain unchanged.
+            std::vector<Path> combined = std::move(paths[end]);
+            combined.reserve(combined.size() + paths[offset].size());
             for (const auto& p : paths[offset]) {
                 combined.push_back({p.text + word.entry.text, p.score + sc});
             }
@@ -508,6 +516,7 @@ std::vector<DictionaryEntry> DictionaryRepository::compose(
         if (remaining.size() > maximum) continue;
 
         auto suffix = suffixWords(db, remaining, scheme, cancelFlag);
+        if (queryFailed_ || isCanceled(cancelFlag)) return {};
         for (const auto& word : suffix) {
             if (word.entry.code.size() <= remaining.size()) continue;
             if (!finalSyllableStarted(word.entry.code, word.spelling, remaining.size(), scheme)) continue;
@@ -565,6 +574,7 @@ std::vector<DictionaryRepository::Word> DictionaryRepository::segments(
                    " = ? ORDER BY weight DESC,len ASC LIMIT 12)";
         }
         auto found = queryWords(db, sql, missing, scheme, cancelFlag);
+        if (queryFailed_ || isCanceled(cancelFlag)) return {};
         std::unordered_map<std::string, std::vector<Word>> grouped;
         for (auto& w : found) {
             grouped[w.entry.code].push_back(std::move(w));
@@ -602,6 +612,7 @@ std::vector<DictionaryRepository::Word> DictionaryRepository::suffixWords(
         std::string(prefix) + upperBoundForScheme(scheme),
     };
     auto res = queryWords(db, sql, args, scheme, cancelFlag);
+    if (queryFailed_ || isCanceled(cancelFlag)) return {};
     suffixCache_.put(key, res);
     return res;
 }
@@ -612,20 +623,29 @@ std::vector<DictionaryRepository::Word> DictionaryRepository::queryWords(
     const std::vector<std::string>& args,
     InputScheme scheme,
     const std::atomic<bool>* cancelFlag) {
-    if (isCanceled(cancelFlag)) return {};
+    if (isCanceled(cancelFlag)) {
+        queryFailed_ = true;
+        return {};
+    }
     sqlQueries_.fetch_add(1, std::memory_order_relaxed);
     sqlite3_progress_handler(db, 500, cancelFlag ? progressCallback : nullptr, const_cast<std::atomic<bool>*>(cancelFlag));
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        queryFailed_ = true;
         return {};
     }
 
     for (size_t i = 0; i < args.size(); ++i) {
-        sqlite3_bind_text(stmt, static_cast<int>(i + 1), args[i].data(), static_cast<int>(args[i].size()), SQLITE_STATIC);
+        if (sqlite3_bind_text(stmt, static_cast<int>(i + 1), args[i].data(), static_cast<int>(args[i].size()), SQLITE_STATIC) != SQLITE_OK) {
+            sqlite3_finalize(stmt);
+            queryFailed_ = true;
+            return {};
+        }
     }
 
     std::vector<Word> result;
+    bool completed = false;
     while (true) {
         if (isCanceled(cancelFlag)) break;
         int rc = sqlite3_step(stmt);
@@ -649,10 +669,15 @@ std::vector<DictionaryRepository::Word> DictionaryRepository::queryWords(
                 std::move(spelling),
             });
         } else {
+            completed = rc == SQLITE_DONE;
             break;
         }
     }
     sqlite3_finalize(stmt);
+    if (!completed || isCanceled(cancelFlag)) {
+        queryFailed_ = true;
+        return {};
+    }
     return result;
 }
 

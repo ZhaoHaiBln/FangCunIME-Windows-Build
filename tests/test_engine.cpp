@@ -4,12 +4,15 @@
 #include "fangcun/InputScheme.hpp"
 #include "fangcun/MixedInput.hpp"
 
+#include <sqlite3.h>
+
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
 #include <iostream>
 #include <mutex>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -45,6 +48,98 @@ int main() {
     FC_ASSERT(FlypyConverter::toCode("shu") == std::optional<std::string>("uu"), "shu -> uu failed");
     FC_ASSERT(FlypyConverter::toCode("shuang") == std::optional<std::string>("ul"), "shuang -> ul failed");
     FC_ASSERT(FlypyConverter::toCode("pin") == std::optional<std::string>("pb"), "pin -> pb failed");
+
+    // Transient SQLite failures must not become durable empty/partial caches.
+    // These databases are isolated fixtures; the packaged dictionary is untouched.
+    {
+        const auto fixtureAssets = tempDataDir / "locked-assets";
+        std::filesystem::create_directories(fixtureAssets);
+        const auto fixtureDb = fixtureAssets / "dict.db";
+        const auto fixtureU8 = fixtureDb.u8string();
+        const std::string fixturePath(reinterpret_cast<const char*>(fixtureU8.data()), fixtureU8.size());
+        sqlite3* raw = nullptr;
+        FC_ASSERT(sqlite3_open(fixturePath.c_str(), &raw) == SQLITE_OK, "Cannot create locked dictionary fixture");
+        std::unique_ptr<sqlite3, decltype(&sqlite3_close)> writer(raw, &sqlite3_close);
+        FC_ASSERT(sqlite3_exec(writer.get(),
+            "CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT);"
+            "INSERT INTO metadata VALUES('entries','745701');"
+            "CREATE TABLE entries(code TEXT,text TEXT,weight INTEGER,len INTEGER);"
+            "CREATE INDEX idx_entries_code ON entries(code);"
+            "INSERT INTO entries VALUES('aa','我',900,1),('bb','爱',800,1),('cc','你',700,1);",
+            nullptr, nullptr, nullptr) == SQLITE_OK, "Cannot initialize locked dictionary fixture");
+        DictionaryRepository dictionary(fixtureAssets, tempDataDir / "locked-data");
+        FC_ASSERT(dictionary.prepare(InputScheme::Flypy), "Fixture must be opened before the external lock");
+        const auto before = dictionary.diagnostics();
+        FC_ASSERT(sqlite3_exec(writer.get(), "BEGIN EXCLUSIVE", nullptr, nullptr, nullptr) == SQLITE_OK,
+                  "Cannot acquire the transient writer lock");
+        FC_ASSERT(dictionary.lookup("aabbcc", InputScheme::Flypy).all().empty(),
+                  "A busy dictionary cannot report partial success");
+        FC_ASSERT(dictionary.diagnostics().sqlQueries > before.sqlQueries,
+                  "The lock fixture must reach actual dictionary SQL");
+        FC_ASSERT(sqlite3_exec(writer.get(), "ROLLBACK", nullptr, nullptr, nullptr) == SQLITE_OK,
+                  "Cannot release the transient writer lock");
+        auto recovered = dictionary.lookup("aabbcc", InputScheme::Flypy).all();
+        FC_ASSERT(std::any_of(recovered.begin(), recovered.end(), [](const DictionaryEntry& entry) {
+            return entry.text == "我爱你";
+        }), "A transient lock must not poison subsequent sentence/segment lookups");
+        const auto afterRecovery = dictionary.diagnostics();
+        FC_ASSERT(!dictionary.lookup("aabbcc", InputScheme::Flypy).all().empty() &&
+                  dictionary.diagnostics().sqlQueries == afterRecovery.sqlQueries,
+                  "A successful recovery must still use the normal result cache");
+    }
+
+    {
+        const auto fixtureAssets = tempDataDir / "partial-assets";
+        std::filesystem::create_directories(fixtureAssets);
+        const auto fixtureU8 = (fixtureAssets / "dict.db").u8string();
+        const std::string fixturePath(reinterpret_cast<const char*>(fixtureU8.data()), fixtureU8.size());
+        sqlite3* raw = nullptr;
+        FC_ASSERT(sqlite3_open(fixturePath.c_str(), &raw) == SQLITE_OK, "Cannot create partial SQL fixture");
+        std::unique_ptr<sqlite3, decltype(&sqlite3_close)> writer(raw, &sqlite3_close);
+        FC_ASSERT(sqlite3_exec(writer.get(),
+            "CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT);"
+            "INSERT INTO metadata VALUES('entries','745701');"
+            "CREATE TABLE raw_entries(code TEXT,text TEXT,weight INTEGER,len INTEGER,broken INTEGER);"
+            "CREATE INDEX idx_fixture_order ON raw_entries(code,weight DESC,len ASC);"
+            "INSERT INTO raw_entries VALUES('aa','我',900,1,0),('aa','啊',800,1,1);"
+            "CREATE VIEW entries AS SELECT code,"
+            "CASE WHEN broken=1 THEN abs(-9223372036854775808) ELSE text END AS text,weight,len FROM raw_entries;",
+            nullptr, nullptr, nullptr) == SQLITE_OK, "Cannot initialize partial SQL fixture");
+        sqlite3_stmt* probe = nullptr;
+        FC_ASSERT(sqlite3_prepare_v2(writer.get(),
+            "SELECT code,text,weight,len FROM entries WHERE code='aa' ORDER BY weight DESC,len ASC LIMIT 80",
+            -1, &probe, nullptr) == SQLITE_OK, "Cannot prepare the partial-row fixture probe");
+        const int firstRow = sqlite3_step(probe);
+        const int failedRow = sqlite3_step(probe);
+        sqlite3_finalize(probe);
+        FC_ASSERT(firstRow == SQLITE_ROW && failedRow == SQLITE_ERROR,
+                  "Fixture must yield one row before its deterministic SQLite error");
+
+        DictionaryRepository dictionary(fixtureAssets, tempDataDir / "partial-data");
+        FC_ASSERT(dictionary.lookup("aa", InputScheme::Flypy).all().empty(),
+                  "A statement that fails after one row must not expose partial candidates");
+        FC_ASSERT(sqlite3_exec(writer.get(), "UPDATE raw_entries SET broken=0", nullptr, nullptr, nullptr) == SQLITE_OK,
+                  "Cannot repair the transient SQL fixture");
+        const auto recovered = dictionary.lookup("aa", InputScheme::Flypy).all();
+        FC_ASSERT(recovered.size() == 2 && recovered[0].text == "我" && recovered[1].text == "啊",
+                  "Partial SQL failure must not poison the exact/prefix result cache");
+        dictionary.close();
+
+        FangCunEngine engine(fixtureAssets, tempDataDir / "frequency-data");
+        const auto unlearned = engine.candidates("aa", InputScheme::Flypy, false);
+        FC_ASSERT(!unlearned.empty() && unlearned.front() == "我",
+                  "Unlearned fixture ordering must follow dictionary weight");
+        engine.learn("啊");
+        for (int repeat = 0; repeat < 3; ++repeat) {
+            const auto learned = engine.candidates("aa", InputScheme::Flypy, false);
+            FC_ASSERT(!learned.empty() && learned.front() == "啊", "Warm frequency snapshot must reflect learning");
+        }
+        engine.clearLearning();
+        const auto cleared = engine.candidates("aa", InputScheme::Flypy, false);
+        FC_ASSERT(!cleared.empty() && cleared.front() == "我",
+                  "Clearing learning must invalidate the frequency snapshot");
+        engine.close();
+    }
 
     // 2. Real Dictionary Engine tests
     {
@@ -100,6 +195,20 @@ int main() {
         FC_ASSERT(containsText(pPinyin, "方寸测试"), "Personal word not found in Pinyin");
         auto pNine = engine.candidates("326428623744", InputScheme::NineKey, false);
         FC_ASSERT(containsText(pNine, "方寸测试"), "Personal word not found in NineKey");
+
+        // Longer typing remains bounded and returns a complete Chinese phrase,
+        // including after an explicitly canceled request for the same code.
+        std::string longFlypy;
+        for (int i = 0; i < 17; ++i) longFlypy += "wo";
+        std::atomic<bool> canceled{true};
+        FC_ASSERT(engine.candidates(longFlypy, InputScheme::Flypy, false, &canceled).empty(),
+                  "Canceled long input must not return results");
+        const auto longCandidates = engine.candidates(longFlypy, InputScheme::Flypy, false);
+        FC_ASSERT(!longCandidates.empty(), "A following uncanceled long query must recover candidates");
+        for (const auto& text : longCandidates) {
+            const auto points = std::count_if(text.begin(), text.end(), [](unsigned char c) { return (c & 0xC0) != 0x80; });
+            FC_ASSERT(points == 17, "Long Flypy composition must retain every syllable without truncating the tail");
+        }
 
         // Test case 8: Async query with generation check
         std::mutex m;

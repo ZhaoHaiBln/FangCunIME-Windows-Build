@@ -1,0 +1,63 @@
+name: FangCun Windows Verify (no installer)
+
+on:
+  push:
+    branches: [codex/input-stability]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      CARGO_BUILD_JOBS: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Compile TSF and C++ tests
+        run: |
+          cmake -S . -B verify-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFANGCUN_BUILD_TSF=ON -DFANGCUN_BUILD_TESTS=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build verify-build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir verify-build --output-on-failure --output-junit native-tests.xml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Check TypeScript and build web resources
+        working-directory: app
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Configure local TLS test tools
+        run: |
+          "FANGCUN_AI_TEST_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
+          $openssl = "C:\Program Files\Git\usr\bin\openssl.exe"
+          if (-not (Test-Path $openssl)) { throw "Local TLS test tool unavailable" }
+          "FANGCUN_AI_TEST_OPENSSL=$openssl" >> $env:GITHUB_ENV
+      - name: Compile actual Tauri adapters and run Rust tests
+        working-directory: app/src-tauri
+        run: |
+          cargo test --lib -- --test-threads=2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload test report only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: input-stability-test-reports
+          path: verify-build/native-tests.xml
+          if-no-files-found: ignore

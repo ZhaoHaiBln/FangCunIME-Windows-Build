@@ -1,4 +1,7 @@
+use crate::settings_io;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -33,6 +36,8 @@ pub struct AppSettings {
     pub full_width: bool,
     #[serde(default)]
     pub traditional: bool,
+    #[serde(default)]
+    pub revision: String,
 }
 
 fn default_candidate_layout() -> String {
@@ -71,6 +76,7 @@ impl Default for AppSettings {
             candidate_layout: default_candidate_layout(),
             full_width: false,
             traditional: false,
+            revision: String::new(),
         }
     }
 }
@@ -122,25 +128,63 @@ fn normalize(mut s: AppSettings) -> AppSettings {
         "light" => false,
         _ => s.system_dark,
     };
-    if !matches!(s.candidate_layout.as_str(), "double" | "single" | "vertical") {
+    if !matches!(
+        s.candidate_layout.as_str(),
+        "double" | "single" | "vertical"
+    ) {
         s.candidate_layout = default_candidate_layout();
     }
     s.page_size = s.page_size.clamp(5, 9);
     s.first_candidate_size = s.first_candidate_size.clamp(16, 30);
     s.key_letter_size = s.key_letter_size.clamp(14, 30);
-    s.key_opacity = s.key_opacity.clamp(0.40, 1.00);
+    s.key_opacity = if s.key_opacity.is_finite() {
+        s.key_opacity.clamp(0.40, 1.00)
+    } else {
+        0.82
+    };
     s
 }
 
 pub fn load_from_disk() -> AppSettings {
-    load_from_path(&settings_path())
+    try_load_from_disk().unwrap_or_else(|_| {
+        // Unknown persistence state must not enable background clipboard capture.
+        AppSettings {
+            clipboard_enabled: false,
+            ..AppSettings::default()
+        }
+    })
 }
 
+pub fn try_load_from_disk() -> Result<AppSettings, String> {
+    try_load_from_path(&settings_path())
+}
+
+fn revision(content: Option<&str>) -> String {
+    match content {
+        Some(value) => format!("{:x}", Sha256::digest(value.as_bytes())),
+        None => "missing".to_string(),
+    }
+}
+
+fn try_load_from_path(path: &Path) -> Result<AppSettings, String> {
+    let content = settings_io::read(path)?;
+    let mut settings = parse_content(content.as_deref().unwrap_or(""));
+    settings.revision = revision(content.as_deref());
+    Ok(settings)
+}
+
+#[cfg(test)]
 fn load_from_path(path: &Path) -> AppSettings {
+    try_load_from_path(path).unwrap()
+}
+
+fn parse_content(content: &str) -> AppSettings {
     let mut s = AppSettings::default();
-    if let Ok(content) = fs::read_to_string(path) {
+    let mut has_theme_mode = false;
+    let mut has_legacy_dark = false;
+    {
         for raw_line in content.lines() {
-            let line = raw_line.trim();
+            let line = raw_line.trim().trim_start_matches('\u{feff}');
             if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
                 continue;
             }
@@ -168,8 +212,12 @@ fn load_from_path(path: &Path) -> AppSettings {
                 }
                 "wheel_paging" => s.wheel_paging = val == "1" || val.eq_ignore_ascii_case("true"),
                 "skin" => s.skin = val.to_string(),
-                "theme_mode" => s.theme_mode = val.to_string(),
+                "theme_mode" => {
+                    has_theme_mode = true;
+                    s.theme_mode = val.to_string();
+                }
                 "dark" | "dark_mode" => {
+                    has_legacy_dark = true;
                     s.dark_mode = val == "1" || val.eq_ignore_ascii_case("true")
                 }
                 "first_candidate_size" => {
@@ -201,20 +249,13 @@ fn load_from_path(path: &Path) -> AppSettings {
             }
         }
     }
+    if !has_theme_mode && has_legacy_dark {
+        s.theme_mode = if s.dark_mode { "dark" } else { "light" }.to_string();
+    }
     normalize(s)
 }
 
-pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
-    let saved = save_to_path(&settings_path(), input)?;
-    notify_tsf_settings_changed();
-    Ok(saved)
-}
-
-fn save_to_path(path: &Path, input: AppSettings) -> Result<AppSettings, String> {
-    let s = normalize(input);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("create settings dir failed: {e}"))?;
-    }
+fn known_values(s: &AppSettings) -> BTreeMap<String, String> {
     let bool_int = |b: bool| if b { 1 } else { 0 };
     let body = format!(
         "scheme={}\nmixed_input={}\nchinese_punctuation={}\nshift_toggle_english={}\ncapslock_bypass={}\npage_size={}\nwheel_paging={}\nskin={}\ntheme_mode={}\ndark={}\ndark_mode={}\nfirst_candidate_size={}\nkey_opacity={:.2}\ntyping_glow={}\nkey_letter_size={}\nkey_letter_bold={}\nclipboard_enabled={}\ncandidate_layout={}\nfull_width={}\ntraditional={}\n",
@@ -239,8 +280,241 @@ fn save_to_path(path: &Path, input: AppSettings) -> Result<AppSettings, String> 
         bool_int(s.full_width),
         bool_int(s.traditional),
     );
-    fs::write(path, body).map_err(|e| format!("write settings.ini failed: {e}"))?;
-    Ok(s)
+
+    body.lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect()
+}
+
+fn merge_document(content: &str, updates: &BTreeMap<String, String>) -> String {
+    let ending = if content.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let mut output = String::new();
+    let mut missing = updates.clone();
+    for raw in content.split_inclusive('\n') {
+        let line = raw.trim_end_matches('\n').trim_end_matches('\r');
+        let trimmed = line.trim().trim_start_matches('\u{feff}');
+        let update = if trimmed.starts_with(['#', ';']) {
+            None
+        } else {
+            trimmed
+                .split_once('=')
+                .and_then(|(key, _)| updates.get(key.trim()).map(|value| (key.trim(), value)))
+        };
+        if let Some((key, value)) = update {
+            output.push_str(key);
+            output.push('=');
+            output.push_str(value);
+            output.push_str(ending);
+            missing.remove(key);
+        } else {
+            output.push_str(raw);
+        }
+    }
+    if !missing.is_empty() && !output.is_empty() && !output.ends_with('\n') {
+        output.push_str(ending);
+    }
+    for (key, value) in missing {
+        output.push_str(&key);
+        output.push('=');
+        output.push_str(&value);
+        output.push_str(ending);
+    }
+    output
+}
+
+fn write_transaction(
+    path: &Path,
+    change: impl FnOnce(&AppSettings) -> Result<(AppSettings, Option<Vec<&'static str>>), String>,
+    committed: impl FnOnce(&AppSettings),
+) -> Result<AppSettings, String> {
+    let _lock = settings_io::lock(path)?;
+    let content = settings_io::read(path)?;
+    let mut latest = parse_content(content.as_deref().unwrap_or(""));
+    latest.revision = revision(content.as_deref());
+    let (input, fields) = change(&latest)?;
+    if !input.key_opacity.is_finite() {
+        return Err("透明度必须是有效数值".to_string());
+    }
+    let mut saved = normalize(input);
+    let mut values = known_values(&saved);
+    if let Some(fields) = fields {
+        values.retain(|key, _| {
+            fields.contains(&key.as_str())
+                || matches!(key.as_str(), "theme_mode" | "dark" | "dark_mode")
+        });
+    }
+    let body = merge_document(content.as_deref().unwrap_or(""), &values);
+    settings_io::replace(path, &body)?;
+    saved.revision = revision(Some(&body));
+    // Commit notifications/runtime changes stay inside the same cross-process write order.
+    committed(&saved);
+    Ok(saved)
+}
+
+pub fn save_to_disk(input: AppSettings) -> Result<AppSettings, String> {
+    save_to_disk_and(input, |_| {})
+}
+
+pub fn save_to_disk_and(
+    input: AppSettings,
+    committed: impl FnOnce(&AppSettings),
+) -> Result<AppSettings, String> {
+    let saved = save_to_path_and(&settings_path(), input, committed)?;
+    notify_tsf_settings_changed();
+    Ok(saved)
+}
+
+fn save_to_path(path: &Path, input: AppSettings) -> Result<AppSettings, String> {
+    save_to_path_and(path, input, |_| {})
+}
+
+fn save_to_path_and(
+    path: &Path,
+    input: AppSettings,
+    committed: impl FnOnce(&AppSettings),
+) -> Result<AppSettings, String> {
+    write_transaction(
+        path,
+        |latest| {
+            if !input.revision.is_empty() && input.revision != latest.revision {
+                return Err("设置已由其他窗口修改，请重新读取后重试".to_string());
+            }
+            Ok((input, None))
+        },
+        committed,
+    )
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SettingsPatch {
+    scheme: Option<String>,
+    mixed_input: Option<bool>,
+    chinese_punctuation: Option<bool>,
+    shift_toggle_english: Option<bool>,
+    caps_lock_bypass: Option<bool>,
+    page_size: Option<i32>,
+    wheel_paging: Option<bool>,
+    skin: Option<String>,
+    theme_mode: Option<String>,
+    first_candidate_size: Option<i32>,
+    key_opacity: Option<f64>,
+    typing_glow: Option<bool>,
+    key_letter_size: Option<i32>,
+    key_letter_bold: Option<bool>,
+    clipboard_enabled: Option<bool>,
+    candidate_layout: Option<String>,
+    full_width: Option<bool>,
+    traditional: Option<bool>,
+}
+
+impl SettingsPatch {
+    fn parse(value: serde_json::Value) -> Result<Self, String> {
+        let map = value.as_object().ok_or("设置修改无效")?;
+        if map.values().any(|value| {
+            value.is_null()
+                || value
+                    .as_str()
+                    .is_some_and(|text| text.chars().any(|c| c.is_control()))
+        }) {
+            return Err("设置值无效，未保存".to_string());
+        }
+        let patch: Self =
+            serde_json::from_value(value).map_err(|_| "设置字段或类型无效，未保存".to_string())?;
+        if patch
+            .scheme
+            .as_deref()
+            .is_some_and(|v| !matches!(v, "flypy" | "pinyin" | "ninekey"))
+            || patch
+                .skin
+                .as_deref()
+                .is_some_and(|v| !matches!(v, "wood_type" | "typewriter" | "terminal" | "brutal"))
+            || patch
+                .theme_mode
+                .as_deref()
+                .is_some_and(|v| !matches!(v, "system" | "light" | "dark"))
+            || patch
+                .candidate_layout
+                .as_deref()
+                .is_some_and(|v| !matches!(v, "double" | "single" | "vertical"))
+            || patch.page_size.is_some_and(|v| !(5..=9).contains(&v))
+            || patch
+                .first_candidate_size
+                .is_some_and(|v| !(16..=30).contains(&v))
+            || patch
+                .key_letter_size
+                .is_some_and(|v| !(14..=30).contains(&v))
+            || patch
+                .key_opacity
+                .is_some_and(|v| !v.is_finite() || !(0.4..=1.0).contains(&v))
+        {
+            return Err("设置值超出支持范围，未保存".to_string());
+        }
+        Ok(patch)
+    }
+
+    fn apply(self, current: &AppSettings) -> (AppSettings, Option<Vec<&'static str>>) {
+        let mut saved = current.clone();
+        let mut changed = Vec::new();
+        macro_rules! field {
+            ($name:ident, $key:literal) => {
+                if let Some(value) = self.$name {
+                    saved.$name = value;
+                    changed.push($key);
+                }
+            };
+        }
+        field!(scheme, "scheme");
+        field!(mixed_input, "mixed_input");
+        field!(chinese_punctuation, "chinese_punctuation");
+        field!(shift_toggle_english, "shift_toggle_english");
+        field!(caps_lock_bypass, "capslock_bypass");
+        field!(page_size, "page_size");
+        field!(wheel_paging, "wheel_paging");
+        field!(skin, "skin");
+        field!(theme_mode, "theme_mode");
+        field!(first_candidate_size, "first_candidate_size");
+        field!(key_opacity, "key_opacity");
+        field!(typing_glow, "typing_glow");
+        field!(key_letter_size, "key_letter_size");
+        field!(key_letter_bold, "key_letter_bold");
+        field!(clipboard_enabled, "clipboard_enabled");
+        field!(candidate_layout, "candidate_layout");
+        field!(full_width, "full_width");
+        field!(traditional, "traditional");
+        (saved, Some(changed))
+    }
+}
+
+pub fn publish_current(committed: impl FnOnce(&AppSettings)) -> Result<(), String> {
+    let path = settings_path();
+    let _lock = settings_io::lock(&path)?;
+    let current = try_load_from_path(&path)?;
+    committed(&current);
+    Ok(())
+}
+
+pub fn patch_to_disk(
+    patch: serde_json::Value,
+    committed: impl FnOnce(&AppSettings),
+) -> Result<AppSettings, String> {
+    let saved = patch_to_path(&settings_path(), patch, committed)?;
+    notify_tsf_settings_changed();
+    Ok(saved)
+}
+
+fn patch_to_path(
+    path: &Path,
+    patch: serde_json::Value,
+    committed: impl FnOnce(&AppSettings),
+) -> Result<AppSettings, String> {
+    let patch = SettingsPatch::parse(patch)?;
+    write_transaction(path, |latest| Ok(patch.apply(latest)), committed)
 }
 
 #[cfg(target_os = "windows")]
@@ -359,6 +633,9 @@ mod tests {
     impl Drop for IniFixture {
         fn drop(&mut self) {
             let _ = fs::remove_file(&self.0);
+            let mut lock = self.0.as_os_str().to_os_string();
+            lock.push(".lock");
+            let _ = fs::remove_file(PathBuf::from(lock));
         }
     }
 
@@ -394,25 +671,20 @@ mod tests {
             assert!(loaded.key_letter_bold);
             assert!(!loaded.typing_glow);
             assert!((loaded.key_opacity - 0.47).abs() < f64::EPSILON);
-            let before = serde_json::to_value(&loaded).unwrap();
+            let mut before = serde_json::to_value(&loaded).unwrap();
+            before.as_object_mut().unwrap().remove("revision");
             save_to_path(&file.0, loaded).unwrap();
             let saved = fs::read_to_string(&file.0).unwrap();
             assert!(saved.contains(&format!("skin={current}\n")));
-            assert_eq!(
-                serde_json::to_value(load_from_path(&file.0)).unwrap(),
-                before
-            );
+            let mut after = serde_json::to_value(load_from_path(&file.0)).unwrap();
+            after.as_object_mut().unwrap().remove("revision");
+            assert_eq!(after, before);
         }
     }
 
     #[test]
     fn all_four_new_skins_round_trip_through_real_ini_without_resetting_explicit_theme() {
-        for skin in [
-            "wood_type",
-            "typewriter",
-            "terminal",
-            "brutal",
-        ] {
+        for skin in ["wood_type", "typewriter", "terminal", "brutal"] {
             let file = IniFixture::new();
             let mut selected = AppSettings::default();
             selected.skin = skin.to_string();
@@ -431,5 +703,201 @@ mod tests {
                 serde_json::to_value(saved).unwrap()
             );
         }
+    }
+
+    #[test]
+    fn independent_patches_merge_under_the_same_real_file_lock_and_keep_unknown_lines() {
+        let file = IniFixture::new();
+        fs::write(&file.0, "# keep this comment\r\nfuture_option = 未知设置\r\nmixed_input=1\r\nclipboard_enabled=1\r\n").unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+        let mut workers = Vec::new();
+        for patch in [
+            serde_json::json!({"skin":"terminal","themeMode":"dark"}),
+            serde_json::json!({"clipboardEnabled":false,"pageSize":9}),
+        ] {
+            let path = file.0.clone();
+            let barrier = barrier.clone();
+            workers.push(std::thread::spawn(move || {
+                barrier.wait();
+                patch_to_path(&path, patch, |_| {}).unwrap()
+            }));
+        }
+        barrier.wait();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        let saved = try_load_from_path(&file.0).unwrap();
+        assert_eq!(saved.skin, "terminal");
+        assert_eq!(saved.theme_mode, "dark");
+        assert_eq!(saved.page_size, 9);
+        assert!(!saved.clipboard_enabled);
+        assert!(saved.mixed_input);
+        let content = fs::read_to_string(&file.0).unwrap();
+        assert!(content.starts_with("# keep this comment\r\nfuture_option = 未知设置\r\n"));
+        assert_eq!(content.matches("future_option").count(), 1);
+    }
+
+    #[test]
+    fn a_stale_full_snapshot_cannot_undo_a_newer_clipboard_patch() {
+        let file = IniFixture::new();
+        save_to_path(&file.0, AppSettings::default()).unwrap();
+        let mut stale = try_load_from_path(&file.0).unwrap();
+        patch_to_path(
+            &file.0,
+            serde_json::json!({"clipboardEnabled":false}),
+            |_| {},
+        )
+        .unwrap();
+        let committed = fs::read(&file.0).unwrap();
+        stale.skin = "brutal".to_string();
+        assert!(save_to_path(&file.0, stale).is_err());
+        assert_eq!(fs::read(&file.0).unwrap(), committed);
+        let updated = patch_to_path(&file.0, serde_json::json!({"skin":"brutal"}), |_| {}).unwrap();
+        assert_eq!(updated.skin, "brutal");
+        assert!(!updated.clipboard_enabled);
+        assert_eq!(
+            updated.revision,
+            try_load_from_path(&file.0).unwrap().revision
+        );
+    }
+
+    #[test]
+    fn failed_reads_and_invalid_patches_preserve_existing_file_and_do_not_notify() {
+        let file = IniFixture::new();
+        fs::write(&file.0, b"\xff\xfeoriginal").unwrap();
+        let original = fs::read(&file.0).unwrap();
+        assert!(try_load_from_path(&file.0).is_err());
+        let notified = std::cell::Cell::new(false);
+        assert!(
+            patch_to_path(&file.0, serde_json::json!({"mixedInput":false}), |_| {
+                notified.set(true)
+            })
+            .is_err()
+        );
+        assert!(!notified.get());
+        assert_eq!(fs::read(&file.0).unwrap(), original);
+        fs::write(&file.0, "scheme=flypy\nfuture=preserved\n").unwrap();
+        let original = fs::read(&file.0).unwrap();
+        for invalid in [
+            serde_json::json!({"themeMode":"dark\nclipboard_enabled=1"}),
+            serde_json::json!({"keyOpacity":null}),
+            serde_json::json!({"keyOpacity":0.2}),
+            serde_json::json!({"pageSize":99}),
+            serde_json::json!({"unknownSetting":true}),
+            serde_json::json!({"systemDark":true}),
+            serde_json::json!({"mixedInput":"false"}),
+        ] {
+            assert!(patch_to_path(&file.0, invalid, |_| notified.set(true)).is_err());
+            assert!(!notified.get());
+            assert_eq!(fs::read(&file.0).unwrap(), original);
+        }
+        let mut invalid = AppSettings::default();
+        invalid.key_opacity = f64::NAN;
+        assert!(save_to_path(&file.0, invalid).is_err());
+        assert_eq!(fs::read(&file.0).unwrap(), original);
+    }
+
+    #[test]
+    fn readers_never_observe_half_a_settings_transaction() {
+        let file = IniFixture::new();
+        patch_to_path(
+            &file.0,
+            serde_json::json!({"pageSize":5,"firstCandidateSize":16}),
+            |_| {},
+        )
+        .unwrap();
+        let path = file.0.clone();
+        let finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let done = finished.clone();
+        let writer = std::thread::spawn(move || {
+            for index in 0..30 {
+                let (page, size) = if index % 2 == 0 { (9, 30) } else { (5, 16) };
+                patch_to_path(
+                    &path,
+                    serde_json::json!({"pageSize":page,"firstCandidateSize":size}),
+                    |_| {},
+                )
+                .unwrap();
+            }
+            done.store(true, Ordering::Release);
+        });
+        let mut reads = 0;
+        while !finished.load(Ordering::Acquire) {
+            let snapshot = try_load_from_path(&file.0).unwrap();
+            assert!(matches!(
+                (snapshot.page_size, snapshot.first_candidate_size),
+                (5, 16) | (9, 30)
+            ));
+            reads += 1;
+        }
+        writer.join().unwrap();
+        assert!(reads > 0);
+    }
+
+    #[test]
+    fn busy_settings_lock_fails_in_bounded_time_without_replacing_preferences() {
+        let file = IniFixture::new();
+        save_to_path(&file.0, AppSettings::default()).unwrap();
+        let before = fs::read(&file.0).unwrap();
+        let lock = settings_io::lock(&file.0).unwrap();
+        let path = file.0.clone();
+        let start = std::time::Instant::now();
+        let failed = std::thread::spawn(move || {
+            patch_to_path(&path, serde_json::json!({"pageSize":9}), |_| {})
+        })
+        .join()
+        .unwrap();
+        assert!(failed.is_err());
+        assert!(start.elapsed() < std::time::Duration::from_secs(2));
+        assert_eq!(fs::read(&file.0).unwrap(), before);
+        drop(lock);
+        assert_eq!(
+            patch_to_path(&file.0, serde_json::json!({"pageSize":9}), |_| {})
+                .unwrap()
+                .page_size,
+            9
+        );
+    }
+
+    #[test]
+    fn unreadable_or_oversized_settings_are_never_treated_as_a_new_file() {
+        let file = IniFixture::new();
+        fs::write(&file.0, "x".repeat(64 * 1024 + 1)).unwrap();
+        let original = fs::read(&file.0).unwrap();
+        assert!(try_load_from_path(&file.0).is_err());
+        assert!(patch_to_path(&file.0, serde_json::json!({"skin":"terminal"}), |_| {}).is_err());
+        assert_eq!(fs::read(&file.0).unwrap(), original);
+        let child = file.0.join("settings.ini");
+        assert!(save_to_path(&child, AppSettings::default()).is_err());
+        assert_eq!(fs::read(&file.0).unwrap(), original);
+    }
+
+    #[test]
+    fn legacy_dark_preference_and_unknown_fields_survive_a_partial_edit() {
+        let file = IniFixture::new();
+        fs::write(&file.0, "dark=1\nfuture=keep\nclipboard_enabled=0\n").unwrap();
+        let saved =
+            patch_to_path(&file.0, serde_json::json!({"skin":"typewriter"}), |_| {}).unwrap();
+        assert_eq!(saved.theme_mode, "dark");
+        assert!(saved.dark_mode);
+        assert!(!saved.clipboard_enabled);
+        assert!(fs::read_to_string(&file.0)
+            .unwrap()
+            .contains("future=keep\n"));
+        assert_eq!(try_load_from_path(&file.0).unwrap().theme_mode, "dark");
+    }
+
+    #[test]
+    fn first_partial_write_keeps_follow_system_instead_of_creating_a_legacy_light_override() {
+        let file = IniFixture::new();
+        let saved =
+            patch_to_path(&file.0, serde_json::json!({"mixedInput":false}), |_| {}).unwrap();
+        assert_eq!(saved.theme_mode, "system");
+        let reloaded = try_load_from_path(&file.0).unwrap();
+        assert_eq!(reloaded.theme_mode, "system");
+        assert!(!reloaded.mixed_input);
+        assert!(fs::read_to_string(&file.0)
+            .unwrap()
+            .contains("theme_mode=system\n"));
     }
 }

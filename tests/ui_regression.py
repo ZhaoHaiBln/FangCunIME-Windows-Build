@@ -74,7 +74,9 @@ MOCK = r"""
       const request = this.pendingSaves.shift();
       if (!request) throw new Error('No pending save in fixture');
       if (!success) {request.reject('FIXTURE_SAVE_DENIED'); return;}
-      this.settings = clone(request.args.settings);
+      this.settings = request.command === 'patch_settings'
+        ? {...this.settings, ...clone(request.args.patch)} : clone(request.args.settings);
+      this.enabled = this.settings.clipboardEnabled;
       this.emit('settings://changed', this.settings);
       request.resolve(clone(this.settings));
     }
@@ -96,11 +98,13 @@ MOCK = r"""
       }
       if (command === 'plugin:event|unlisten') return null;
       if (command === 'load_settings') return clone(fixture.settings);
-      if (command === 'save_settings') {
+      if (command === 'save_settings' || command === 'patch_settings') {
         if (fixture.deferSaves) {
-          return await new Promise((resolve,reject) => fixture.pendingSaves.push({args:clone(args),resolve,reject}));
+          return await new Promise((resolve,reject) => fixture.pendingSaves.push({command,args:clone(args),resolve,reject}));
         }
-        fixture.settings = clone(args.settings);
+        fixture.settings = command === 'patch_settings'
+          ? {...fixture.settings, ...clone(args.patch)} : clone(args.settings);
+        fixture.enabled = fixture.settings.clipboardEnabled;
         fixture.emit('settings://changed', fixture.settings);
         return clone(fixture.settings);
       }
@@ -109,7 +113,8 @@ MOCK = r"""
       }
       if (command === 'list_clipboard') return clone(fixture.items);
       if (command === 'get_clipboard_enabled') return fixture.enabled;
-      if (command === 'set_clipboard_enabled') {fixture.enabled=args.enabled; return fixture.enabled;}
+      if (command === 'clipboard_persistence_status') return null;
+      if (command === 'set_clipboard_enabled') {fixture.enabled=args.enabled; fixture.settings.clipboardEnabled=args.enabled; fixture.emit('clipboard://enabled-changed',fixture.enabled); fixture.emit('settings://changed',fixture.settings); return fixture.enabled;}
       if (command === 'copy_clipboard_item') return clone(fixture.items);
       if (command === 'toggle_pin_clipboard') {
         fixture.items=fixture.items.map(item => item.id===args.id ? {...item,pinned:!item.pinned}:item);
@@ -168,7 +173,7 @@ def app(browser, *, skin="wood_type", mode="system", system_dark=False,
     try:
         page.goto(BASE + ("" if window == "main" else "?mode=" + window), wait_until="networkidle")
         if native:
-            page.wait_for_function("window.__fixture.count('load_settings') === 1 && window.__fixture.count('clipboard_share_snapshot') === 1")
+            page.wait_for_function("window.__fixture.count('load_settings') >= 1 && window.__fixture.count('clipboard_share_snapshot') === 1")
             page.wait_for_timeout(50)
         yield page
     finally:
@@ -317,10 +322,10 @@ def serial_saves_and_stale_event(browser):
     with app(browser) as page:
         page.evaluate("window.__fixture.deferSaves=true")
         page.locator("#sw-mixed").uncheck()
-        wait_count(page,"save_settings",1)
+        wait_count(page,"patch_settings",1)
         page.locator("#sw-punct").uncheck()
         page.locator("#sel-page-size").select_option("9")
-        check(count(page,"save_settings")==1,"Rapid saves must be serialized")
+        check(count(page,"patch_settings")==1,"Rapid saves must be serialized")
         expect(page.locator("#sidebar-status-text")).to_contain_text("正在保存")
         page.evaluate("window.__fixture.emit('settings://changed', window.__fixture.settings)")
         expect(page.locator("#sw-mixed")).not_to_be_checked()
@@ -336,7 +341,7 @@ def serial_saves_and_stale_event(browser):
             expect(page.locator("#sw-punct")).not_to_be_checked()
             expect(page.locator("#sel-page-size")).to_have_value("9")
         expect(page.locator("#sidebar-status-text")).to_have_text("设置已保存")
-        check(count(page,"save_settings")>=2,"Follow-up changed values were not persisted")
+        check(count(page,"patch_settings")>=2,"Follow-up changed values were not persisted")
         settings=page.evaluate("window.__fixture.settings")
         check(not settings["mixedInput"] and not settings["chinesePunctuation"] and settings["pageSize"]==9,"Rapid saves lost changed fields")
         check(settings["skin"]=="wood_type" and settings["themeMode"]=="system" and settings["shiftToggleEnglish"],"Rapid saves changed unrelated fields")
@@ -347,7 +352,7 @@ def serial_saves_and_stale_event(browser):
 def save_rejection(browser):
     with app(browser,mode="dark") as page:
         tab(page,"theme")
-        page.evaluate("window.__fixture.fail('save_settings')")
+        page.evaluate("window.__fixture.fail('patch_settings')")
         page.locator('button[data-skin="terminal"]').click()
         expect(page.locator("#sidebar-status-text")).to_contain_text("保存失败")
         page.wait_for_function("document.documentElement.dataset.imeTheme==='wood_type'")
@@ -365,9 +370,53 @@ def initial_load_rejection(browser):
         else:
             expect(switch).to_be_disabled()
         page.wait_for_timeout(80)
-        check(count(page,"save_settings")==0,"Failed load must not write defaults over existing settings")
+        check(count(page,"patch_settings")==0,"Failed load must not write defaults over existing settings")
         expect(page.locator("#sidebar-status-text")).to_contain_text("失败")
         check(count(page,"hide_window")==0,"Failed load must not hide window")
+
+
+def patches_preserve_other_window_fields(browser):
+    with app(browser) as page:
+        page.evaluate("window.__fixture.deferSaves=true")
+        page.locator("#sw-mixed").uncheck()
+        wait_count(page,"patch_settings",1)
+        check(page.evaluate("Object.keys(window.__fixture.pendingSaves[0].args.patch).join(',')") == "mixedInput",
+              "One changed control must send only its owned field")
+        page.evaluate("""() => {
+          const f=window.__fixture;
+          f.settings.skin='terminal'; f.settings.themeMode='dark';
+          f.settings.clipboardEnabled=false; f.enabled=false;
+          f.emit('settings://changed',f.settings);
+          f.emit('clipboard://enabled-changed',true); // delayed older boolean payload
+          f.finishSave(true);
+        }""")
+        expect(page.locator("#sidebar-status-text")).to_have_text("设置已保存")
+        settings=page.evaluate("window.__fixture.settings")
+        check(not settings["mixedInput"] and settings["skin"]=="terminal" and settings["themeMode"]=="dark",
+              "A patch must retain another window's skin/mode changes")
+        check(not settings["clipboardEnabled"],"A patch must preserve the committed clipboard preference")
+        check(count(page,"save_settings")==0,"The UI must not fall back to a stale whole-settings write")
+        tab(page,"clipboard")
+        expect(page.locator("#clip-watch-text")).to_have_text("已暂停")
+
+
+def clipboard_events_reload_committed_state(browser):
+    with app(browser) as page:
+        tab(page,"clipboard")
+        page.evaluate("""() => {
+          const f=window.__fixture;
+          f.enabled=false; f.settings.clipboardEnabled=false;
+          f.emit('clipboard://enabled-changed',true);
+        }""")
+        expect(page.locator("#clip-watch-text")).to_have_text("已暂停")
+        page.evaluate("window.__fixture.emit('clipboard://persistence-error','<private filesystem path>')")
+        expect(page.locator("#toast")).to_contain_text("历史保存失败")
+        check("private filesystem" not in page.locator("#toast").inner_text(),"Persistence error must not expose raw payload")
+        page.evaluate("window.__fixture.fail('set_clipboard_enabled')")
+        page.locator("#clip-toggle-watch").click()
+        expect(page.locator("#toast")).to_contain_text("监听设置失败")
+        check(not page.evaluate("window.__fixture.settings.clipboardEnabled"),"Rejected native save must retain preference")
+        expect(page.locator("#clip-watch-text")).to_have_text("已暂停")
 
 
 def press_feedback_fixed_bounds(browser):
@@ -478,6 +527,8 @@ def main():
             ("altv_copy_failure_does_not_dismiss",altv_copy_rejection_and_success),
             ("serial_saves_and_stale_settings_event",serial_saves_and_stale_event),
             ("save_rejection_restores_confirmed_theme",save_rejection),
+            ("minimal_patches_preserve_other_window_edits",patches_preserve_other_window_fields),
+            ("clipboard_events_read_committed_state",clipboard_events_reload_committed_state),
             ("initial_load_failure_cannot_write_defaults",initial_load_rejection),
             ("press_feedback_keeps_touch_bounds",press_feedback_fixed_bounds),
             ("minimum_window_and_keyboard_focus",minimum_window_and_keyboard_focus),

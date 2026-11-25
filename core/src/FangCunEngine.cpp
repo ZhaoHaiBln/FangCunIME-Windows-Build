@@ -32,8 +32,7 @@ void FangCunEngine::close() {
     userStore_.close();
 }
 
-std::unordered_map<std::string, int32_t> FangCunEngine::learningFrequencies() {
-    std::lock_guard<std::mutex> lock(freqMutex_);
+const std::unordered_map<std::string, int32_t>& FangCunEngine::learningFrequenciesLocked() {
     if (cachedRevision_ == learningRevision_) {
         return cachedFreqs_;
     }
@@ -48,7 +47,8 @@ std::vector<std::string> FangCunEngine::candidates(
     InputScheme scheme,
     bool mixed,
     const std::atomic<bool>* cancelFlag) {
-    if (closed_.load(std::memory_order_relaxed)) return {};
+    if (closed_.load(std::memory_order_relaxed) ||
+        (cancelFlag && cancelFlag->load(std::memory_order_relaxed))) return {};
 
     std::string lookupInput(input);
     if (mixed && scheme == InputScheme::NineKey) {
@@ -67,7 +67,6 @@ std::vector<std::string> FangCunEngine::candidates(
     auto found = dictionary_.lookup(lookupInput, scheme, cancelFlag);
     if (cancelFlag && cancelFlag->load(std::memory_order_relaxed)) return {};
 
-    auto learned = learningFrequencies();
     auto custom = userStore_.personalEntries(lookupInput, scheme);
     std::string norm = PinyinCode::normalize(lookupInput);
     std::string code = (scheme == InputScheme::Pinyin) ? PinyinCode::compact(norm) : norm;
@@ -82,7 +81,9 @@ std::vector<std::string> FangCunEngine::candidates(
 
     std::vector<std::string> chinese;
     std::unordered_set<std::string> seen;
-    auto appendRanked = [&](const std::vector<DictionaryEntry>& bucket) {
+    auto appendRanked = [&](const std::vector<DictionaryEntry>& bucket,
+                            const std::unordered_map<std::string, int32_t>& learned) {
+        if (cancelFlag && cancelFlag->load(std::memory_order_relaxed)) return;
         for (auto& text : CandidateRanker::rank(bucket, code, learned)) {
             if (seen.insert(text).second) {
                 chinese.push_back(std::move(text));
@@ -91,11 +92,19 @@ std::vector<std::string> FangCunEngine::candidates(
         }
     };
 
-    appendRanked(filterByExact(custom, true));
-    if (chinese.size() < 200) appendRanked(filterByExact(found.words, true));
-    if (chinese.size() < 200) appendRanked(filterByExact(custom, false));
-    if (chinese.size() < 200) appendRanked(filterByExact(found.words, false));
-    if (chinese.size() < 200) appendRanked(found.sentences);
+    {
+        // Ranking reads one protected frequency snapshot. Copying the complete
+        // learned-word map on every keypress grows with years of user history.
+        // UserStore operations above have released their lock before this one.
+        std::lock_guard<std::mutex> lock(freqMutex_);
+        if (cancelFlag && cancelFlag->load(std::memory_order_relaxed)) return {};
+        const auto& learned = learningFrequenciesLocked();
+        appendRanked(filterByExact(custom, true), learned);
+        if (chinese.size() < 200) appendRanked(filterByExact(found.words, true), learned);
+        if (chinese.size() < 200) appendRanked(filterByExact(custom, false), learned);
+        if (chinese.size() < 200) appendRanked(filterByExact(found.words, false), learned);
+        if (chinese.size() < 200) appendRanked(found.sentences, learned);
+    }
 
     if (mixed) {
         return MixedInput::candidates(input, chinese, scheme);
@@ -162,7 +171,8 @@ void FangCunEngine::workerLoop() {
 void FangCunEngine::prepare(InputScheme scheme) {
     if (closed_.load(std::memory_order_relaxed)) return;
     dictionary_.prepare(scheme, nullptr);
-    learningFrequencies();
+    std::lock_guard<std::mutex> lock(freqMutex_);
+    learningFrequenciesLocked();
 }
 
 void FangCunEngine::learn(std::string_view text) {
@@ -170,8 +180,11 @@ void FangCunEngine::learn(std::string_view text) {
     auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                      std::chrono::system_clock::now().time_since_epoch())
                      .count();
+    // Use the same lock for the durable increment and snapshot adjustment. A
+    // cold candidate query must not read the increment and then add it twice.
+    std::lock_guard<std::mutex> lock(freqMutex_);
+    if (closed_.load(std::memory_order_relaxed)) return;
     if (userStore_.incrementFrequency(text, nowMs)) {
-        std::lock_guard<std::mutex> lock(freqMutex_);
         if (cachedRevision_ == learningRevision_) {
             cachedFreqs_[std::string(text)] += 1;
         }
@@ -179,8 +192,8 @@ void FangCunEngine::learn(std::string_view text) {
 }
 
 void FangCunEngine::clearLearning() {
-    userStore_.clearLearning();
     std::lock_guard<std::mutex> lock(freqMutex_);
+    if (!userStore_.clearLearning()) return;
     ++learningRevision_;
     cachedFreqs_.clear();
     cachedRevision_ = UINT64_MAX;

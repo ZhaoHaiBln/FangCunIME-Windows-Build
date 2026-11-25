@@ -4,7 +4,6 @@ use crate::sync_windows::{self, ClipboardSnapshot};
 #[cfg(not(target_os = "windows"))]
 use arboard::Clipboard;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -27,37 +26,46 @@ pub struct ClipboardState {
     pub items: Vec<ClipboardItem>,
     pub enabled: bool,
     pub last_seen_text: String,
+    history_path: Option<PathBuf>,
+    history_load_failed: bool,
+    history_error: Option<&'static str>,
 }
 
 impl ClipboardState {
     pub fn load() -> Self {
-        let mut items = Vec::new();
         let path = clipboard_path();
-        if let Ok(raw) = fs::read_to_string(&path) {
-            if let Ok(parsed) = serde_json::from_str::<Vec<ClipboardItem>>(&raw) {
-                items = parsed;
-            }
-        }
+        let (items, history_error) = match crate::clipboard_history::load::<ClipboardItem>(&path) {
+            Ok(items) => (items, None),
+            Err(error) => (Vec::new(), Some(error)),
+        };
         let last_seen_text = items.first().map(|i| i.text.clone()).unwrap_or_default();
-        let enabled = crate::settings::load_from_disk().clipboard_enabled;
+        // An unreadable settings file must not start observing the system clipboard.
+        let enabled = crate::settings::try_load_from_disk().map(|settings| settings.clipboard_enabled).unwrap_or(false);
         Self {
             items,
             enabled,
             last_seen_text,
+            history_path: Some(path),
+            history_load_failed: history_error.is_some(),
+            history_error,
         }
     }
 
-    pub fn persist(&self) {
-        let path = clipboard_path();
-        let snapshot = self.items.clone();
-        std::thread::spawn(move || {
-            if let Some(parent) = path.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            if let Ok(json) = serde_json::to_string_pretty(&snapshot) {
-                let _ = fs::write(&path, json);
-            }
-        });
+    pub fn persist(&mut self) -> Result<(), &'static str> {
+        // A failed load is not permission to replace the unknown original history.
+        let result = if self.history_load_failed {
+            Err(crate::clipboard_history::READ_ERROR)
+        } else {
+            let path = self.history_path.clone().unwrap_or_else(clipboard_path);
+            // The caller owns ClipboardState's mutex; no older detached write can win.
+            crate::clipboard_history::save(&path, &self.items)
+        };
+        self.history_error = result.as_ref().err().copied();
+        result
+    }
+
+    pub fn persistence_error(&self) -> Option<&'static str> {
+        self.history_error
     }
 
     pub fn ordered_items(&self) -> Vec<ClipboardItem> {
@@ -105,7 +113,7 @@ impl ClipboardState {
             }
         });
 
-        self.persist();
+        let _ = self.persist();
         true
     }
 }
@@ -144,6 +152,8 @@ fn read_local_clipboard() -> Result<ClipboardSnapshot, &'static str> {
 
 pub fn start_watcher(app: AppHandle, state: Arc<Mutex<ClipboardState>>, share: Arc<ShareManager>) {
     std::thread::spawn(move || {
+        let initial_error = state.lock().ok().and_then(|guard| guard.persistence_error());
+        if let Some(error) = initial_error { let _ = app.emit("clipboard://persistence-error", error); }
         let mut last_sequence = sync_windows::sequence();
         // Startup seeding stays local. Loading history or starting the app never uploads it.
         let initially_enabled = state.lock().map(|guard| guard.enabled).unwrap_or(false);
@@ -158,6 +168,9 @@ pub fn start_watcher(app: AppHandle, state: Arc<Mutex<ClipboardState>>, share: A
                 if guard.enabled && !initial.trim().is_empty() && guard.items.is_empty() {
                     if guard.record_text(initial, "windows") {
                         let _ = app.emit("clipboard://changed", guard.ordered_items());
+                        if let Some(error) = guard.persistence_error() {
+                            let _ = app.emit("clipboard://persistence-error", error);
+                        }
                     }
                 } else if !initial.is_empty() {
                     guard.last_seen_text = initial;
@@ -188,17 +201,20 @@ pub fn start_watcher(app: AppHandle, state: Arc<Mutex<ClipboardState>>, share: A
             let Some(text) = snapshot.text else {
                 continue;
             };
-            let ordered = {
+            let (ordered, history_error) = {
                 let mut guard = state.lock().unwrap();
-                if guard.record_text(text.clone(), "windows") {
+                let ordered = if guard.record_text(text.clone(), "windows") {
                     Some(guard.ordered_items())
                 } else {
                     None
-                }
+                };
+                let history_error = if ordered.is_some() { guard.persistence_error() } else { None };
+                (ordered, history_error)
             };
             if let Some(ordered) = ordered {
                 let _ = app.emit("clipboard://changed", ordered);
             }
+            if let Some(error) = history_error { let _ = app.emit("clipboard://persistence-error", error); }
             // A new OS copy is independent of list refresh/dedup/pin/delete. Session start time
             // plus the activation sequence rejects startup/enable races and old clipboard text.
             #[cfg(target_os = "windows")]

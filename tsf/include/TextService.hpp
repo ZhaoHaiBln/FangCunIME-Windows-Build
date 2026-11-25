@@ -62,6 +62,7 @@ public:
 
     // Helpers for EditSessions
     ITfComposition* composition() const { return composition_; }
+    ITfContext* activeContext() const { return activeContext_; }
     void setComposition(ITfComposition* comp);
     TfGuidAtom displayAttributeAtom() const { return displayAttrAtom_; }
     void updateCandidateWindowPosition(const RECT& caretRect);

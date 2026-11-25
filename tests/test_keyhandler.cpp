@@ -16,6 +16,49 @@
         }                                                                         \
     } while (0)
 
+namespace {
+struct DeferredInputFixture {
+    struct Query { uint64_t generation; std::string input; };
+    std::vector<Query> queries;
+    std::vector<std::string> learned;
+    fangcun::tsf::KeyHandler handler;
+
+    DeferredInputFixture() : handler(
+        [this](uint64_t generation, std::string input, fangcun::InputScheme, bool) {
+            queries.push_back({generation, std::move(input)});
+            return generation;
+        },
+        [this](std::string_view word) { learned.emplace_back(word); }, [] {}) {}
+
+    fangcun::tsf::KeyAction type(char character) {
+        uint32_t vk = character >= 'a' && character <= 'z' ? character - 'a' + 'A' : character;
+        bool shift = false;
+        // Win32 supplies physical VK_* codes, not ASCII punctuation codes
+        // (ASCII '!' is VK_PRIOR and would incorrectly exercise PageUp).
+        switch (character) {
+            case ',': vk = 0xBC; break;
+            case '.': vk = 0xBE; break;
+            case '-': vk = 0xBD; break;
+            case '=': vk = 0xBB; break;
+            case '!': vk = '1'; shift = true; break;
+            case '@': vk = '2'; shift = true; break;
+            case '?': vk = 0xBF; shift = true; break;
+            default: break;
+        }
+        return handler.onKeyDown({vk, character, false, false, false, shift});
+    }
+    fangcun::tsf::KeyAction press(uint32_t vk) { return handler.onKeyDown({vk}); }
+    fangcun::tsf::KeyAction reply(size_t index, std::vector<std::string> words) {
+        // A response may enqueue the next segment and reallocate queries.
+        const auto query = queries.at(index);
+        return handler.onAsyncCandidates(query.generation, query.input, std::move(words));
+    }
+    fangcun::tsf::KeyAction accept(const fangcun::tsf::KeyAction& action, bool followup = true) {
+        return handler.acknowledgeCommit(action.commitReceipt, true, followup);
+    }
+};
+} // namespace
+
 int runKeyHandlerTests() {
     using namespace fangcun;
     using namespace fangcun::tsf;
@@ -148,6 +191,8 @@ int runKeyHandlerTests() {
     auto actAsync = handler.onAsyncCandidates(lastQuerySession, "wo", {"我", "窝", "wo"});
     KH_ASSERT(actAsync.commitText && actAsync.textToCommit == "我", "Queued space did not commit candidate[0]");
     KH_ASSERT(handler.composing().empty(), "Composing should be empty after commit");
+    KH_ASSERT(learned.empty() && actAsync.commitReceipt != 0, "Proposed text must not be learned before host acknowledgement");
+    handler.acknowledgeCommit(actAsync.commitReceipt, true);
     KH_ASSERT(learned.size() == 1 && learned[0] == "我", "Learning callback not invoked");
 
     // 4. Stale async query after focus switch (resetContext) must be discarded
@@ -173,6 +218,7 @@ int runKeyHandlerTests() {
     auto actDigit = handler.onKeyDown(digit2);
     KH_ASSERT(actDigit.handled && actDigit.commitText && actDigit.textToCommit == "窝",
               "Digit 2 should commit second candidate");
+    handler.acknowledgeCommit(actDigit.commitReceipt, true);
 
     // 7. English candidate Space appends trailing space in mixed mode
     KeyInput keyA{'A', 'A', false, false, false, true, false};
@@ -183,6 +229,7 @@ int runKeyHandlerTests() {
     auto actEngSpace = handler.onKeyDown(space);
     KH_ASSERT(actEngSpace.commitText && actEngSpace.textToCommit == "AI ",
               "Space on English candidate should append trailing space");
+    handler.acknowledgeCommit(actEngSpace.commitReceipt, true);
 
     // 8. Reference materials, migrated settings, and bounded typing glow.
     {
@@ -326,6 +373,7 @@ int runKeyHandlerTests() {
         auto actCommitP2 = handler.onKeyDown(digit2);
         KH_ASSERT(actCommitP2.commitText && actCommitP2.textToCommit == "词10",
                   "Digit 2 on page 1 should commit candidate[10]");
+        handler.acknowledgeCommit(actCommitP2.commitReceipt, true);
 
         // PageUp on empty composing does nothing; test PageUp from page 1
         handler.onKeyDown(keyW);
@@ -372,12 +420,212 @@ int runKeyHandlerTests() {
         KH_ASSERT(handler.englishMode(), "Should now be in English mode");
         KH_ASSERT(toggleAct.commitText && toggleAct.textToCommit == "w",
                   "Toggling to English while composing should commit raw text");
+        handler.acknowledgeCommit(toggleAct.commitReceipt, true);
         KH_ASSERT(!handler.shouldEatKey(keyW), "Letters should pass through in English mode");
 
         handler.toggleEnglishMode();
         KH_ASSERT(!handler.englishMode() && handler.shouldEatKey(keyW),
                   "Toggling back to Chinese mode should resume composing");
         handler.resetContext();
+    }
+
+    // Fast typing keeps each accepted boundary ahead of later segments. The
+    // fixture controls response order instead of relying on thread timing.
+    {
+        DeferredInputFixture f;
+        f.type('w'); f.type('o'); f.press(0x20);
+        f.type('n'); f.type('i'); f.press(0x20);
+        f.type('h'); f.type('a'); f.type('o');
+        KH_ASSERT(f.queries.size() == 2 && f.handler.displayComposing() == "wo ni hao",
+                  "Keys after pending Space must stay in a bounded tail, not replace the old code");
+        const auto first = f.reply(1, {"我", "窝"});
+        KH_ASSERT(first.textToCommit == "我" && first.compositionText == "ni hao" &&
+                      first.updateComposition && f.queries.size() == 3 && f.queries.back().input == "ni",
+                  "One transaction must commit the old word and keep both later segments");
+        f.accept(first);
+        const auto second = f.reply(2, {"你"});
+        KH_ASSERT(second.textToCommit == "你" && second.compositionText == "hao" &&
+                      f.queries.size() == 4 && f.queries.back().input == "hao",
+                  "A second queued boundary must commit in order and query only its following segment");
+        f.accept(second);
+        f.reply(3, {"好"});
+        const auto third = f.press(0x20);
+        f.accept(third);
+        KH_ASSERT(first.textToCommit + second.textToCommit + third.textToCommit == "我你好" &&
+                      (f.learned == std::vector<std::string>{"我", "你", "好"}) && f.handler.composing().empty(),
+                  "Several rapid boundaries must produce the complete sentence and learn only accepted words");
+    }
+    {
+        DeferredInputFixture f;
+        f.type('w'); f.type('o'); f.type(','); f.type('n'); f.type('i'); f.type('!');
+        const auto first = f.reply(1, {"我"});
+        KH_ASSERT(first.textToCommit == "我，" && first.compositionText == "ni！",
+                  "Pending punctuation must follow its own word and leave the next punctuation with its segment");
+        f.accept(first);
+        const auto second = f.reply(2, {"你"});
+        KH_ASSERT(second.textToCommit == "你！" && second.hideCandidates,
+                  "Punctuation may not replace the word already in the editor composition");
+        f.accept(second);
+
+        f.handler.setChinesePunctuation(false);
+        f.type('w'); f.type('o'); f.type(',');
+        const auto ascii = f.reply(f.queries.size() - 1, {"我"});
+        KH_ASSERT(ascii.textToCommit == "我,", "ASCII punctuation mode must still commit the preceding word");
+        f.accept(ascii);
+        f.type('w'); f.type('o');
+        f.reply(f.queries.size() - 1, {"我"});
+        const auto at = f.type('@');
+        KH_ASSERT(at.textToCommit == "我@", "An unmapped printable symbol must follow rather than overwrite the word");
+        f.accept(at);
+    }
+    {
+        DeferredInputFixture f;
+        f.type('w'); f.type('o'); f.press(0x20); f.type('@'); f.type('0'); f.type('n'); f.type('i');
+        const auto action = f.reply(1, {"我"});
+        KH_ASSERT(action.textToCommit == "我@0" && action.compositionText == "ni",
+                  "Literal symbols and zero after a queued boundary must retain their order");
+        f.accept(action);
+    }
+    {
+        DeferredInputFixture f;
+        f.type('w'); f.type('o'); f.press(0x20); f.type('n'); f.type('i'); f.press(0x0D);
+        f.type('h'); f.type('a'); f.type('o'); f.press(0x20);
+        const auto action = f.reply(1, {"我"});
+        KH_ASSERT(action.textToCommit == "我ni" && action.compositionText == "hao " &&
+                      f.queries.size() == 3 && f.queries.back().input == "hao",
+                  "Queued Enter must commit its raw segment and avoid submitting a superseded intermediate query");
+        f.accept(action);
+        const auto next = f.reply(2, {"好"});
+        KH_ASSERT(next.textToCommit == "好", "A later Space must still resolve after queued raw Enter");
+        f.accept(next);
+        KH_ASSERT((f.learned == std::vector<std::string>{"我", "好"}), "Raw code must never be learned as a Chinese candidate");
+    }
+    {
+        DeferredInputFixture f;
+        f.type('w'); f.type('o'); f.press(0x20); f.type('n'); f.type('i');
+        KH_ASSERT(f.press(0x08).compositionText == "wo n" && f.press(0x08).compositionText == "wo ",
+                  "Backspace must edit the deferred tail immediately");
+        KH_ASSERT(f.press(0x08).compositionText == "w" && f.handler.composing() == "w",
+                  "Backspace crossing an unresolved boundary must edit the old code without accepting it");
+        const auto stale = f.reply(1, {"我"});
+        KH_ASSERT(!stale.commitText && !stale.showCandidates, "A response for the erased old code must be ignored");
+        const auto cancel = f.press(0x1B);
+        KH_ASSERT(cancel.hideCandidates && f.handler.composing().empty(), "Escape must cancel the old segment and entire tail");
+        const auto afterCancel = f.reply(f.queries.size() - 1, {"文"});
+        KH_ASSERT(!afterCancel.commitText && !afterCancel.showCandidates, "Focus/cancel generation must invalidate deferred results");
+    }
+    {
+        DeferredInputFixture f;
+        f.type('w'); f.type('o'); f.press(0x20);
+        for (int i = 0; i < 128; ++i) {
+            KH_ASSERT(!f.type('a').inputLimitReached, "All 128 deferred keys must fit");
+        }
+        const auto overflow = f.type('b');
+        KH_ASSERT(overflow.handled && overflow.inputLimitReached && f.handler.displayComposing().size() == 131,
+                  "A full tail must explicitly report its limit while preserving all earlier keys");
+        f.press(0x08);
+        KH_ASSERT(!f.type('b').inputLimitReached && f.handler.displayComposing().back() == 'b',
+                  "Backspace must free a deferred slot");
+        f.handler.resetContext();
+        for (int i = 0; i < 128; ++i) f.type('a');
+        const auto codeOverflow = f.type('b');
+        KH_ASSERT(codeOverflow.handled && codeOverflow.inputLimitReached && f.handler.composing().size() == 128,
+                  "The existing 128-code engine limit must remain bounded and visible to the adapter");
+    }
+    {
+        DeferredInputFixture f;
+        f.type('w'); f.type('o'); f.press(0x20); f.type('n'); f.type('i');
+        const auto proposed = f.reply(1, {"我", "窝"});
+        const auto refused = f.handler.acknowledgeCommit(proposed.commitReceipt, false);
+        KH_ASSERT(refused.compositionText == "wo ni" && !refused.commitText && f.learned.empty() &&
+                      f.handler.composing() == "wo" && f.queries.size() == 3,
+                  "A refused commit must restore the exact old code and tail without learning or automatic retry");
+        const auto oldTailResult = f.reply(2, {"你"});
+        KH_ASSERT(!oldTailResult.showCandidates && !oldTailResult.commitText,
+                  "A canceled tail query must not overwrite a restored rejected prefix");
+        const auto retry = f.press(0x20);
+        KH_ASSERT(retry.textToCommit == "我" && retry.compositionText == "ni" &&
+                      retry.commitReceipt != proposed.commitReceipt,
+                  "Explicit Space must retry the rejected boundary while keeping later input");
+        f.accept(retry);
+        f.accept(retry);
+        const auto staleAck = f.handler.acknowledgeCommit(proposed.commitReceipt, false);
+        KH_ASSERT(!staleAck.handled && f.learned.size() == 1 && f.handler.composing() == "ni",
+                  "Duplicate/stale receipts must neither learn twice nor restore over later input");
+        f.reply(f.queries.size() - 1, {"你"});
+        const auto next = f.press(0x20);
+        f.accept(next);
+        KH_ASSERT((f.learned == std::vector<std::string>{"我", "你"}), "Accepted retry and tail must each learn once");
+    }
+    {
+        DeferredInputFixture f;
+        f.type('w'); f.type('o'); f.press(0x20); f.type('n'); f.type('i'); f.press(0x20);
+        const auto proposed = f.reply(1, {"我"});
+        const auto partial = f.accept(proposed, false);
+        KH_ASSERT(partial.updateComposition && !partial.commitText && partial.compositionText == "ni " &&
+                      f.handler.composing() == "ni" && (f.learned == std::vector<std::string>{"我"}),
+                  "If prefix commit succeeds but followup fails, recover only the tail and never resend the prefix");
+        const auto tail = f.reply(2, {"你"});
+        KH_ASSERT(tail.textToCommit == "你", "Only the remaining tail may be committed after a partial editor failure");
+        f.accept(tail);
+        KH_ASSERT((f.learned == std::vector<std::string>{"我", "你"}), "Partial success must not lose accepted-prefix learning");
+    }
+    {
+        DeferredInputFixture f;
+        std::vector<std::string> words;
+        for (int i = 0; i < 12; ++i) words.push_back("词" + std::to_string(i));
+        f.type('w'); f.reply(0, words); f.handler.movePage(1);
+        f.type('o'); f.handler.movePage(1); f.type('2');
+        const auto pendingDigit = f.reply(1, words);
+        KH_ASSERT(pendingDigit.textToCommit == "词10", "Queued digit selection must remember its requested page");
+        const auto rejected = f.handler.acknowledgeCommit(pendingDigit.commitReceipt, false);
+        KH_ASSERT(rejected.compositionText == "wo" && rejected.selectedIndex == 0 && f.learned.empty(),
+                  "Rejected pending digit must retain its original draft");
+        const auto clickedRetry = f.handler.selectCandidateIndex(0);
+        KH_ASSERT(clickedRetry.textToCommit == "词0", "Clicking a different retry candidate must replace the failed digit selection");
+        f.accept(clickedRetry);
+
+        f.type('w'); f.reply(f.queries.size() - 1, words); f.handler.movePage(1);
+        const auto directDigit = f.type('2');
+        f.handler.acknowledgeCommit(directDigit.commitReceipt, false);
+        KH_ASSERT(f.handler.selectedIndex() == 10, "A direct commit refusal must preserve the chosen candidate and page");
+        const auto directRetry = f.press(0x20);
+        KH_ASSERT(directRetry.textToCommit == "词10", "A refused direct selection must not silently change the chosen word");
+        f.accept(directRetry);
+    }
+    {
+        DeferredInputFixture f;
+        f.type('w');
+        const auto toggle = f.handler.toggleEnglishMode();
+        const auto restored = f.handler.acknowledgeCommit(toggle.commitReceipt, false);
+        KH_ASSERT(!f.handler.englishMode() && restored.compositionText == "w" && f.learned.empty(),
+                  "A rejected Shift raw commit must restore both the draft and Chinese mode");
+        const auto retry = f.handler.toggleEnglishMode();
+        f.accept(retry);
+        KH_ASSERT(f.handler.englishMode() && f.handler.composing().empty(), "Accepted Shift retry must switch mode once");
+        f.handler.setEnglishMode(false);
+        f.type('w'); f.reply(f.queries.size() - 1, {"我"});
+        const auto commit = f.press(0x20);
+        f.handler.resetContext();
+        const auto ignored = f.handler.acknowledgeCommit(commit.commitReceipt, false);
+        KH_ASSERT(!ignored.handled && f.handler.composing().empty() && f.learned.empty(),
+                  "A receipt after losing focus must not restore or learn into another editor");
+        f.type('a');
+        f.accept(commit);
+        KH_ASSERT(f.handler.composing() == "a" && f.learned.empty(), "Late success must not affect a newer input session");
+    }
+    {
+        DeferredInputFixture f;
+        const auto punctuation = f.type('.');
+        const auto rejected = f.handler.acknowledgeCommit(punctuation.commitReceipt, false);
+        KH_ASSERT(rejected.compositionText == "。", "Failed direct punctuation must remain available as a recoverable draft");
+        const auto erased = f.press(0x08);
+        KH_ASSERT(erased.compositionText.empty() && erased.hideCandidates,
+                  "Backspace must remove one complete UTF-8 code point from a recovered literal");
+        f.handler.setPersonalizedLearning(false);
+        f.type('w'); f.reply(f.queries.size() - 1, {"我"});
+        f.accept(f.press(0x20));
+        KH_ASSERT(f.learned.empty(), "Host acknowledgement must still honor disabled personalization");
     }
 
     return 0;

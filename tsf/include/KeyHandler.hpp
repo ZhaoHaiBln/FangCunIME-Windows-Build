@@ -4,7 +4,9 @@
 #include "fangcun/InputScheme.hpp"
 
 #include <cstdint>
+#include <deque>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -44,6 +46,8 @@ struct KeyAction {
     bool candidatesPending = false;     // gray out old candidates while async query is in flight
     std::vector<std::string> candidates;
     int32_t selectedIndex = 0;
+    uint64_t commitReceipt = 0;         // acknowledge only after the host actually accepts the commit
+    bool inputLimitReached = false;
 };
 
 /**
@@ -90,6 +94,11 @@ public:
     // Called when background engine returns candidates; verifies sessionGen + input match
     KeyAction onAsyncCandidates(uint64_t sessionGen, const std::string& input, std::vector<std::string> results);
 
+    // The TSF adapter acknowledges synchronously. Failed commits restore the
+    // draft; focus changes or a newer action invalidate an old receipt.
+    KeyAction acknowledgeCommit(uint64_t receipt, bool committed, bool followupApplied = true);
+    std::string displayComposing() const;
+
     static constexpr size_t kPageSize = 9;
 
     // Select a candidate by 0-based global index (e.g. mouse click on candidate window or digit key)
@@ -113,9 +122,38 @@ private:
         None,
         Space,
         Digit,
+        Punctuation,
+    };
+
+    struct InputState {
+        std::string composing;
+        std::vector<std::string> candidates;
+        bool candidatesPending = false;
+        int32_t selectedIndex = 0;
+        bool englishMode = false;
+        PendingBoundaryType boundary = PendingBoundaryType::None;
+        size_t digitIndex = 0;
+        std::string punctuation;
+        std::deque<KeyInput> deferred;
+    };
+    struct PendingCommit {
+        uint64_t receipt = 0;
+        uint64_t generation = 0;
+        InputState previous;
+        std::vector<std::string> learning;
+        std::string literalFallback;
     };
 
     void triggerQuery(KeyAction& action);
+    KeyAction processKeyDown(const KeyInput& key);
+    KeyAction processAsyncCandidates(uint64_t sessionGen, const std::string& input, std::vector<std::string> results);
+    KeyAction clearContext(bool keepCommitPlan);
+    KeyAction finishQueuedBoundary();
+    KeyAction replayDeferred(KeyAction action, std::deque<KeyInput> keys);
+    bool canDefer(const KeyInput& key) const;
+    void beginAction();
+    void prepareCommit();
+    KeyAction finishAction(KeyAction action);
     KeyAction commitCandidateAt(size_t index, bool appendEnglishSpace);
     std::string mapChinesePunctuation(char ascii) const;
     bool isComposingKey(const KeyInput& key) const;
@@ -140,6 +178,16 @@ private:
 
     PendingBoundaryType pendingBoundary_ = PendingBoundaryType::None;
     size_t pendingDigitIndex_ = 0;
+    std::string pendingPunctuation_;
+    std::deque<KeyInput> deferredKeys_;
+    static constexpr size_t kDeferredKeyLimit = 128;
+    bool replaying_ = false;
+    bool queryAfterReplay_ = false;
+    bool retryCommit_ = false;
+    uint64_t nextCommitReceipt_ = 1;
+    std::optional<InputState> commitPlan_;
+    std::vector<std::string> plannedLearning_;
+    std::optional<PendingCommit> pendingCommit_;
 };
 
 } // namespace fangcun::tsf

@@ -494,7 +494,13 @@ void SettingsWindow::onLButtonDown(int x, int y) {
 
 void SettingsWindow::saveAndNotify() {
     settings_.darkMode = SettingsStore::effectiveDarkMode(settings_);
-    SettingsStore::save(settings_);
+    if (!SettingsStore::save(settings_)) {
+        const auto latest = SettingsStore::load();
+        settings_ = latest.readSucceeded ? latest : SettingsStore::confirmed(settings_);
+        MessageBoxW(hwnd_, L"设置未保存。其他窗口可能正在保存，或文件暂时不可写，请重试。", L"方寸输入法", MB_OK | MB_ICONWARNING);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
     broadcastSettingsChanged();
     if (onChanged_) {
         onChanged_(settings_);

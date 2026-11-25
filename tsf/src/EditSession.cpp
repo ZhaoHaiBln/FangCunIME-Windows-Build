@@ -1,6 +1,8 @@
 #include "EditSession.hpp"
 #include "TextService.hpp"
 
+#include <wrl/client.h>
+
 namespace fangcun::tsf {
 
 EditSessionBase::EditSessionBase(TextService* service, ITfContext* context)
@@ -40,128 +42,168 @@ UpdateCompositionEditSession::UpdateCompositionEditSession(
     ITfContext* context,
     std::wstring text,
     bool commit,
-    bool cancelOnly)
+    bool cancelOnly,
+    std::optional<std::wstring> followup)
     : EditSessionBase(service, context),
       text_(std::move(text)),
       commit_(commit),
-      cancelOnly_(cancelOnly) {}
+      cancelOnly_(cancelOnly),
+      followup_(std::move(followup)) {
+    if (cancelOnly_ && service_) {
+        expectedCancellation_ = service_->composition();
+        if (expectedCancellation_) expectedCancellation_->AddRef();
+    }
+}
+
+UpdateCompositionEditSession::~UpdateCompositionEditSession() {
+    if (expectedCancellation_) expectedCancellation_->Release();
+}
 
 STDMETHODIMP UpdateCompositionEditSession::DoEditSession(TfEditCookie ec) {
+    using Microsoft::WRL::ComPtr;
     if (!service_ || !context_) return E_FAIL;
 
-    ITfComposition* comp = service_->composition();
-
-    if (cancelOnly_) {
-        if (comp) {
-            ITfRange* range = nullptr;
-            if (SUCCEEDED(comp->GetRange(&range)) && range) {
-                range->SetText(ec, 0, L"", 0);
-                range->Release();
-            }
-            comp->EndComposition(ec);
-            service_->setComposition(nullptr);
-        }
-        return S_OK;
-    }
-
-    if (!comp) {
-        ITfInsertAtSelection* insertAtSel = nullptr;
-        if (FAILED(context_->QueryInterface(IID_ITfInsertAtSelection, reinterpret_cast<void**>(&insertAtSel))) || !insertAtSel) {
-            return E_FAIL;
-        }
-        ITfRange* range = nullptr;
-        HRESULT hr = insertAtSel->InsertTextAtSelection(ec, TF_IAS_QUERYONLY, nullptr, 0, &range);
-        insertAtSel->Release();
-        if (FAILED(hr) || !range) return E_FAIL;
-
-        if (commit_) {
-            range->SetText(ec, 0, text_.c_str(), static_cast<LONG>(text_.size()));
-            range->Collapse(ec, TF_ANCHOR_END);
-            TF_SELECTION sel = {};
-            sel.range = range;
-            sel.style.ase = TF_AE_NONE;
-            sel.style.fInterimChar = FALSE;
-            context_->SetSelection(ec, 1, &sel);
-            range->Release();
-            return S_OK;
-        }
-
-        ITfContextComposition* ctxComp = nullptr;
-        hr = context_->QueryInterface(IID_ITfContextComposition, reinterpret_cast<void**>(&ctxComp));
-        if (SUCCEEDED(hr) && ctxComp) {
-            ITfComposition* newComp = nullptr;
-            hr = ctxComp->StartComposition(ec, range, service_, &newComp);
-            if (SUCCEEDED(hr) && newComp) {
-                service_->setComposition(newComp);
-                comp = newComp;
-                newComp->Release();
-            }
-            ctxComp->Release();
-        }
-        range->Release();
-        if (!comp) return E_FAIL;
-    }
-
-    ITfRange* compRange = nullptr;
-    if (FAILED(comp->GetRange(&compRange)) || !compRange) return E_FAIL;
-
-    compRange->SetText(ec, 0, text_.c_str(), static_cast<LONG>(text_.size()));
-
-    if (commit_) {
-        compRange->Collapse(ec, TF_ANCHOR_END);
+    // Keep our own reference: EndComposition can synchronously invoke the sink.
+    ComPtr<ITfComposition> comp = cancelOnly_ ? expectedCancellation_ : service_->composition();
+    const auto endComposition = [&]() -> HRESULT {
+        if (service_->composition() != comp.Get()) return E_UNEXPECTED;
+        // An intentional end belongs to the prefix, not the new draft that may
+        // follow it. The old callback must not reset the KeyHandler's tail.
+        service_->setComposition(nullptr);
+        const HRESULT hr = comp->EndComposition(ec);
+        if (FAILED(hr) && !service_->composition()) service_->setComposition(comp.Get());
+        return hr;
+    };
+    const auto selectionRange = [&](ComPtr<ITfRange>& range) -> HRESULT {
+        ComPtr<ITfInsertAtSelection> insert;
+        HRESULT hr = context_->QueryInterface(IID_ITfInsertAtSelection,
+            reinterpret_cast<void**>(insert.GetAddressOf()));
+        if (FAILED(hr)) return hr;
+        if (!insert) return E_NOINTERFACE;
+        hr = insert->InsertTextAtSelection(ec, TF_IAS_QUERYONLY, nullptr, 0, range.GetAddressOf());
+        return SUCCEEDED(hr) && !range ? E_FAIL : hr;
+    };
+    const auto selectEnd = [&](ITfRange* range, ComPtr<ITfRange>& end) -> HRESULT {
+        HRESULT hr = range->Clone(end.GetAddressOf());
+        if (FAILED(hr)) return hr;
+        if (!end) return E_FAIL;
+        hr = end->Collapse(ec, TF_ANCHOR_END);
+        if (FAILED(hr)) return hr;
         TF_SELECTION sel = {};
-        sel.range = compRange;
+        sel.range = end.Get();
         sel.style.ase = TF_AE_NONE;
         sel.style.fInterimChar = FALSE;
+        // The collapsed range is authoritative for the following draft. Some
+        // hosts reject explicit caret placement despite accepting SetText.
+        // Do not turn their selection limitation into a failed text edit.
         context_->SetSelection(ec, 1, &sel);
-        comp->EndComposition(ec);
-        service_->setComposition(nullptr);
-    } else {
-        // Apply display attribute underline
-        if (service_->displayAttributeAtom() != TF_INVALID_GUIDATOM) {
-            ITfProperty* dispProp = nullptr;
-            if (SUCCEEDED(context_->GetProperty(GUID_PROP_ATTRIBUTE, &dispProp)) && dispProp) {
-                VARIANT var = {};
-                var.vt = VT_I4;
-                var.lVal = static_cast<LONG>(service_->displayAttributeAtom());
-                dispProp->SetValue(ec, compRange, &var);
-                dispProp->Release();
-            }
-        }
+        return S_OK;
+    };
 
-        // Collapse caret to end of composition
-        ITfRange* selRange = nullptr;
-        if (SUCCEEDED(compRange->Clone(&selRange)) && selRange) {
-            selRange->Collapse(ec, TF_ANCHOR_END);
-            TF_SELECTION sel = {};
-            sel.range = selRange;
-            sel.style.ase = TF_AE_NONE;
-            sel.style.fInterimChar = FALSE;
-            context_->SetSelection(ec, 1, &sel);
-            selRange->Release();
-        }
+    if (cancelOnly_) {
+        // Focus-loss cancellation can be scheduled asynchronously. It may only
+        // erase the object that existed when cancellation was requested.
+        if (!comp) return S_OK;
+        ComPtr<ITfRange> range;
+        HRESULT hr = comp->GetRange(range.GetAddressOf());
+        if (FAILED(hr) || !range) return FAILED(hr) ? hr : E_FAIL;
+        hr = range->SetText(ec, 0, L"", 0);
+        if (FAILED(hr)) return hr;
+        // resetAllState detaches this object before scheduling us. A later
+        // composition may already belong to another document; never touch it.
+        const bool wasCurrent = service_->composition() == comp.Get();
+        if (wasCurrent) service_->setComposition(nullptr);
+        hr = comp->EndComposition(ec);
+        if (FAILED(hr) && wasCurrent && !service_->composition()) service_->setComposition(comp.Get());
+        return hr;
+    }
 
-        // Query caret screen rect for CandidateWindow
-        ITfContextView* view = nullptr;
-        if (SUCCEEDED(context_->GetActiveView(&view)) && view) {
-            RECT rc = {};
-            BOOL clipped = FALSE;
-            if (SUCCEEDED(view->GetTextExt(ec, compRange, &rc, &clipped))) {
-                service_->updateCandidateWindowPosition(rc);
-            }
-            view->Release();
+    ComPtr<ITfRange> followupPosition;
+    if (commit_) {
+        ComPtr<ITfRange> range;
+        HRESULT hr = comp ? comp->GetRange(range.GetAddressOf()) : selectionRange(range);
+        if (FAILED(hr) || !range) return FAILED(hr) ? hr : E_FAIL;
+        hr = range->SetText(ec, 0, text_.c_str(), static_cast<LONG>(text_.size()));
+        if (FAILED(hr)) return hr;
+        // Without a composition, SetText already inserted permanent text. A
+        // later caret/followup failure must not insert it a second time.
+        if (!comp) commitAccepted_ = true;
+        hr = selectEnd(range.Get(), followupPosition);
+        if (FAILED(hr)) return hr;
+        if (comp) {
+            hr = endComposition();
+            if (FAILED(hr)) return hr;
+            commitAccepted_ = true;
+            comp.Reset();
+        }
+        if (!followup_ || followup_->empty()) {
+            followupApplied_ = true;
+            return S_OK;
         }
     }
 
-    compRange->Release();
+    // The same edit cookie now starts/updates the tail after the accepted
+    // prefix. There is no unlocked gap in which another editor can move it.
+    const auto& draft = commit_ ? *followup_ : text_;
+    comp = service_->composition();
+    if (!comp) {
+        ComPtr<ITfRange> range;
+        HRESULT hr = followupPosition ? followupPosition->Clone(range.GetAddressOf()) : selectionRange(range);
+        if (FAILED(hr) || !range) return FAILED(hr) ? hr : E_FAIL;
+        ComPtr<ITfContextComposition> contextComposition;
+        hr = context_->QueryInterface(IID_ITfContextComposition,
+            reinterpret_cast<void**>(contextComposition.GetAddressOf()));
+        if (FAILED(hr)) return hr;
+        if (!contextComposition) return E_NOINTERFACE;
+        hr = contextComposition->StartComposition(ec, range.Get(), service_, comp.GetAddressOf());
+        if (FAILED(hr) || !comp) return FAILED(hr) ? hr : E_FAIL;
+        service_->setComposition(comp.Get());
+    }
+
+    ComPtr<ITfRange> range;
+    HRESULT hr = comp->GetRange(range.GetAddressOf());
+    if (FAILED(hr) || !range) return FAILED(hr) ? hr : E_FAIL;
+    hr = range->SetText(ec, 0, draft.c_str(), static_cast<LONG>(draft.size()));
+    if (FAILED(hr)) return hr;
+    ComPtr<ITfRange> caret;
+    hr = selectEnd(range.Get(), caret);
+    if (FAILED(hr)) return hr;
+    followupApplied_ = true;
+
+    // Underline and placement are decoration; a provider that does not support
+    // them must not turn an accepted text edit into a failed commit.
+    if (service_->displayAttributeAtom() != TF_INVALID_GUIDATOM) {
+        ComPtr<ITfProperty> property;
+        if (SUCCEEDED(context_->GetProperty(GUID_PROP_ATTRIBUTE, property.GetAddressOf())) && property) {
+            VARIANT value = {};
+            value.vt = VT_I4;
+            value.lVal = static_cast<LONG>(service_->displayAttributeAtom());
+            property->SetValue(ec, range.Get(), &value);
+        }
+    }
+    ComPtr<ITfContextView> view;
+    if (SUCCEEDED(context_->GetActiveView(view.GetAddressOf())) && view) {
+        RECT rect = {};
+        BOOL clipped = FALSE;
+        if (SUCCEEDED(view->GetTextExt(ec, range.Get(), &rect, &clipped))) {
+            service_->updateCandidateWindowPosition(rect);
+        }
+    }
     return S_OK;
 }
 
 GetCaretRectEditSession::GetCaretRectEditSession(TextService* service, ITfContext* context)
-    : EditSessionBase(service, context) {}
+    : EditSessionBase(service, context), expectedComposition_(service ? service->composition() : nullptr) {
+    if (expectedComposition_) expectedComposition_->AddRef();
+}
+
+GetCaretRectEditSession::~GetCaretRectEditSession() {
+    if (expectedComposition_) expectedComposition_->Release();
+}
 
 STDMETHODIMP GetCaretRectEditSession::DoEditSession(TfEditCookie ec) {
     if (!service_ || !context_) return E_FAIL;
+    if (service_->activeContext() != context_ || service_->composition() != expectedComposition_) return S_OK;
 
     ITfRange* range = nullptr;
     if (service_->composition()) {

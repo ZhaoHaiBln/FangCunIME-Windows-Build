@@ -72,7 +72,8 @@ private:
     };
 
     void workerLoop();
-    std::unordered_map<std::string, int32_t> learningFrequencies();
+    // Callers keep freqMutex_ locked while using the returned cached snapshot.
+    const std::unordered_map<std::string, int32_t>& learningFrequenciesLocked();
 
     DictionaryRepository dictionary_;
     UserStore userStore_;
