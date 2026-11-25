@@ -4,6 +4,7 @@ version = "0.6.5"
 description = "FangCun IME Settings & Clipboard Companion"
 authors = ["FangCunIME"]
 edition = "2021"
+rust-version = "1.85"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -27,7 +28,6 @@ httpdate = "1"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
-  "Win32_Storage_FileSystem",
   "Win32_Graphics_Dwm",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",

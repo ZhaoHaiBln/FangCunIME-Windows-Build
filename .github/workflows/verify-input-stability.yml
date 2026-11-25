@@ -47,11 +47,23 @@ jobs:
           $openssl = "C:\Program Files\Git\usr\bin\openssl.exe"
           if (-not (Test-Path $openssl)) { throw "Local TLS test tool unavailable" }
           "FANGCUN_AI_TEST_OPENSSL=$openssl" >> $env:GITHUB_ENV
-      - name: Compile actual Tauri adapters and run Rust tests
+      - name: Compile actual Tauri adapters and Rust tests
         working-directory: app/src-tauri
         run: |
-          cargo test --lib -- --test-threads=2
+          cargo test --lib --no-run
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run Rust file and AI tests with bounded runtime
+        working-directory: app/src-tauri
+        run: |
+          $cargo = (Get-Command cargo).Source
+          $tests = Start-Process -FilePath $cargo -ArgumentList @("test", "--lib", "--", "--test-threads=2", "--nocapture") -NoNewWindow -PassThru
+          if (-not $tests.WaitForExit(180000)) {
+            taskkill /PID $tests.Id /T /F
+            throw "Rust tests exceeded their three-minute runtime budget; see the uncaptured failure log."
+          }
+          $tests.Refresh()
+          if ($null -eq $tests.ExitCode) { throw "Rust test exit code was not available." }
+          if ($tests.ExitCode -ne 0) { exit $tests.ExitCode }
       - name: Upload test report only
         if: always()
         uses: actions/upload-artifact@v4

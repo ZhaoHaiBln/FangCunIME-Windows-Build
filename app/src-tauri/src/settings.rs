@@ -810,6 +810,15 @@ mod tests {
         let finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let done = finished.clone();
         let writer = std::thread::spawn(move || {
+            // A writer error must fail this test through join(), not leave its
+            // reader spinning forever and hide the original Windows failure.
+            struct FinishOnDrop(std::sync::Arc<std::sync::atomic::AtomicBool>);
+            impl Drop for FinishOnDrop {
+                fn drop(&mut self) {
+                    self.0.store(true, Ordering::Release);
+                }
+            }
+            let _finished = FinishOnDrop(done);
             for index in 0..30 {
                 let (page, size) = if index % 2 == 0 { (9, 30) } else { (5, 16) };
                 patch_to_path(
@@ -819,7 +828,6 @@ mod tests {
                 )
                 .unwrap();
             }
-            done.store(true, Ordering::Release);
         });
         let mut reads = 0;
         while !finished.load(Ordering::Acquire) {

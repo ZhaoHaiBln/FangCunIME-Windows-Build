@@ -1,5 +1,6 @@
 #include "SettingsStore.hpp"
 #include "DllMain.hpp"
+#include "AtomicFileReplace.hpp"
 
 #include <shlobj.h>
 #include <windows.h>
@@ -201,7 +202,10 @@ bool replaceAtomically(const std::filesystem::path& path, const std::string& con
         }
         result = offset == content.size() && FlushFileBuffers(file.value);
     }
-    if (result) result = MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+    if (result) {
+        try { result = replaceFlushedFile(temporary, path); }
+        catch (...) { result = false; }
+    }
     if (!result) DeleteFileW(temporary.c_str());
     return result;
 }
