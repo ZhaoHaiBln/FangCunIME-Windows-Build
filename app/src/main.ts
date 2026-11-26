@@ -66,7 +66,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   capsLockBypass: true,
   pageSize: 7,
   wheelPaging: true,
-  skin: "wood_type",
+  skin: "system_default",
   themeMode: "system",
   darkMode: false,
   systemDark: false,
@@ -81,26 +81,22 @@ const DEFAULT_SETTINGS: AppSettings = {
   traditional: false,
 };
 
-type SkinId = "wood_type" | "typewriter" | "terminal" | "brutal";
-const SKIN_ORDER: SkinId[] = ["wood_type", "typewriter", "terminal", "brutal"];
-const SKIN_LABELS: Record<SkinId, string> = {
-  wood_type: "木框活字", typewriter: "经典打字机", terminal: "绿屏终端", brutal: "极客机械",
-};
+type SkinId = "system_default" | "wood_type" | "typewriter" | "terminal" | "brutal";
+const PACKAGE_BASES = new Set(["wood_type", "typewriter", "terminal", "brutal"]);
 function canonicalSkin(value: string): SkinId {
-  if (SKIN_ORDER.includes(value as SkinId)) return value as SkinId;
-  const legacy: Record<string, SkinId> = {
-    swiss: "wood_type", metro: "terminal", eink: "typewriter",
-    warm_grid: "wood_type", native_light: "terminal", deep_blue: "brutal", mint: "typewriter",
-    square_cream: "wood_type", square_aluminum: "terminal", square_amber: "brutal", square_jade: "typewriter",
-  };
-  return Object.prototype.hasOwnProperty.call(legacy, value) ? legacy[value]! : "wood_type";
+  // Legacy base IDs still describe imported-package geometry, never builtin choices.
+  return PACKAGE_BASES.has(value) ? value as SkinId : "system_default";
+}
+function hasLocalSelection(): boolean {
+  return typeof state.customSkinId === "string" && /^[a-z][a-z0-9]*(?:\.[a-z0-9][a-z0-9_-]*)+$/.test(state.customSkinId)
+    && typeof state.customSkinHash === "string" && /^[a-f0-9]{64}$/.test(state.customSkinHash);
 }
 
 function effectiveDark(): boolean {
   return state.themeMode === "dark" || (state.themeMode === "system" && state.systemDark);
 }
 function applySkinTheme(): void {
-  const skin = canonicalSkin(state.skin);
+  const skin = hasLocalSelection() ? canonicalSkin(state.skin) : "system_default";
   const dark = effectiveDark();
   const root = document.documentElement;
   document.body.dataset.skin = skin;
@@ -124,8 +120,8 @@ function applySkinTheme(): void {
   }
   const lightLabel = document.getElementById("showcase-light-label");
   const darkLabel = document.getElementById("showcase-dark-label");
-  if (lightLabel) lightLabel.textContent = `${SKIN_LABELS[skin]} · 浅色候选窗`;
-  if (darkLabel) darkLabel.textContent = `${SKIN_LABELS[skin]} · 深色候选窗`;
+  if (lightLabel) lightLabel.textContent = "系统默认 · 浅色候选窗";
+  if (darkLabel) darkLabel.textContent = "系统默认 · 深色候选窗";
 }
 
 const appMode = new URLSearchParams(window.location.search).get("mode") ?? "main";
@@ -556,7 +552,7 @@ function renderClipboard(): void {
 }
 
 function render(): void {
-  state.skin = canonicalSkin(state.skin);
+  state.skin = hasLocalSelection() ? canonicalSkin(state.skin) : "system_default";
   applySkinTheme();
   // Scheme cards
   document.querySelectorAll<HTMLButtonElement>("[data-scheme]").forEach((btn) => {
@@ -564,11 +560,7 @@ function render(): void {
     btn.setAttribute("aria-pressed", String(btn.dataset.scheme === state.scheme));
   });
 
-  // Skin & Mode buttons
-  document.querySelectorAll<HTMLButtonElement>("button[data-skin]").forEach((btn) => {
-    btn.classList.toggle("is-selected", btn.dataset.skin === state.skin);
-    btn.setAttribute("aria-pressed", String(btn.dataset.skin === state.skin));
-  });
+  // Mode buttons stay independent of the selected skin file.
   document.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach((btn) => {
     btn.classList.toggle("is-selected", btn.dataset.mode === state.themeMode);
     btn.setAttribute("aria-pressed", String(btn.dataset.mode === state.themeMode));
@@ -667,7 +659,7 @@ settingsSearch.addEventListener("input", (e) => {
   if (!q) return;
   const targets: [string, string[]][] = [
     ["clipboard", ["剪贴", "clip", "alt", "共享", "配对"]],
-    ["theme", ["皮肤", "外观", "深色", "浅色", "跟随系统", "木框", "活字", "打字机", "终端", "极客", "机械", "wood", "typewriter", "terminal", "brutal"]],
+    ["theme", ["皮肤", "外观", "深色", "浅色", "跟随系统", "本地", "文件", "导入", "默认", "fcskin"]],
     ["effects", ["字号", "流光", "透明", "特效", "字体"]],
     ["general", ["状态栏", "常规"]],
     ["about", ["关于", "版本", "配置文件"]],
@@ -775,16 +767,6 @@ document.getElementById("btn-toggle-statusbar")?.addEventListener("click", () =>
 });
 
 // Theme & Skin Controls
-document.getElementById("skin-group")!.addEventListener("click", (e) => {
-  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-skin]");
-  if (btn?.dataset.skin) {
-    const selection = new CustomEvent("fangcun:skin-select", { cancelable: true, detail: { id: "builtin:" + btn.dataset.skin } });
-    if (!window.dispatchEvent(selection)) return;
-    const skin = canonicalSkin(btn.dataset.skin);
-    previewDarkCand = null;
-    void save({ skin });
-  }
-});
 document.getElementById("mode-group")!.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-mode]");
   if (btn?.dataset.mode) {

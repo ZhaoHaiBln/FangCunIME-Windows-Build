@@ -234,23 +234,13 @@ int runKeyHandlerTests() {
     // 8. Reference materials, migrated settings, and bounded typing glow.
     {
         using fangcun::SkinPreset;
-        const auto& wood = fangcun::sharpTheme(SkinPreset::WoodType);
-        KH_ASSERT(wood.light.windowOuterBorder == 0xFF472A16 && wood.light.candidateActiveText == 0xFF9E2F1E,
-                  "Wood type uses a walnut frame and red ink");
-        const auto& typewriter = fangcun::sharpTheme(SkinPreset::Typewriter);
-        KH_ASSERT(typewriter.metrics.candidateRadiusDp == 4.0f && typewriter.light.candidateActiveBg == 0xFF2B2723 &&
-                      typewriter.light.accent == 0xFF237218,
-                  "Typewriter selection is a dark round-edged stamp on paper with emerald caret");
-        const auto& terminal = fangcun::sharpTheme(SkinPreset::Terminal);
-        KH_ASSERT(terminal.metrics.useMonospaceCode && terminal.light.accent == 0xFFF4E667 &&
-                      terminal.light.candidateActiveBg == 0xFF78F867 && terminal.light.candidateActiveText == 0xFF0B1A0D,
-                  "Terminal uses amber monospaced code and a solid green selection");
-        KH_ASSERT(wood.metrics.outerBorderWidthPx == 6 && typewriter.metrics.outerBorderWidthPx == 6 &&
-                      terminal.metrics.outerBorderWidthPx == 6,
-                  "The three reference candidate frames have the same thickness");
+        const auto& system = fangcun::sharpTheme(SkinPreset::SystemDefault);
+        KH_ASSERT(system.metrics.outerBorderWidthPx == 1 && system.metrics.hardShadowOffsetPx == 0 &&
+                      !system.metrics.useMonospaceCode && system.metrics.candidateRadiusDp == 0,
+                  "Package-free system appearance is neutral, square and without decorative material");
         const auto& brutal = fangcun::sharpTheme(SkinPreset::Brutal);
-        KH_ASSERT(brutal.metrics.useMonospaceCode && brutal.metrics.hardShadowOffsetPx == 4,
-                  "Brutal keeps its monospace code and four pixel hard shadow");
+        KH_ASSERT(brutal.metrics.hardShadowOffsetPx == 4,
+                  "The external brutal package retains its structural hard-shadow layout base");
 
         const std::array presets{SkinPreset::WoodType, SkinPreset::Typewriter, SkinPreset::Terminal, SkinPreset::Brutal};
         const std::array<std::string_view, 4> ids{"wood_type", "typewriter", "terminal", "brutal"};
@@ -290,10 +280,6 @@ int runKeyHandlerTests() {
                     colors.isDarkKeyboard() ? .35f : .55f);
                 KH_ASSERT(contrast(label, colors.keyboard) >= 4.5f && contrast(label, settingsCard) >= 4.5f,
                           "Small native-settings labels must be readable on both the plate and translucent cards");
-                if (!dark && (preset == SkinPreset::Terminal || preset == SkinPreset::Brutal)) {
-                    KH_ASSERT(label.toColorRef() != colors.accent.toColorRef(),
-                              "A bright accent fill must not also be used as illegible text on a light settings plate");
-                }
                 KH_ASSERT(fangcun::accentForeground(colors).toColorRef() == colors.onAccent.toColorRef(),
                           "Making small labels readable must not change emphasized-button foreground colors");
                 const auto preview = fangcun::computeGlassKeyColors(preset, colors, .4f, true, true, true);
@@ -302,8 +288,9 @@ int runKeyHandlerTests() {
                           "Preview geometry must preserve each material's cap shape");
             }
         }
-        KH_ASSERT(fangcun::parseSkinPreset("unknown") == SkinPreset::WoodType,
-                  "An invalid skin falls back to wood type");
+        KH_ASSERT(fangcun::parseSkinPreset("unknown") == SkinPreset::SystemDefault &&
+                      fangcun::parseSkinPreset("system_default") == SkinPreset::SystemDefault,
+                  "An invalid or explicit system identifier uses the neutral fallback");
 
         fangcun::TypingGlowEngine glow;
         glow.setEnabled(true);

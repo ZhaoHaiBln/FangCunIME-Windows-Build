@@ -249,38 +249,31 @@ float CandidateWindow::dpToPx(float dp) const {
 void CandidateWindow::setCustomSkin(const std::filesystem::path& root, const std::string& id, const std::string& hash, bool dark) {
     if (customDataRoot_ == root && customId_ == id && customHash_ == hash && customDark_ == dark) return;
     customDataRoot_ = root; customId_ = id; customHash_ = hash; customDark_ = dark;
+    skin_ = SkinPreset::SystemDefault;
     customSkin_.reset(); builtinSkin_.reset(); builtinId_.clear(); builtinHash_.clear(); releaseCustomBitmaps();
     if (!id.empty() && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
     if (customCache_) customCache_->request(hwnd_, root, id, hash, dark);
-    if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
+    if (hwnd_) {
+        if (id.empty()) {
+            recomputeHeaderBudget(); recalculateSize();
+            if (hasCaretRect_) moveNearCaret(lastCaretRect_);
+        }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
 }
 
 const LoadedBuiltinStyle* CandidateWindow::activeBuiltinStyle() const {
-    return customId_.empty() && builtinSkin_ && builtinSkin_->spec.builtin == skinMetrics(skin_).id &&
-        builtinSkin_->spec.builtin == builtinId_ && builtinSkin_->spec.hash == builtinHash_ &&
-        builtinSkin_->dark == darkMode_ ? builtinSkin_.get() : nullptr;
+    return nullptr; // Retired builtin references never affect the file-only renderer.
 }
 
-void CandidateWindow::setBuiltinStyle(const std::filesystem::path& root, const std::string& id, const std::string& hash, bool dark) {
-    // The pack renderer always wins. Do not supersede its pending worker job.
-    const bool enabled = customId_.empty() && skin::validBuiltinStyleId(id) && skin::validHash(hash);
-    const std::string nextId = enabled ? id : "", nextHash = enabled ? hash : "";
-    if (builtinDataRoot_ == root && builtinId_ == nextId && builtinHash_ == nextHash && builtinDark_ == dark) return;
-    builtinDataRoot_ = root; builtinId_ = nextId; builtinHash_ = nextHash; builtinDark_ = dark;
-    builtinSkin_.reset();
-    if (!customId_.empty()) return;
-    if (enabled && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
-    if (customCache_) customCache_->requestBuiltinStyle(hwnd_, root, nextId, nextHash, dark);
-    if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
+void CandidateWindow::setBuiltinStyle(const std::filesystem::path&, const std::string&, const std::string&, bool) {
+    builtinSkin_.reset(); builtinId_.clear(); builtinHash_.clear();
 }
 
 void CandidateWindow::consumeCustomSkin() {
     if (!customCache_) return;
     if (customId_.empty()) {
-        auto ready = customCache_->takeBuiltinReady();
-        if (ready && (ready->spec.builtin != builtinId_ || ready->spec.hash != builtinHash_ || ready->dark != builtinDark_)) ready.reset();
-        if (ready && ready == builtinSkin_) return;
-        builtinSkin_ = std::move(ready);
+        builtinSkin_.reset();
         recomputeHeaderBudget(); recalculateSize();
         if (hasCaretRect_) moveNearCaret(lastCaretRect_);
         if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
@@ -300,6 +293,7 @@ void CandidateWindow::consumeCustomSkin() {
     customSkin_ = std::move(ready);
     releaseCustomBitmaps();
     if (customSkin_ && (customSkin_->spec.id != customId_ || customSkin_->spec.hash != customHash_ || customSkin_->dark != customDark_)) customSkin_.reset();
+    skin_ = customSkin_ ? customSkin_->spec.baseSkin : SkinPreset::SystemDefault;
     rebuildCustomBitmaps();
     recomputeHeaderBudget(); recalculateSize();
     if (hasCaretRect_) moveNearCaret(lastCaretRect_);
@@ -370,10 +364,9 @@ void CandidateWindow::update(
     selectedIndex_ = selectedIndex;
     pending_ = pending;
     scheme_ = scheme;
-    skin_ = skin;
+    skin_ = customSkin_ ? customSkin_->spec.baseSkin : SkinPreset::SystemDefault;
     darkMode_ = darkMode;
     if (!customId_.empty() && customDark_ != darkMode) setCustomSkin(customDataRoot_, customId_, customHash_, darkMode);
-    if (customId_.empty() && !builtinId_.empty() && builtinDark_ != darkMode) setBuiltinStyle(builtinDataRoot_, builtinId_, builtinHash_, darkMode);
     firstCandidateSize_ = std::clamp(firstCandidateSize, HeaderMetricsSpec::kFirstCandidateMinSp, HeaderMetricsSpec::kFirstCandidateMaxSp);
     typingGlow_ = typingGlow;
 
@@ -405,10 +398,9 @@ void CandidateWindow::showModeToast(bool englishMode, SkinPreset skin, bool dark
     candidates_.clear();
     toastActive_ = true;
     toastEnglish_ = englishMode;
-    skin_ = skin;
+    skin_ = customSkin_ ? customSkin_->spec.baseSkin : SkinPreset::SystemDefault;
     darkMode_ = darkMode;
     if (!customId_.empty() && customDark_ != darkMode) setCustomSkin(customDataRoot_, customId_, customHash_, darkMode);
-    if (customId_.empty() && !builtinId_.empty() && builtinDark_ != darkMode) setBuiltinStyle(builtinDataRoot_, builtinId_, builtinHash_, darkMode);
 
     dpi_ = queryDpiForWindow(hwnd_);
     recomputeHeaderBudget();
@@ -431,11 +423,9 @@ void CandidateWindow::showModeToast(bool englishMode, SkinPreset skin, bool dark
 
 void CandidateWindow::recomputeHeaderBudget() {
     if (!ensureFactories()) return;
-    const auto* builtin = activeBuiltinStyle();
-    const std::optional<std::string> font = customSkin_ ? std::optional<std::string>(customSkin_->spec.fontFamily)
-        : builtin ? builtin->spec.fontFamily : std::nullopt;
-    const bool mono = font ? *font == "mono" : sharpTheme(skin_).metrics.useMonospaceCode;
-    const bool serif = font ? *font == "serif" : skin_ == SkinPreset::WoodType || skin_ == SkinPreset::Typewriter;
+    const std::optional<std::string> font = customSkin_ ? std::optional<std::string>(customSkin_->spec.fontFamily) : std::nullopt;
+    const bool mono = font ? *font == "mono" : false;
+    const bool serif = font ? *font == "serif" : false;
     const wchar_t* candidateFont = font && mono ? L"Consolas" : serif ? L"SimSun" : kUiFontFamily;
     const wchar_t* codeFont = mono ? L"Consolas" : serif ? L"Georgia" : kUiFontFamily;
     const wchar_t* indexFont = mono ? L"Consolas" : kUiFontFamily;
@@ -574,7 +564,7 @@ void CandidateWindow::recalculateSize() {
     const float border = static_cast<float>(style.outerBorderWidthPx);
     const float shadow = static_cast<float>(style.hardShadowOffsetPx);
     const bool isReference = skin_ != SkinPreset::Brutal;
-    const float topChrome = (skin_ == SkinPreset::Typewriter && !single) ? 10.0f : 0.0f;
+    const float topChrome = 0.0f;
     const float verticalFooter = (vertical && (!isReference || pages > 1)) ? 24.0f : 4.0f;
     float totalHeight = single ? rowHeight : codeHeightDp_ + rowHeight + topChrome;
     if (vertical) totalHeight = topChrome + codeHeightDp_ + rowHeight * std::max<size_t>(1, end - start) + verticalFooter;
@@ -608,7 +598,7 @@ void CandidateWindow::recalculateSize() {
     // This is display-only; the original code still determines all layout sizes.
     const float plateWidth = static_cast<float>(width_) * 96.0f / static_cast<float>(dpi_) - shadow;
     const float codeRight = single ? border + singleCodeWidth_ : plateWidth - border;
-    const float ledWidth = skin_ == SkinPreset::Terminal && !single ? 30.0f : 0.0f;
+    const float ledWidth = 0.0f;
     const bool showPageCount = !isReference || pages > 1;
     const float labelRight = codeRight - (single ? 9.0f : (showPageCount ? 43.0f : 8.0f) + ledWidth);
     const float caretWidth = skin_ == SkinPreset::Typewriter ? 2.6f : (skin_ == SkinPreset::WoodType ? 1.2f : 2.0f);
@@ -631,14 +621,6 @@ void CandidateWindow::updateWindowRegion() {
         }
         if (face) DeleteObject(face);
         if (offset) DeleteObject(offset);
-    } else if (skin_ != SkinPreset::Brutal && width_ > 0 && height_ > 0) {
-        const int radiusDp = skin_ == SkinPreset::Typewriter ? 9 : (skin_ == SkinPreset::Terminal ? 8 : 7);
-        const int diameter = scaleForDpi(radiusDp * 2);
-        HRGN face = CreateRoundRectRgn(0, 0, width_ + 1, height_ + 1, diameter, diameter);
-        if (!face || !SetWindowRgn(hwnd_, face, TRUE)) {
-            if (face) DeleteObject(face);
-            SetWindowRgn(hwnd_, nullptr, TRUE);
-        }
     } else {
         SetWindowRgn(hwnd_, nullptr, TRUE);
     }
@@ -878,32 +860,24 @@ void CandidateWindow::onPaint() {
 
     const auto& metrics = sharpTheme(skin_).metrics;
     const auto* custom = customSkin_ ? &customSkin_->theme() : nullptr;
-    const auto* builtin = activeBuiltinStyle();
-    const auto* edit = builtin ? &builtin->tone() : nullptr;
-    const bool customDrawing = custom || !customId_.empty();
     auto palette = custom ? skin::palette(*custom) : sharpPalette(skin_, darkMode_);
-    if (edit) palette = builtinPalette(*edit, palette);
     const bool vertical = layout_ == CandidateLayout::Vertical;
     const bool single = layout_ == CandidateLayout::SingleRow;
     const float shadow = toastActive_ ? 0.0f : static_cast<float>(metrics.hardShadowOffsetPx);
     const float w = width_ * 96.0f / dpi_ - shadow;
     const float h = height_ * 96.0f / dpi_ - shadow;
     const float edge = static_cast<float>(metrics.outerBorderWidthPx);
-    const float topChrome = (skin_ == SkinPreset::Typewriter && !single && !toastActive_) ? 10.0f : 0.0f;
+    const float topChrome = 0.0f;
     const float left = edge;
     const float right = w - edge;
     const float bottom = h - edge;
     const float codeTop = edge + topChrome;
     const float headerBottom = single ? bottom : codeTop + codeHeightDp_;
     const float rowHeight = std::max(layout_ == CandidateLayout::DoubleRow ? 36.0f : 32.0f, candidateHeightDp_);
-    const float outerR = skin_ == SkinPreset::Brutal ? 0.0f
-        : (skin_ == SkinPreset::Typewriter ? 9.0f : (skin_ == SkinPreset::Terminal ? 8.0f : 7.0f));
-    const float innerR = skin_ == SkinPreset::Brutal ? 0.0f
-        : (skin_ == SkinPreset::Typewriter ? 4.0f : (skin_ == SkinPreset::Terminal ? 3.5f : 2.5f));
     const auto rect = [](float l, float t, float r, float b) { return D2D1::RectF(l, t, r, b); };
     const auto color = ColorArgb::fromHex;
     const auto originalChrome = skinColors(skin_, darkMode_);
-    const auto chrome = custom ? skin::colors(*custom) : edit ? builtinColors(*edit, originalChrome) : originalChrome;
+    const auto chrome = custom ? skin::colors(*custom) : originalChrome;
 
     candidateRects_.clear();
     candidateIndices_.clear();
@@ -914,51 +888,13 @@ void CandidateWindow::onPaint() {
     ID2D1SolidColorBrush* brush = nullptr;
     renderTarget_->CreateSolidColorBrush(toD2DColor(color(palette.windowBg)), &brush);
     if (brush) {
-        bool tintFrame = false;
-        auto materialColor = [&](uint32_t argb) {
-            return tintFrame ? builtinMaterialTint(argb, edit, skin::ColorRole::Background, originalChrome.keyboard) : argb;
-        };
         auto fill = [&](D2D1_RECT_F bounds, uint32_t argb) {
-            brush->SetColor(toD2DColor(color(materialColor(argb))));
+            brush->SetColor(toD2DColor(color(argb)));
             renderTarget_->FillRectangle(bounds, brush);
-        };
-        auto fillRound = [&](D2D1_RECT_F bounds, float r, uint32_t argb) {
-            brush->SetColor(toD2DColor(color(materialColor(argb))));
-            renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(bounds, r, r), brush);
-        };
-        auto strokeRound = [&](D2D1_RECT_F bounds, float r, uint32_t argb, float strokeW) {
-            auto ink = color(materialColor(argb));
-            if (edit) if (const auto& border = builtinColor(*edit, skin::ColorRole::Border);
-                border && !sameBuiltinColor(*border, originalChrome.border)) {
-                const auto alpha = ink.a; ink = *border; ink.a = alpha;
-            }
-            brush->SetColor(toD2DColor(ink));
-            renderTarget_->DrawRoundedRectangle(D2D1::RoundedRect(bounds, r, r), brush, strokeW);
         };
         auto argb = [](ColorArgb c) -> uint32_t {
             return (static_cast<uint32_t>(c.a) << 24) | (static_cast<uint32_t>(c.r) << 16) |
                 (static_cast<uint32_t>(c.g) << 8) | c.b;
-        };
-        auto gradientRound = [&](D2D1_RECT_F bounds, float r, uint32_t top, uint32_t middle, uint32_t bottomColor) {
-            if (bounds.bottom <= bounds.top || bounds.right <= bounds.left) return;
-            const D2D1_GRADIENT_STOP stops[] = {
-                {0.0f, toD2DColor(color(materialColor(top)))}, {0.5f, toD2DColor(color(materialColor(middle)))},
-                {1.0f, toD2DColor(color(materialColor(bottomColor)))},
-            };
-            ID2D1GradientStopCollection* collection = nullptr;
-            if (FAILED(renderTarget_->CreateGradientStopCollection(stops, 3, &collection))) return;
-            ID2D1LinearGradientBrush* surface = nullptr;
-            const auto axis = D2D1::LinearGradientBrushProperties(
-                D2D1::Point2F(bounds.left, bounds.top), D2D1::Point2F(bounds.left, bounds.bottom));
-            if (SUCCEEDED(renderTarget_->CreateLinearGradientBrush(axis, collection, &surface))) {
-                if (r > 0.0f) renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(bounds, r, r), surface);
-                else renderTarget_->FillRectangle(bounds, surface);
-                surface->Release();
-            }
-            collection->Release();
-        };
-        auto gradient = [&](D2D1_RECT_F bounds, uint32_t top, uint32_t middle, uint32_t bottomColor) {
-            gradientRound(bounds, 0.0f, top, middle, bottomColor);
         };
         auto text = [&](const std::wstring& label, IDWriteTextFormat* format, D2D1_RECT_F bounds,
                         uint32_t argb, bool alignRight = false) {
@@ -975,43 +911,11 @@ void CandidateWindow::onPaint() {
         };
 
         if (shadow > 0) fill(rect(shadow, shadow, w + shadow, h + shadow), palette.hardShadowColor);
-        if (customDrawing) {
-            const auto c = custom ? custom->color(skin::ColorRole::Background) : chrome.keyboard;
-            fill(rect(0, 0, w, h), argb(c));
-            drawCustomImage(skin::ImageRole::Deck, rect(0, 0, w, h));
-        } else {
-        tintFrame = true;
-        if (skin_ == SkinPreset::Brutal) {
-            fill(rect(0, 0, w, h), palette.windowOuterBorder);
-        } else if (skin_ == SkinPreset::WoodType) {
-            gradientRound(rect(0, 0, w, h), outerR,
-                darkMode_ ? 0xFF665041 : 0xFF8C5F41,
-                darkMode_ ? 0xFF3E2C23 : 0xFF684127,
-                darkMode_ ? 0xFF241A16 : 0xFF472A16);
-            for (float line = 1.8f; line < edge - 0.5f; line += 1.5f) {
-                fill(rect(4.0f, line, w - 4.0f, line + 0.5f), 0x45A07454);
-                fill(rect(4.0f, h - line - 0.5f, w - 4.0f, h - line), 0x553A2010);
-            }
-            strokeRound(rect(0.5f, 0.5f, w - 0.5f, h - 0.5f), outerR, 0xFF3D2211, 1.0f);
-        } else if (skin_ == SkinPreset::Typewriter) {
-            gradientRound(rect(0, 0, w, h), outerR, 0xFFD3C9BC, 0xFF7D7366, 0xFFB0A699);
-            strokeRound(rect(1.3f, 1.3f, w - 1.3f, h - 1.3f), outerR - 1.0f, 0xB8E5DDD2, 0.9f);
-            strokeRound(rect(0.5f, 0.5f, w - 0.5f, h - 0.5f), outerR, 0xFF3A3530, 1.0f);
-            strokeRound(rect(edge - 1.0f, edge - 1.0f, right + 1.0f, bottom + 1.0f), innerR + 0.8f, 0xFF1E1A18, 1.8f);
-        } else if (skin_ == SkinPreset::Terminal) {
-            gradientRound(rect(0, 0, w, h), outerR,
-                darkMode_ ? 0xFF8E9081 : 0xFFEAE2D2,
-                darkMode_ ? 0xFF6B6D61 : 0xFFD4CCB9,
-                darkMode_ ? 0xFF414437 : 0xFFB8AF99);
-            strokeRound(rect(1.4f, 1.4f, w - 1.4f, h - 1.4f), outerR - 1.0f, darkMode_ ? 0x55B6B9AA : 0xB8F6F1E5, 1.0f);
-            strokeRound(rect(0.5f, 0.5f, w - 0.5f, h - 0.5f), outerR, 0xFF8E8574, 1.0f);
-            strokeRound(rect(edge - 1.0f, edge - 1.0f, right + 1.0f, bottom + 1.0f), innerR + 0.8f, 0xFF5D574A, 1.4f);
-        }
-
-        tintFrame = false;
-        if (skin_ == SkinPreset::Brutal) fill(rect(edge, edge, right, bottom), palette.windowBg);
-        else fillRound(rect(edge, edge, right, bottom), innerR, palette.windowBg);
-        }
+        const auto deck = custom ? custom->color(skin::ColorRole::Background) : chrome.keyboard;
+        fill(rect(0, 0, w, h), argb(deck));
+        drawCustomImage(skin::ImageRole::Deck, rect(0, 0, w, h));
+        brush->SetColor(toD2DColor(color(palette.windowOuterBorder)));
+        renderTarget_->DrawRectangle(rect(edge * .5f, edge * .5f, w - edge * .5f, h - edge * .5f), brush, edge);
 
         if (toastActive_ && composing_.empty()) {
             drawTianzigeLogoD2D(left + 8, (h - 20) * .5f, 20);
@@ -1022,59 +926,20 @@ void CandidateWindow::onPaint() {
             const std::wstring pageLabel = std::to_wstring(page + 1) + L"/" + std::to_wstring(std::max<size_t>(1, pages));
             const float codeRight = single ? left + singleCodeWidth_ : right;
             const auto candidateArea = rect(left, edge, right, bottom);
-            const auto material = color(palette.windowBg);
-            if (customDrawing) {
-                fill(candidateArea, palette.windowBg);
-                drawCustomImage(skin::ImageRole::Candidates, candidateArea);
-                const auto header = rect(left, edge, single ? codeRight : right, headerBottom);
-                fill(header, custom ? argb(custom->color(skin::ColorRole::Toolbar)) : palette.windowHeaderBg);
-                drawCustomImage(skin::ImageRole::Toolbar, header);
-                const auto codeArea = rect(left, codeTop, codeRight, headerBottom);
-                drawCustomImage(skin::ImageRole::Code, codeArea);
-            } else if (skin_ == SkinPreset::Terminal) {
-                gradientRound(candidateArea, innerR,
-                    argb(ColorArgb::lerp(material, color(0xFF000000), .20f)),
-                    palette.windowBg,
-                    argb(ColorArgb::lerp(material, color(0xFF000000), .24f)));
-                for (float y = edge + 1.5f; y < bottom - 1.5f; y += 2.6f) {
-                    fill(rect(left + 1.0f, y, right - 1.0f, std::min(y + .65f, bottom - 1.0f)), 0x36000000);
-                }
-                strokeRound(rect(left + 0.5f, edge + 0.5f, right - 0.5f, bottom - 0.5f), innerR, 0xB0060E07, 1.4f);
-            } else if (skin_ != SkinPreset::Brutal) {
-                gradientRound(candidateArea, innerR,
-                    argb(ColorArgb::lerp(material, color(0xFF4D3020), .05f)),
-                    argb(ColorArgb::lerp(material, color(0xFFFFF6DF), darkMode_ ? .03f : .22f)),
-                    palette.windowBg);
-                if (skin_ == SkinPreset::WoodType) {
-                    strokeRound(rect(left + 0.5f, edge + 0.5f, right - 0.5f, bottom - 0.5f), innerR, 0x3D4A2D18, 1.6f);
-                }
-                if (skin_ == SkinPreset::Typewriter && topChrome > 0.0f) {
-                    // Dedicated cylindrical rubber platen roller + knurled end-caps + cast shadow on paper
-                    const float rollerTop = edge + 1.5f;
-                    const float rollerBot = rollerTop + 7.2f;
-                    gradient(rect(left + 1.0f, rollerBot, right - 1.0f, rollerBot + 5.0f), 0x441A1510, 0x1A1A1510, 0x001A1510);
-                    gradientRound(rect(left + 2.0f, rollerTop, right - 2.0f, rollerBot), 2.0f, 0xFF141311, 0xFF494641, 0xFF0A0908);
-                    for (const float cx : {left + 4.0f, right - 15.0f}) {
-                        const auto capRc = rect(cx, rollerTop - 0.8f, cx + 11.0f, rollerBot + 0.8f);
-                        fillRound(capRc, 2.0f, 0xFFAFA598);
-                        strokeRound(capRc, 2.0f, 0xFF423C35, 0.9f);
-                        for (float kx = cx + 3.0f; kx <= cx + 8.5f; kx += 2.6f) {
-                            brush->SetColor(toD2DColor(color(0xFF423C35)));
-                            renderTarget_->DrawLine(D2D1::Point2F(kx, rollerTop), D2D1::Point2F(kx, rollerBot), brush, 0.9f);
-                        }
-                    }
-                }
-            }
-            if (!customDrawing && skin_ == SkinPreset::Brutal) fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
-            if (edit && builtinColor(*edit, skin::ColorRole::Toolbar))
-                fill(rect(left, codeTop, codeRight, headerBottom), palette.windowHeaderBg);
+            fill(candidateArea, palette.windowBg);
+            drawCustomImage(skin::ImageRole::Candidates, candidateArea);
+            const auto header = rect(left, edge, single ? codeRight : right, headerBottom);
+            fill(header, custom ? argb(custom->color(skin::ColorRole::Toolbar)) : palette.windowHeaderBg);
+            drawCustomImage(skin::ImageRole::Toolbar, header);
+            const auto codeArea = rect(left, codeTop, codeRight, headerBottom);
+            drawCustomImage(skin::ImageRole::Code, codeArea);
 
-            const auto pulses = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, custom ? custom->glow : edit && edit->glow ? *edit->glow : skinMetrics(skin_).glowColors);
+            const auto pulses = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, custom ? custom->glow : skinMetrics(skin_).glowColors);
             if (!pulses.empty()) {
                 const auto surface = rect(left, edge, right, bottom);
                 renderTarget_->PushAxisAlignedClip(surface, D2D1_ANTIALIAS_MODE_ALIASED);
                 for (const auto& pulse : pulses) {
-                    // Paint under the glyphs and selection, and keep the wood / metal frame clear.
+                    // Paint under the glyphs and selection within the local component bounds.
                     const auto center = D2D1::Point2F(pulse.cx, pulse.cy);
                     const D2D1_GRADIENT_STOP stops[] = {
                         {0.0f, toD2DColor(pulse.innerColor.withAlpha(pulse.innerColor.a / 390.0f))},
@@ -1102,14 +967,12 @@ void CandidateWindow::onPaint() {
                 fill(rect(left + divInset, headerBottom - 1, right - divInset, headerBottom), palette.innerDivider);
             }
 
-            const bool terminalLeds = !customDrawing && skin_ == SkinPreset::Terminal && !single;
-            const float ledWidth = terminalLeds ? 30.0f : 0.0f;
+            const float ledWidth = 0.0f;
             const bool showPageCount = !isReference || pages > 1;
             const float labelRight = codeRight - (single ? 9.0f : (showPageCount ? 43.0f : 8.0f) + ledWidth);
             const float codeX = left + 9;
             const std::wstring preedit = utf8ToWide(composing_);
             const auto codeInk = custom ? argb(custom->color(skin::ColorRole::CodeText))
-                : edit && builtinColor(*edit, skin::ColorRole::CodeText) ? argb(*builtinColor(*edit, skin::ColorRole::CodeText))
                 : skin_ == SkinPreset::Terminal ? palette.accent : argb(chrome.text);
             const auto secondaryInk = skin_ == SkinPreset::Terminal ? palette.textSecondary : argb(chrome.secondary);
             text(visibleCode_, codeFormat_, rect(codeX, codeTop, labelRight, headerBottom), codeInk);
@@ -1121,20 +984,6 @@ void CandidateWindow::onPaint() {
             if (!single && showPageCount) {
                 text(pageLabel, indexFormat_, rect(labelRight + 5, codeTop, right - 8 - ledWidth, headerBottom), secondaryInk, true);
             }
-            if (terminalLeds) {
-                const float ledCy = (codeTop + headerBottom) * 0.5f;
-                for (int i = 0; i < 3; ++i) {
-                    const float lx = right - 26.0f + i * 8.5f;
-                    const bool lit = (i == 2);
-                    if (lit) {
-                        brush->SetColor(toD2DColor(color(palette.candidateActiveBg).withAlpha(0.32f)));
-                        renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(lx, ledCy), 5.2f, 5.2f), brush);
-                    }
-                    brush->SetColor(toD2DColor(color(lit ? palette.candidateActiveBg : 0xFF475C44)));
-                    renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(lx, ledCy), 2.4f, 2.4f), brush);
-                }
-            }
-
             const float footerTop = vertical ? bottom - 24 : (single ? edge : headerBottom);
             const float pagerLeft = right - kPagerWidth;
             float x = single ? codeRight : left;
@@ -1146,28 +995,9 @@ void CandidateWindow::onPaint() {
                 const float y = vertical ? headerBottom + local * rowHeight : (single ? edge : headerBottom);
                 const auto cell = rect(vertical ? left : x, y, (vertical ? left : x) + width, std::min(bottom, y + rowHeight));
                 const bool active = !pending_ && static_cast<int>(index) == selectedIndex_;
-                if (active && customDrawing) {
+                if (active) {
                     fill(cell, palette.candidateActiveBg);
                     drawCustomImage(skin::ImageRole::Selection, cell);
-                } else if (active && skin_ == SkinPreset::Brutal) {
-                    fill(cell, palette.candidateActiveBg);
-                } else if (active && cell.right - cell.left > 7.0f) {
-                    const float hPad = vertical ? 8.0f : 3.0f;
-                    const auto inset = rect(cell.left + hPad, cell.top + 3.0f,
-                        cell.right - hPad, cell.bottom - 3.0f);
-                    const float radius = metrics.candidateRadiusDp;
-                    const auto cap = D2D1::RoundedRect(inset, radius, radius);
-                    if (skin_ == SkinPreset::WoodType) {
-                        const auto ink = edit && builtinColor(*edit, skin::ColorRole::Selection)
-                            ? *builtinColor(*edit, skin::ColorRole::Selection) : color(0xFFB54632);
-                        brush->SetColor(toD2DColor(ink.withAlpha(0.05f)));
-                        renderTarget_->FillRoundedRectangle(cap, brush);
-                        brush->SetColor(toD2DColor(ink));
-                        renderTarget_->DrawRoundedRectangle(cap, brush, 1.3f);
-                    } else {
-                        brush->SetColor(toD2DColor(color(palette.candidateActiveBg)));
-                        renderTarget_->FillRoundedRectangle(cap, brush);
-                    }
                 }
                 if (vertical && !isReference) fill(rect(cell.left, cell.bottom - 1, cell.right, cell.bottom), palette.innerDivider);
                 std::wstring number = std::to_wstring(local + 1);

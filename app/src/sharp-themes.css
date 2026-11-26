@@ -1,183 +1,44 @@
-/* 木框活字 */
-[data-ime-theme="wood_type"] {
-  --ime-board-bg: #EBDDCA;
-  --ime-toolbar-bg: #E8D6BA;
-  --ime-key-bg: #E2D4BF;
-  --ime-key-pressed-bg: #E8CFAA;
-  --ime-fn-key-bg: #DFC9AC;
-  --ime-border: #AA8B6C;
-  --ime-win-outer-border: #493629;
-  --ime-text: #251B14;
-  --ime-subtext: #624A37;
-  --ime-accent: #963E2C;
-  --ime-accent-text: #FFF5DE;
-  --ime-cand-active-bg: #F4DBB9;
-  --ime-cand-active-text: #8B1A10;
-  --ime-win-bg: #F0DFC3;
-  --ime-win-header-bg: #E8D6BA;
+/* Neutral platform fallback. Every named visual skin is supplied by an imported .fcskin file. */
+:root, [data-ime-theme] {
+  --ime-board-bg: #F3F3F3;
+  --ime-toolbar-bg: #E9E9E9;
+  --ime-key-bg: #FFFFFF;
+  --ime-key-pressed-bg: #DCDCDC;
+  --ime-fn-key-bg: #E9E9E9;
+  --ime-border: #B8B8B8;
+  --ime-win-outer-border: #B8B8B8;
+  --ime-text: #202020;
+  --ime-subtext: #606060;
+  --ime-accent: #404040;
+  --ime-accent-text: #FFFFFF;
+  --ime-cand-active-bg: #404040;
+  --ime-cand-active-text: #FFFFFF;
+  --ime-win-bg: #FFFFFF;
+  --ime-win-header-bg: #E9E9E9;
   --ime-radius: 0px;
-  --ime-key-gap: 5px;
+  --ime-key-gap: 4px;
   --ime-board-pad: 4px;
   --ime-key-border-w: 1px;
-  --ime-win-border-w: 3px;
-  --ime-key-shadow: 0 2px 2px #160f0b70;
-  --ime-win-shadow: 0 6px 18px #0003;
+  --ime-win-border-w: 1px;
+  --ime-key-shadow: none;
+  --ime-win-shadow: none;
+  --glow-a: #92B8DF75;
+  --glow-b: #83C9D065;
 }
-
-/* 经典打字机 */
-[data-ime-theme="typewriter"] {
-  --ime-board-bg: #E7D8BF;
-  --ime-toolbar-bg: #EBDDCA;
-  --ime-key-bg: #F1E3CA;
-  --ime-key-pressed-bg: #322C22;
-  --ime-fn-key-bg: #DDC9AA;
-  --ime-border: #9D8667;
-  --ime-win-outer-border: #34302B;
-  --ime-text: #272019;
-  --ime-subtext: #644F39;
-  --ime-accent: #745633;
-  --ime-accent-text: #FFF1D2;
-  --ime-cand-active-bg: #342A1E;
-  --ime-cand-active-text: #FFF1D2;
-  --ime-win-bg: #F1DFC0;
-  --ime-win-header-bg: #EBDDCA;
-  --ime-radius: 0px;
-  --ime-key-gap: 5px;
-  --ime-board-pad: 4px;
-  --ime-key-border-w: 1px;
-  --ime-win-border-w: 3px;
-  --ime-key-shadow: 0 2px 2px #160f0b70;
-  --ime-win-shadow: 0 6px 18px #0003;
-}
-
-/* 绿屏终端 */
-[data-ime-theme="terminal"] {
-  --ime-board-bg: #C9BEA9;
-  --ime-toolbar-bg: #D7CDBA;
-  --ime-key-bg: #E5DDCC;
-  --ime-key-pressed-bg: #B7AB94;
-  --ime-fn-key-bg: #DBD0BA;
-  --ime-border: #8E816B;
-  --ime-win-outer-border: #766C5C;
-  --ime-text: #252722;
-  --ime-subtext: #514B40;
-  --ime-accent: #303535;
-  --ime-accent-text: #F5ECDD;
-  --ime-cand-active-bg: #253729;
-  --ime-cand-active-text: #C2FFAF;
-  --ime-win-bg: #E0D8C7;
-  --ime-win-header-bg: #D7CDBA;
-  --ime-radius: 0px;
-  --ime-key-gap: 5px;
-  --ime-board-pad: 4px;
-  --ime-key-border-w: 1px;
-  --ime-win-border-w: 3px;
-  --ime-key-shadow: 0 2px 2px #160f0b70;
-  --ime-win-shadow: 0 6px 18px #0003;
-}
-
-[data-ime-theme="wood_type"][data-ime-mode="dark"] {
-  --ime-board-bg: #2B211B;
-  --ime-toolbar-bg: #3C2D24;
-  --ime-key-bg: #45362D;
-  --ime-key-pressed-bg: #594235;
-  --ime-fn-key-bg: #392C24;
-  --ime-border: #8B6E55;
-  --ime-win-outer-border: #584031;
-  --ime-text: #F5E3CC;
-  --ime-subtext: #CDB69B;
-  --ime-accent: #A84834;
-  --ime-accent-text: #FFF5DE;
-  --ime-cand-active-bg: #56352A;
-  --ime-cand-active-text: #FFB294;
-  --ime-win-bg: #45362D;
-  --ime-win-header-bg: #3C2D24;
-}
-
-[data-ime-theme="typewriter"][data-ime-mode="dark"] {
-  --ime-board-bg: #181615;
-  --ime-toolbar-bg: #302923;
-  --ime-key-bg: #272321;
-  --ime-key-pressed-bg: #3E342A;
-  --ime-fn-key-bg: #211D19;
-  --ime-border: #8F8271;
-  --ime-win-outer-border: #191615;
-  --ime-text: #F6E8D1;
-  --ime-subtext: #CBBA9B;
-  --ime-accent: #795936;
-  --ime-accent-text: #FFEECC;
-  --ime-cand-active-bg: #3C3126;
-  --ime-cand-active-text: #FFEECC;
-  --ime-win-bg: #272321;
-  --ime-win-header-bg: #302923;
-}
-
-[data-ime-theme="terminal"][data-ime-mode="dark"] {
-  --ime-board-bg: #232720;
-  --ime-toolbar-bg: #34382F;
-  --ime-key-bg: #494B40;
-  --ime-key-pressed-bg: #565A4C;
-  --ime-fn-key-bg: #292C27;
-  --ime-border: #777760;
-  --ime-win-outer-border: #5A5E4F;
-  --ime-text: #F0ECDB;
-  --ime-subtext: #CCCEAF;
-  --ime-accent: #3E6443;
-  --ime-accent-text: #F9FFE8;
-  --ime-cand-active-bg: #253729;
-  --ime-cand-active-text: #B7FFA4;
-  --ime-win-bg: #494B40;
-  --ime-win-header-bg: #34382F;
-}
-
-/* 极客机械 - Light */
-[data-ime-theme="brutal"][data-ime-mode="light"] {
-  --ime-radius: 0px;
-  --ime-key-gap: 6px;
-  --ime-board-pad: 7px;
-  --ime-key-border-w: 1.5px;
-  --ime-win-border-w: 2px;
-  --ime-board-bg: #E6E1D6;
-  --ime-toolbar-bg: #F6F3EC;
-  --ime-key-bg: #FFFDF8;
-  --ime-key-pressed-bg: #F3EFE4;
-  --ime-fn-key-bg: #D7D0C3;
-  --ime-border: #121212;
-  --ime-win-outer-border: #121212;
-  --ime-text: #121212;
-  --ime-subtext: #5E5950;
-  --ime-accent: #B8F500;
-  --ime-accent-text: #121212;
-  --ime-cand-active-bg: #B8F500;
-  --ime-cand-active-text: #121212;
-  --ime-win-bg: #FFFDF8;
-  --ime-win-header-bg: #EFEAE0;
-  --ime-key-shadow: 2px 2px 0px #121212;
-  --ime-win-shadow: 4px 4px 0px #121212;
-}
-
-/* 极客机械 - Dark */
-[data-ime-theme="brutal"][data-ime-mode="dark"] {
-  --ime-radius: 0px;
-  --ime-key-gap: 6px;
-  --ime-board-pad: 7px;
-  --ime-key-border-w: 1.5px;
-  --ime-win-border-w: 2px;
-  --ime-board-bg: #101412;
-  --ime-toolbar-bg: #151B18;
-  --ime-key-bg: #1A211E;
-  --ime-key-pressed-bg: #222B27;
-  --ime-fn-key-bg: #121715;
-  --ime-border: #46574F;
-  --ime-win-outer-border: #00F078;
-  --ime-text: #E6F4EC;
-  --ime-subtext: #6F877B;
-  --ime-accent: #00F078;
-  --ime-accent-text: #08120C;
-  --ime-cand-active-bg: #00F078;
-  --ime-cand-active-text: #08120C;
-  --ime-win-bg: #141A17;
-  --ime-win-header-bg: #0F1412;
-  --ime-key-shadow: 2px 2px 0px #000000;
-  --ime-win-shadow: 4px 4px 0px #000000;
+[data-ime-mode="dark"] {
+  --ime-board-bg: #181818;
+  --ime-toolbar-bg: #303030;
+  --ime-key-bg: #242424;
+  --ime-key-pressed-bg: #3A3A3A;
+  --ime-fn-key-bg: #303030;
+  --ime-border: #626262;
+  --ime-win-outer-border: #626262;
+  --ime-text: #F0F0F0;
+  --ime-subtext: #B0B0B0;
+  --ime-accent: #D0D0D0;
+  --ime-accent-text: #181818;
+  --ime-cand-active-bg: #D0D0D0;
+  --ime-cand-active-text: #181818;
+  --ime-win-bg: #242424;
+  --ime-win-header-bg: #303030;
 }

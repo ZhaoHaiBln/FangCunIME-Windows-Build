@@ -105,16 +105,7 @@ pub fn valid_id(id: &str) -> bool {
     IDS.contains(&id)
 }
 pub fn caption_defaults(settings: &crate::settings::AppSettings) -> (u32, u32) {
-    match (settings.skin.as_str(), settings.dark_mode) {
-        ("typewriter", false) => (0xEBDDCA, 0x272019),
-        ("typewriter", true) => (0x302923, 0xF6E8D1),
-        ("terminal", false) => (0xD7CDBA, 0x252722),
-        ("terminal", true) => (0x34382F, 0xF0ECDB),
-        ("brutal", false) => (0xEFEAE0, 0x121212),
-        ("brutal", true) => (0x0F1412, 0xE6F4EC),
-        (_, true) => (0x3C2D24, 0xF5E3CC),
-        _ => (0xE8D6BA, 0x251B14),
-    }
+    if settings.dark_mode { (0x303030, 0xF0F0F0) } else { (0xE9E9E9, 0x202020) }
 }
 fn color(value: &str) -> bool {
     value.len() == 7

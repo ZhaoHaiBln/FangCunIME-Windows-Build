@@ -424,8 +424,7 @@ LRESULT CALLBACK SettingsWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
                 if (self->customCache_) {
                     self->customSkin_ = self->customCache_->takeReady();
                     if (self->customSkin_ && (self->customSkin_->spec.id != self->customId_ || self->customSkin_->spec.hash != self->customHash_ || self->customSkin_->dark != self->customDark_)) self->customSkin_.reset();
-                    self->builtinSkin_ = self->customId_.empty() ? self->customCache_->takeBuiltinReady() : nullptr;
-                    if (self->builtinSkin_ && (self->builtinSkin_->spec.builtin != self->builtinId_ || self->builtinSkin_->spec.hash != self->builtinHash_ || self->builtinSkin_->dark != self->customDark_)) self->builtinSkin_.reset();
+                    self->builtinSkin_.reset();
                     InvalidateRect(hwnd, nullptr, FALSE);
                 }
                 return 0;
@@ -578,10 +577,10 @@ void SettingsWindow::applyAction(ActionId action) {
         case ActionId::SchemeNineKey: settings_.scheme = InputScheme::NineKey; break;
         case ActionId::ToggleMixedInput: settings_.mixedInput = !settings_.mixedInput; break;
         case ActionId::ToggleChinesePunct: settings_.chinesePunctuation = !settings_.chinesePunctuation; break;
-        case ActionId::SkinTerminal: settings_.skin = SkinPreset::Terminal; break;
-        case ActionId::SkinWoodType: settings_.skin = SkinPreset::WoodType; break;
-        case ActionId::SkinTypewriter: settings_.skin = SkinPreset::Typewriter; break;
-        case ActionId::SkinBrutal: settings_.skin = SkinPreset::Brutal; break;
+        case ActionId::SystemDefault:
+            settings_.skin = SkinPreset::SystemDefault;
+            settings_.customSkinId.clear(); settings_.customSkinHash.clear();
+            break;
         case ActionId::ModeSystem: settings_.themeMode = ThemeMode::System; break;
         case ActionId::ModeLight: settings_.themeMode = ThemeMode::Light; break;
         case ActionId::ModeDark: settings_.themeMode = ThemeMode::Dark; break;
@@ -624,11 +623,6 @@ void SettingsWindow::applyAction(ActionId action) {
         default:
             return;
     }
-    if (action == ActionId::SkinTerminal || action == ActionId::SkinWoodType ||
-        action == ActionId::SkinTypewriter || action == ActionId::SkinBrutal) {
-        settings_.customSkinId.clear();
-        settings_.customSkinHash.clear();
-    }
     saveAndNotify();
 }
 
@@ -669,18 +663,20 @@ void SettingsWindow::drawGlassButton(
     bool bold,
     bool pressed) {
     const auto* builtin = activeBuiltinStyle();
-    const float sink = pressed && builtin && builtin->spec.pressOffsetDp ? *builtin->spec.pressOffsetDp : 0.0f;
+    skin = customSkin_ ? customSkin_->spec.baseSkin : SkinPreset::SystemDefault;
+    const float sink = pressed && customSkin_ ? customSkin_->spec.pressOffsetDp : 0.0f;
     auto rect = targetRect;
     if (sink > 0) {
         renderTarget_->PushAxisAlignedClip(targetRect, D2D1_ANTIALIAS_MODE_ALIASED);
-        rect.left += sink; rect.right += sink; rect.top += sink; rect.bottom += sink;
+        if (skin == SkinPreset::Brutal) { rect.left += sink; rect.right += sink; }
+        rect.top += sink; rect.bottom += sink;
     }
     GlassKeyColors gc = computeGlassKeyColors(
         skin, colors, settings_.keyOpacity, false, functional, emphasized, selected);
     if (customSkin_) {
         const auto& theme = customSkin_->theme();
         gc.top = theme.color(selected ? fangcun::skin::ColorRole::Selection : emphasized ? fangcun::skin::ColorRole::Accent : functional ? fangcun::skin::ColorRole::Function : fangcun::skin::ColorRole::Surface);
-        gc.edge = theme.color(fangcun::skin::ColorRole::Border); gc.ledgeDepthDp = 0;
+        gc.edge = theme.color(fangcun::skin::ColorRole::Border); gc.ledgeDepthDp = skin == SkinPreset::Brutal ? (pressed ? 0.0f : 2.0f) : 0.0f;
     }
 
     const auto face = D2D1::RectF(rect.left, rect.top, rect.right - gc.ledgeDepthDp, rect.bottom - gc.ledgeDepthDp);
@@ -733,26 +729,19 @@ void SettingsWindow::drawGlassButton(
 }
 
 const LoadedBuiltinStyle* SettingsWindow::activeBuiltinStyle() const {
-    return customId_.empty() && builtinSkin_ && builtinSkin_->spec.builtin == skinMetrics(settings_.skin).id &&
-        builtinSkin_->spec.builtin == builtinId_ && builtinSkin_->spec.hash == builtinHash_ &&
-        builtinSkin_->dark == customDark_ ? builtinSkin_.get() : nullptr;
+    return nullptr; // Retired profile data cannot override file-only skins.
 }
 
 void SettingsWindow::refreshCustomSkin() {
     if (!hwnd_) return;
     const bool dark = SettingsStore::effectiveDarkMode(settings_);
-    const std::string nextBuiltin = settings_.customSkinId.empty() && skin::validHash(settings_.builtinStyleHash) ? skinMetrics(settings_.skin).id : "";
-    const std::string nextHash = nextBuiltin.empty() ? "" : settings_.builtinStyleHash;
-    if (customId_ == settings_.customSkinId && customHash_ == settings_.customSkinHash && customDark_ == dark && builtinId_ == nextBuiltin && builtinHash_ == nextHash) return;
+    if (customId_ == settings_.customSkinId && customHash_ == settings_.customSkinHash && customDark_ == dark) return;
     customId_ = settings_.customSkinId; customHash_ = settings_.customSkinHash; customDark_ = dark;
-    builtinId_ = nextBuiltin; builtinHash_ = nextHash;
+    builtinId_.clear(); builtinHash_.clear();
     customSkin_.reset(); builtinSkin_.reset();
-    if ((!customId_.empty() || !builtinId_.empty()) && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
-    if (customCache_) {
-        const auto root = SettingsStore::getDataDirectory();
-        if (!customId_.empty()) customCache_->request(hwnd_, root, customId_, customHash_, dark, false);
-        else customCache_->requestBuiltinStyle(hwnd_, root, builtinId_, builtinHash_, dark);
-    }
+    if (!customId_.empty() && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
+    if (customCache_) customCache_->request(hwnd_, SettingsStore::getDataDirectory(), customId_, customHash_, dark, false);
+
 }
 
 void SettingsWindow::onPaint() {
@@ -1075,19 +1064,19 @@ void SettingsWindow::onPaint() {
     };
 
     auto drawThemeCard = [&](float x, float cy, float w, float h) {
-        drawCardFrame(x, cy, w, h, L"02 · ~/THEME", L"皮肤预设与明暗");
+        drawCardFrame(x, cy, w, h, L"02 · ~/THEME", L"本地皮肤与明暗");
         float ix = x + 14.0f;
         float iw = w - 28.0f;
         float ry = cy + 40.0f;
-        float w2 = (iw - 6.0f) / 2.0f;
-        addPill(ix, ry, w2, 36.0f, L"木框活字", ActionId::SkinWoodType, settings_.skin == SkinPreset::WoodType);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"经典打字机", ActionId::SkinTypewriter, settings_.skin == SkinPreset::Typewriter);
-
-        ry += 42.0f;
-        addPill(ix, ry, w2, 36.0f, L"绿屏终端", ActionId::SkinTerminal, settings_.skin == SkinPreset::Terminal);
-        addPill(ix + w2 + 6.0f, ry, w2, 36.0f, L"极客机械", ActionId::SkinBrutal, settings_.skin == SkinPreset::Brutal);
-
-        ry += 46.0f;
+        addPill(ix, ry, iw, 36.0f, L"系统默认", ActionId::SystemDefault, settings_.customSkinId.empty());
+        ry += 44.0f;
+        if (smallFormat_) {
+            brush->SetColor(toD2DColor(colors.secondary));
+            const std::wstring tip = L"在主设置的皮肤管理中导入 .fcskin 文件";
+            renderTarget_->DrawText(tip.c_str(), static_cast<UINT32>(tip.size()), smallFormat_,
+                D2D1::RectF(ix, ry, ix + iw, ry + 24.0f), brush);
+        }
+        ry += 44.0f;
         float w3 = (iw - 12.0f) / 3.0f;
         addPill(ix, ry, w3, 34.0f, L"跟随系统", ActionId::ModeSystem, settings_.themeMode == ThemeMode::System);
         addPill(ix + w3 + 6.0f, ry, w3, 34.0f, L"浅色模式", ActionId::ModeLight, settings_.themeMode == ThemeMode::Light);

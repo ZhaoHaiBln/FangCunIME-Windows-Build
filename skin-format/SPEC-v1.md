@@ -72,12 +72,12 @@
 
 ## 管理与内部接口（两端协作约定）
 
-内置隐藏可恢复，至少保留一款可见内置作为可靠回退。本地包真正移除；删除当前本地包，或隐藏当前内置时，先在同一次设置事务中切到可见内置，保留明暗、输入、字体、流光与 AI 设置。导入开关默认开，关掉只禁止新导入，不禁用已安装包。
+当前客户端按用户2026-11-26要求不再提供命名内置皮肤。无本地包时使用中性系统默认；删除当前或最后一本地包时，先在同一次设置事务中切到 `system:default`，再清理素材，保留明暗、输入、字体、流光与 AI 设置。旧隐藏/编辑记录只作兼容读取，不会恢复已移除的主题。导入开关默认开，关掉只禁止新导入，不禁用已安装包。
 
-内部安装根为各自应用数据目录的 `skins/<归档SHA256>/`，文件仍用已校验的包内相对路径。安装不可变；目录内另有导入器生成、最多 16 KiB 的 `resolved.ini` 给 Windows 原生组件。注册表保存在现有设置的 `skin_library_v1`（单行 JSON），结构为 `{"version":1,"importEnabled":true,"hiddenBuiltins":[],"packs":[{"id":"fangcun.example","hash":"64位小写sha256"}]}`。本地选择另有 `custom_skin_id` / `custom_skin_hash`；原 `skin` 继续保存基础内置样式，避免旧组件读到未知 ID。逻辑移除先提交注册表和回退选择，再清理不再引用的素材；清理失败可留作后续垃圾清理，不得重新出现在列表。
+内部安装根为各自应用数据目录的 `skins/<归档SHA256>/`，文件仍用已校验的包内相对路径。安装不可变；目录内另有导入器生成、最多 16 KiB 的 `resolved.ini` 给 Windows 原生组件。注册表保存在现有设置的 `skin_library_v1`（单行 JSON），结构为 `{"version":1,"importEnabled":true,"hiddenBuiltins":[],"packs":[{"id":"fangcun.example","hash":"64位小写sha256"}]}`。本地选择另有 `custom_skin_id` / `custom_skin_hash`；原 `skin` 在本地包激活时保存兼容基础几何ID，系统默认保存各平台默认ID；基础ID不再代表可选内置皮肤。逻辑移除先提交注册表和回退选择，再清理不再引用的素材；清理失败可留作后续垃圾清理，不得重新出现在列表。
 
 Windows 原生 resolved.ini 字段固定：`schema_version=1`、`id`、`hash`、`base_skin`（mechanical/typewriter/mahjong/brutal）、`asset_scale`、`font_family`、`press_offset_dp`；每个模式 `light_` / `dark_` 后接 18 个颜色名的 snake_case、`glow_0` 到 `glow_3`。图像字段例如 `light_image_key_normal=light/key_normal.png`、`light_scale_key_normal=nineSlice`、`light_insets_key_normal=18,18,18,18`；其余八个角色同理转 snake_case。颜色统一存 `#RRGGBB`。不存绝对路径。原生组件校验大小、相对路径及字段后，后台 WIC 解码并缓存；切换主题时更新，按键和绘制不读盘。
 
 Android 公共数据 API 由 `data.skin` 提供 `SkinPackManifest`、`SkinPackTheme`、`SkinPackImage`、`SkinLibrarySnapshot`、`SkinPackRepository`；绘制层从当前本地 ID + hash 异步取得 manifest / PNG。保持现有 `SkinPreset`，映射 mechanical→MECHANICAL、typewriter→IVORY_TYPEWRITER、mahjong→JADE_MAHJONG、brutal→BRUTAL；Windows 的兼容基础枚举分别为 WoodType、Typewriter、Terminal、Brutal。
 
-Windows 伴侣命令统一 `skin_library_snapshot`、`skin_set_import_enabled(enabled,revision)`、`skin_set_builtin_hidden(id,hidden,revision)`、`skin_select(id,revision)`、`skin_delete(id,revision)`、`skin_import_pick(revision)`。选择 ID 用 `builtin:<平台原生ID>` / `local:<manifest.id>`。文件选择取消返回 null。所有变更都返回最新 snapshot，并以库 revision 防止迟到操作覆盖新状态；失败不显示成功。图片仅通过受控资源接口返回，禁止任意本机路径访问。
+Windows 伴侣命令统一 `skin_library_snapshot`、`skin_set_import_enabled(enabled,revision)`、`skin_set_builtin_hidden(id,hidden,revision)`、`skin_select(id,revision)`、`skin_delete(id,revision)`、`skin_import_pick(revision)`。当前选择 ID 用 `system:default` / `local:<manifest.id>`；旧 `builtin:<平台原生ID>` 和内置隐藏/编辑写命令只保留安全拒绝，不提供恢复入口。文件选择取消返回 null。所有变更都返回最新 snapshot，并以库 revision 防止迟到操作覆盖新状态；失败不显示成功。图片仅通过受控资源接口返回，禁止任意本机路径访问。

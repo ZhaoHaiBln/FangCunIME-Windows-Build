@@ -1,0 +1,109 @@
+{
+  "sourceCommit": "3626f9d",
+  "sourcePaletteSha256": "d9f46abfae2f746263e1f8f3257d9314416f929075ed0ab148353f46c2b5410d",
+  "previewFontSha256": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a",
+  "ninePatchSources": [
+    {
+      "role": "keyNormal",
+      "source": "skin-format/releases/file-only-v1/sources/grass/ime_key_white.9.png",
+      "sourceSha256": "d2820bbde0da127b43a7030b42f48408b67400b15b6d9253cd34f1039ee1f0e2",
+      "contentSize": [
+        142,
+        177
+      ],
+      "insets": [
+        44,
+        44,
+        46,
+        57
+      ]
+    },
+    {
+      "role": "keyFunction",
+      "source": "skin-format/releases/file-only-v1/sources/grass/ime_key_grass.9.png",
+      "sourceSha256": "034a234307ea09b4b3730c8832a27b23f6521f32baf0afae3c9bf173a7fb7200",
+      "contentSize": [
+        179,
+        180
+      ],
+      "insets": [
+        49,
+        44,
+        51,
+        58
+      ]
+    },
+    {
+      "role": "code",
+      "source": "skin-format/releases/file-only-v1/sources/grass/ime_input_grass.9.png",
+      "sourceSha256": "7172760edece6aba3012c251879ea9ca1e2d5970fcb390d3766ff4d6741330bb",
+      "contentSize": [
+        1394,
+        117
+      ],
+      "insets": [
+        51,
+        41,
+        52,
+        42
+      ]
+    },
+    {
+      "role": "candidates",
+      "source": "skin-format/releases/file-only-v1/sources/grass/ime_candidates_grass.9.png",
+      "sourceSha256": "018836b78a67d3b76b144eedddd850c8b3b02dea1c81e540f71abce4cc736a7d",
+      "contentSize": [
+        1394,
+        138
+      ],
+      "insets": [
+        51,
+        37,
+        52,
+        51
+      ]
+    }
+  ],
+  "packages": [
+    {
+      "file": "fangcun.grass-mechanical.fcskin",
+      "id": "fangcun.grass-mechanical",
+      "bytes": 666604,
+      "sha256": "4be097d748258677e56fa0f2519cd9527379e9a291073e5c72e66b8e0d61605d",
+      "imageRoles": {
+        "light": [
+          "candidates",
+          "code",
+          "deck",
+          "keyAction",
+          "keyFunction",
+          "keyNormal",
+          "selection"
+        ],
+        "dark": [
+          "candidates",
+          "code",
+          "deck",
+          "keyAction",
+          "keyFunction",
+          "keyNormal",
+          "selection"
+        ]
+      },
+      "normalPngOnly": true,
+      "lightPixelIdentityAndDarkAlphaChecked": true
+    },
+    {
+      "file": "fangcun.geek-mechanical.fcskin",
+      "id": "fangcun.geek-mechanical",
+      "bytes": 32345,
+      "sha256": "d9d847cb7ff3c1e7a047bf75bea1c71a9b0a1ae2da0cb99096d63fc985026ccc",
+      "imageRoles": {
+        "light": [],
+        "dark": []
+      },
+      "normalPngOnly": true,
+      "lightPixelIdentityAndDarkAlphaChecked": false
+    }
+  ]
+}

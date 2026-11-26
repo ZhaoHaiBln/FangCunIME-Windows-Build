@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-ime-theme="system_default" data-ime-mode="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -288,7 +288,7 @@
 
             <div class="dual-cand-showcase">
               <div class="showcase-box">
-                <span id="showcase-light-label" class="showcase-label">瑞士网格 · 浅色候选窗</span>
+                <span id="showcase-light-label" class="showcase-label">系统默认 · 浅色候选窗</span>
                 <div class="cand-window is-light-demo" data-tone="light">
                   <div class="cand-top-row">
                     <svg class="cand-mini-logo" viewBox="0 0 100 100">
@@ -309,7 +309,7 @@
               </div>
 
               <div class="showcase-box">
-                <span id="showcase-dark-label" class="showcase-label">瑞士网格 · 深色候选窗</span>
+                <span id="showcase-dark-label" class="showcase-label">系统默认 · 深色候选窗</span>
                 <div class="cand-window is-dark" data-tone="dark">
                   <div class="cand-top-row">
                     <svg class="cand-mini-logo" viewBox="0 0 100 100">
@@ -331,72 +331,16 @@
             </div>
 
             <div class="section-card" style="margin-top: 14px">
-              <div class="skin-library-heading"><h3 class="sub-heading">内置皮肤</h3><button id="skin-library-reload" class="mini-pill" type="button">重新读取</button></div>
+              <div class="skin-library-heading"><h3 class="sub-heading">皮肤文件</h3><button id="skin-library-reload" class="mini-pill" type="button">重新读取</button></div>
               <p id="skin-library-status" class="skin-library-note" role="status" aria-live="polite">正在读取皮肤列表…</p>
-              <div id="skin-group" class="skin-grid" aria-label="选择皮肤">
-                <article class="builtin-skin-card">
-                <button class="skin-option" data-skin="wood_type" type="button" aria-pressed="false">
-                  <span class="skin-swatch" data-ime-theme="wood_type" data-ime-mode="light" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                  <span>木框活字</span>
-                </button>
-                  <div class="builtin-card-actions"><button type="button" data-builtin-edit="wood_type">编辑</button><button type="button" data-builtin-reset="wood_type">恢复原样</button></div>
-                </article>
-                <article class="builtin-skin-card">
-                <button class="skin-option" data-skin="typewriter" type="button" aria-pressed="false">
-                  <span class="skin-swatch" data-ime-theme="typewriter" data-ime-mode="light" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                  <span>经典打字机</span>
-                </button>
-                  <div class="builtin-card-actions"><button type="button" data-builtin-edit="typewriter">编辑</button><button type="button" data-builtin-reset="typewriter">恢复原样</button></div>
-                </article>
-                <article class="builtin-skin-card">
-                <button class="skin-option" data-skin="terminal" type="button" aria-pressed="false">
-                  <span class="skin-swatch" data-ime-theme="terminal" data-ime-mode="light" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                  <span>绿屏终端</span>
-                </button>
-                  <div class="builtin-card-actions"><button type="button" data-builtin-edit="terminal">编辑</button><button type="button" data-builtin-reset="terminal">恢复原样</button></div>
-                </article>
-                <article class="builtin-skin-card">
-                <button class="skin-option" data-skin="brutal" type="button" aria-pressed="false">
-                  <span class="skin-swatch" data-ime-theme="brutal" data-ime-mode="dark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                  <span>极客机械</span>
-                </button>
-                  <div class="builtin-card-actions"><button type="button" data-builtin-edit="brutal">编辑</button><button type="button" data-builtin-reset="brutal">恢复原样</button></div>
-                </article>
+              <div class="skin-default-row">
+                <div><strong id="skin-current-name">当前：系统默认</strong><p class="skin-library-note">未使用皮肤文件时，键盘和候选窗使用简洁的默认外观。</p></div>
+                <button id="skin-use-default" class="mini-pill" type="button" aria-pressed="true" disabled>使用系统默认</button>
               </div>
-
-
-              <section id="builtin-skin-editor" class="builtin-skin-editor" hidden aria-labelledby="builtin-editor-title">
-                <div class="builtin-editor-heading"><h3 id="builtin-editor-title" tabindex="-1">编辑皮肤</h3><button id="builtin-editor-cancel" class="mini-pill" type="button">取消</button></div>
-                <p class="skin-library-note">保留原拟物材质和键位。深浅配色分别保存，不改变当前明暗模式。</p>
-                <div class="builtin-tone-switch" role="group" aria-label="编辑明暗配色"><button type="button" data-builtin-tone="light" aria-pressed="true">浅色</button><button type="button" data-builtin-tone="dark" aria-pressed="false">深色</button></div>
-                <div id="builtin-editor-material" class="builtin-editor-material" data-ime-theme="wood_type" data-ime-mode="light">
-                  <div id="builtin-editor-candidate" class="cand-window builtin-editor-preview" data-ime-theme="wood_type" data-ime-mode="light">
-                    <div class="cand-top-row"><span class="cand-composing">fang'cun<span class="cand-caret">|</span></span></div>
-                    <div class="cand-bottom-strip"><span class="cand-pill is-selected"><span class="cand-num">1</span><span class="cand-word">方寸</span></span><span class="cand-pill"><span class="cand-num">2</span><span class="cand-word">方村</span></span><span class="cand-pill"><span class="cand-num">3</span><span class="cand-word">放存</span></span></div>
-                  </div>
-                  <div class="skin-swatch builtin-editor-keys" aria-label="键帽材质预览"><i>q<small>1</small></i><i>w<small>2</small></i><i>e<small>3</small></i><button class="mini-pill builtin-press-preview" type="button">按一下</button></div>
-                </div>
-                <h4 class="builtin-editor-subheading">常用配色</h4><div id="builtin-editor-colors" class="builtin-color-grid"></div>
-                <details class="builtin-editor-details"><summary>更多配色与文字颜色</summary><div id="builtin-editor-advanced" class="builtin-color-grid"></div></details>
-                <details class="builtin-editor-details"><summary>字体和按压效果</summary>
-                  <label class="builtin-option-row" for="builtin-editor-font"><span>字体</span><select id="builtin-editor-font"><option value="">皮肤默认</option><option value="sans">黑体</option><option value="serif">宋体</option><option value="mono">等宽</option></select></label>
-                  <label class="builtin-option-row" for="builtin-editor-use-press"><span>自定义按压下沉</span><input id="builtin-editor-use-press" type="checkbox" /></label>
-                  <label class="builtin-option-row" for="builtin-editor-press"><span id="builtin-editor-press-value">使用皮肤默认</span><input id="builtin-editor-press" type="range" min="0" max="2" step="0.1" value="1.5" disabled /></label>
-                </details>
-                <details class="builtin-editor-details"><summary>打字流光颜色</summary><p class="skin-library-note">只修改流光配色；原来的流光开关和减少动画设置仍然有效。</p><div id="builtin-editor-glow" class="builtin-color-grid"></div></details>
-                <p id="builtin-editor-status" class="skin-library-note" role="status" aria-live="polite"></p><p id="builtin-editor-error" class="skin-library-error" role="alert" hidden></p>
-                <div class="builtin-editor-actions"><button id="builtin-editor-defaults" class="mini-pill" type="button">草稿恢复原样</button><button id="builtin-editor-reload" class="mini-pill" type="button">重新读取并保留草稿</button><button id="builtin-editor-save" class="mini-pill skin-action-primary" type="button">保存并使用</button></div>
-              </section>
-
-              <details id="skin-builtin-management" class="skin-management">
-                <summary>管理内置皮肤</summary>
-                <p class="skin-library-note">隐藏后不在选择区显示，随时可以恢复；至少保留一款内置皮肤。</p>
-                <div id="skin-builtin-controls"></div>
-              </details>
 
               <div class="skin-local-heading"><h3 class="sub-heading">本地皮肤</h3><button id="skin-import" class="mini-pill" type="button" disabled>导入 .fcskin</button></div>
               <label class="skin-import-toggle"><span>允许导入本地皮肤<small>关闭只停止新导入，已安装皮肤仍可使用</small></span><input id="skin-import-enabled" class="ui-switch" type="checkbox" checked disabled /></label>
-              <p id="skin-local-empty" class="skin-library-note">还没有本地皮肤。导入后先查看，再点选使用。</p>
+              <p id="skin-local-empty" class="skin-library-note">还没有皮肤文件。导入「极客机械」「草绿机械」或其他 .fcskin 文件，再点选使用。</p>
               <div id="skin-local-grid" class="skin-local-grid" aria-label="本地皮肤"></div>
               <p id="skin-library-error" class="skin-library-error" role="alert" hidden></p>
 

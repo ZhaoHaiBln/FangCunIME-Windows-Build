@@ -1,9 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./skins.css";
-import { applyBuiltinStyles, installBuiltinEditor, type BuiltinStyle } from "./builtin-skins";
 
-type Builtin = "wood_type" | "typewriter" | "terminal" | "brutal";
 type Tone = "light" | "dark";
 type Role = "deck" | "toolbar" | "code" | "candidates" | "selection" | "keyNormal" | "keyFunction" | "keyAction";
 type ColorName = "background" | "surface" | "border" | "function" | "text" | "muted" | "accent" | "onAccent" | "pressed" | "toolbar" | "candidateBackground" | "candidateText" | "selection" | "onSelection" | "keyText" | "keyHint" | "functionText" | "codeText";
@@ -12,13 +10,12 @@ interface SkinTheme { colors: Record<ColorName, string>; glow: [string, string, 
 interface Manifest { format: "fangcun.skin"; schemaVersion: 1; id: string; name: string; version: number; author?: string; license?: string; baseSkin: "mechanical" | "typewriter" | "mahjong" | "brutal"; assetScale: number; fontFamily: "sans" | "serif" | "mono"; pressOffsetDp: number; preview: string; themes: Record<Tone, SkinTheme>; }
 interface PackInfo { id: string; hash: string; name: string; version: number; author: string; baseSkin: Manifest["baseSkin"]; previewUrl: string; unavailable?: boolean; }
 interface ActivePack { id?: string; hash: string; manifest: Manifest; imageUrls: Record<Tone, Partial<Record<Role, string>>>; }
-interface Library { revision: string; importEnabled: boolean; hiddenBuiltins: string[]; builtins: Array<{ id: Builtin; label: string; hidden: boolean }>; packs: PackInfo[]; activeId: string; active: ActivePack | null; builtinStyles?: Partial<Record<Builtin, BuiltinStyle>>; warning?: string | null; }
+interface Library { revision: string; importEnabled: boolean; packs: PackInfo[]; activeId: string; active: ActivePack | null; warning?: string | null; }
 interface AppliedTheme { skin: string; dark: boolean; themeMode: string; customSkinId?: string; customSkinHash?: string; }
 
 const native = isTauri();
 const mode = new URLSearchParams(location.search).get("mode") ?? "main";
 const main = mode === "main";
-const labels: Record<Builtin, string> = { wood_type: "木框活字", typewriter: "经典打字机", terminal: "绿屏终端", brutal: "极客机械" };
 const roles: Role[] = ["deck", "toolbar", "code", "candidates", "selection", "keyNormal", "keyFunction", "keyAction"];
 const colorNames: ColorName[] = ["background", "surface", "border", "function", "text", "muted", "accent", "onAccent", "pressed", "toolbar", "candidateBackground", "candidateText", "selection", "onSelection", "keyText", "keyHint", "functionText", "codeText"];
 const variables: Record<ColorName, string[]> = {
@@ -32,9 +29,9 @@ const variables: Record<ColorName, string[]> = {
 const ownedVariables = [...Object.values(variables).flat(), "--ime-deck", "--ime-paper", "--ime-screen", "--ime-crt-code", "--glow-a", "--glow-b", "--fc-font", "--fc-press-offset"];
 const CAS_ERROR = "皮肤列表已更新，请重新读取后重试";
 const knownErrors = new Set([
-  CAS_ERROR, "内置皮肤编辑配置无效，已保留原设置", "至少保留一款可见内置皮肤", "至少保留一款可见的内置皮肤", "本地皮肤导入已关闭",
+  CAS_ERROR, "本地皮肤导入已关闭",
   "皮肤导入已关闭，已安装的皮肤仍可使用", "皮肤导入已关闭，未安装", "本地皮肤不存在",
-  "皮肤包不存在，请重新读取", "该内置皮肤已隐藏或不存在", "同名皮肤已存在，请先删除旧包再导入",
+  "皮肤包不存在，请重新读取", "同名皮肤已存在，请先删除旧包再导入",
   "皮肤文件不可用，原选择和文件已保留", "皮肤库数据无效，已保留原文件", "请选择 .fcskin 皮肤包",
   "皮肤包格式不正确，请使用方寸 .fcskin v1 皮肤包", "皮肤素材过大，未导入", "皮肤包展开后过大，未导入",
   "皮肤图片过大，未导入", "皮肤图片总像素过大，未导入", "皮肤九切片边距不正确，未导入",
@@ -44,7 +41,7 @@ const knownErrors = new Set([
 ]);
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
 let library: Library | null = null;
-let theme: AppliedTheme = { skin: document.documentElement.dataset.imeTheme ?? "wood_type", dark: document.documentElement.dataset.imeMode === "dark", themeMode: "system" };
+let theme: AppliedTheme = { skin: document.documentElement.dataset.imeTheme ?? "system_default", dark: document.documentElement.dataset.imeMode === "dark", themeMode: "system" };
 let busy = false, mustReload = false, pendingRefresh = false, disposed = false;
 let requestSequence = 0;
 let notice = native ? "正在读取皮肤列表…" : "界面预览 · 本地导入需在方寸桌面伴侣中使用";
@@ -68,12 +65,6 @@ const observer = new ResizeObserver(entries => {
     if (layer?.dataset.insets) fitSlices(layer, target, layer.dataset.insets, Number(layer.dataset.assetScale));
   }
 });
-
-const builtinEditor = main ? installBuiltinEditor({
-  native, library: () => library, busy: () => busy, blocked: () => mustReload,
-  mutate: (command, args, success, revision) => mutate(command, args, success, revision),
-  reload: () => reload(true),
-}) : null;
 
 function allowedUrl(raw: string | undefined, hash: string, path?: string): string | null {
   if (!raw || !/^[a-f0-9]{64}$/.test(hash)) return null;
@@ -152,22 +143,23 @@ function imageRole(target: HTMLElement, active: ActivePack, tone: Tone, role: Ro
 }
 function decorate(selector: string, active: ActivePack, tone: Tone, role: Role): void {
   document.querySelectorAll<HTMLElement>(selector).forEach(target => {
-    if (!target.closest("#builtin-editor-material")) imageRole(target, active, tone, role);
+    imageRole(target, active, tone, role);
   });
 }
 function applyActive(): void {
   contentObserver.disconnect();
   clearCustom();
   const active = library?.active;
-  applyBuiltinStyles(library, { ...theme, customSkinId: active && validActive(active) ? active.manifest.id : theme.customSkinId });
-  if (!active || !validActive(active)) {
-    const name = labels[theme.skin as Builtin];
-    if (name) { const light = el("showcase-light-label"), dark = el("showcase-dark-label"); if (light) light.textContent = name + " · 浅色候选窗"; if (dark) dark.textContent = name + " · 深色候选窗"; }
-    builtinEditor?.preview();
+  const matchesSelection = active && validActive(active)
+    && library?.activeId === "local:" + active.manifest.id
+    && (theme.customSkinId === undefined || (theme.customSkinId === active.manifest.id
+      && (!theme.customSkinHash || theme.customSkinHash === active.hash)));
+  if (!active || !matchesSelection) {
+    const light = el("showcase-light-label"), dark = el("showcase-dark-label");
+    if (light) light.textContent = "系统默认 · 浅色候选窗";
+    if (dark) dark.textContent = "系统默认 · 深色候选窗";
     return;
   }
-  // A settings refresh can precede the corresponding library snapshot; never paint a stale pack over a known builtin selection.
-  if (theme.customSkinId !== undefined && (theme.customSkinId !== active.manifest.id || (theme.customSkinHash && theme.customSkinHash !== active.hash))) return;
   const tone: Tone = theme.dark ? "dark" : "light";
   applyColors(document.documentElement, active, tone);
   decorate(".win-shell,.altv-popup", active, tone, "deck");
@@ -176,7 +168,7 @@ function applyActive(): void {
   decorate(".mini-pill,.mode-pill,.btn-restore,.clip-icon-btn,.fb-tool-btn,.fb-lang-badge,.sb-btn,.ai-secondary,.ai-modes button", active, tone, "keyFunction");
   decorate(".btn-finish,.ai-primary,.skin-action-primary", active, tone, "keyAction");
   decorate(".nav-item.is-active,.clip-view-tabs button[aria-selected=true]", active, tone, "selection");
-  document.querySelectorAll<HTMLElement>(".cand-window:not(.builtin-editor-preview)").forEach(preview => {
+  document.querySelectorAll<HTMLElement>(".cand-window").forEach(preview => {
     const previewTone: Tone = preview.dataset.imeMode === "dark" ? "dark" : "light";
     applyColors(preview, active, previewTone); decorated.add(preview);
     imageRole(preview, active, previewTone, "candidates");
@@ -188,7 +180,6 @@ function applyActive(): void {
   if (dark) dark.textContent = active.manifest.name + " · 深色候选窗";
   // Other workspaces render new buttons/items independently. Reapply only after those DOM updates,
   // and disconnect while decorating so our own image layers cannot trigger a mutation loop.
-  builtinEditor?.preview();
   contentObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-selected"] });
 }
 function scheduleApply(): void {
@@ -206,22 +197,17 @@ function message(): void {
   const importButton = el<HTMLButtonElement>("skin-import");
   if (importButton) importButton.disabled = !native || !library || busy || mustReload || !library.importEnabled;
   const reload = el<HTMLButtonElement>("skin-library-reload"); if (reload) reload.disabled = !native || busy;
-  document.querySelectorAll<HTMLButtonElement>("#skin-group [data-skin],#skin-local-grid button").forEach(button => { button.disabled = native && (!library || busy || mustReload || button.dataset.unavailable === "true"); });
-  document.querySelectorAll<HTMLInputElement>("#skin-builtin-controls input").forEach(input => {
-    const id = input.dataset.builtin as Builtin;
-    const hidden = library?.hiddenBuiltins.includes(id) ?? false;
-    input.checked = !hidden;
-    input.disabled = !native || !library || busy || mustReload || (!hidden && library.builtins.filter(item => !item.hidden).length <= 1);
-  });
-  builtinEditor?.render();
+  document.querySelectorAll<HTMLButtonElement>("#skin-use-default,#skin-local-grid button").forEach(button => { button.disabled = !native || !library || busy || mustReload || button.dataset.unavailable === "true"; });
+
 }
 function selection(): void {
   if (!library) return;
-  document.querySelectorAll<HTMLButtonElement>("#skin-group [data-skin]").forEach(button => {
-    const selected = library!.activeId === "builtin:" + button.dataset.skin;
-    button.hidden = library!.hiddenBuiltins.includes(button.dataset.skin ?? "");
-    button.classList.toggle("is-selected", selected); button.setAttribute("aria-pressed", String(selected));
-  });
+  const useDefault = el<HTMLButtonElement>("skin-use-default");
+  const isDefault = library.activeId === "system:default";
+  useDefault?.classList.toggle("is-active", isDefault);
+  useDefault?.setAttribute("aria-pressed", String(isDefault));
+  const currentName = el("skin-current-name");
+  if (currentName) currentName.textContent = "当前：" + (library.active?.manifest.name ?? "系统默认");
   document.querySelectorAll<HTMLButtonElement>("#skin-local-grid [data-local-id]").forEach(button => {
     const selected = library!.activeId === "local:" + button.dataset.localId;
     button.classList.toggle("is-selected", selected); button.setAttribute("aria-pressed", String(selected));
@@ -230,14 +216,6 @@ function selection(): void {
 }
 function renderLibrary(): void {
   if (main && library) {
-    const controls = el("skin-builtin-controls");
-    if (controls && !controls.childElementCount) for (const id of Object.keys(labels) as Builtin[]) {
-      const label = document.createElement("label"); label.className = "skin-builtin-row";
-      const text = document.createElement("span"); text.textContent = labels[id];
-      const input = document.createElement("input"); input.type = "checkbox"; input.className = "ui-switch"; input.dataset.builtin = id;
-      input.addEventListener("change", () => { const hidden = !input.checked; message(); void mutate("skin_set_builtin_hidden", { id, hidden }, hidden ? "已隐藏皮肤，可在管理中恢复" : "已恢复内置皮肤"); });
-      label.append(text, input); controls.append(label);
-    }
     const grid = el("skin-local-grid");
     if (grid) {
       grid.replaceChildren();
@@ -252,7 +230,7 @@ function renderLibrary(): void {
         const action = document.createElement("span"); action.className = "skin-local-use"; action.textContent = "使用皮肤";
         use.append(name, meta, action); use.addEventListener("click", () => { void mutate("skin_select", { id: "local:" + pack.id }, "已使用本地皮肤"); });
         const remove = document.createElement("button"); remove.type = "button"; remove.className = "mini-pill skin-local-delete"; remove.textContent = "删除"; remove.setAttribute("aria-label", "删除皮肤“" + pack.name + "”");
-        remove.addEventListener("click", () => { if (window.confirm("删除“" + pack.name + "”？正在使用时会先切回内置皮肤。")) void mutate("skin_delete", { id: "local:" + pack.id }, "已删除本地皮肤"); });
+        remove.addEventListener("click", () => { if (window.confirm("删除“" + pack.name + "”？正在使用时会先切回系统默认外观。")) void mutate("skin_delete", { id: "local:" + pack.id }, "已删除本地皮肤"); });
         card.append(use, remove); grid.append(card);
       }
     }
@@ -302,11 +280,8 @@ async function mutate(command: string, args: object, success: string, expectedRe
 }
 
 window.addEventListener("fangcun:theme-applied", event => { theme = (event as CustomEvent<AppliedTheme>).detail; selection(); scheduleApply(); });
-window.addEventListener("fangcun:skin-select", event => {
-  if (!native) return;
-  event.preventDefault();
-  if (!library || mustReload) { failure = "请先重新读取皮肤列表"; message(); return; }
-  void mutate("skin_select", { id: (event as CustomEvent<{ id: string }>).detail.id }, "已使用内置皮肤");
+el("skin-use-default")?.addEventListener("click", () => {
+  void mutate("skin_select", { id: "system:default" }, "已使用系统默认外观");
 });
 el("skin-library-reload")?.addEventListener("click", () => { void reload(true); });
 el("skin-import")?.addEventListener("click", () => { void mutate("skin_import_pick", {}, "已导入皮肤，请点选使用"); });

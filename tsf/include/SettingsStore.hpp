@@ -13,7 +13,7 @@ struct AppSettings {
     InputScheme scheme = InputScheme::Flypy;
     bool mixedInput = true;
     bool chinesePunctuation = true;
-    SkinPreset skin = SkinPreset::WoodType;
+    SkinPreset skin = SkinPreset::SystemDefault;
     std::string customSkinId;
     std::string customSkinHash;
     // Read-only reference owned by the builtin editor, not fallback saves.

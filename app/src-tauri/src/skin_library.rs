@@ -1,6 +1,6 @@
 //! Passive, immutable local skin packages. The existing INI transaction is the
 //! authority; cached metadata never replaces a failed settings read.
-use crate::builtin_skin_edits::{self, BuiltinEdits, BuiltinStyle};
+use crate::builtin_skin_edits::{BuiltinEdits, BuiltinStyle};
 use crate::settings::{self, AppSettings};
 use crate::settings_io;
 use crate::skin_pack::{self, SkinPackManifest, ValidatedPack};
@@ -17,7 +17,8 @@ const REGISTRY_KEY: &str = "skin_library_v1";
 const CONFLICT: &str = "皮肤列表已更新，请重新读取后重试";
 const INVALID: &str = "皮肤库数据无效，已保留原文件";
 const FILE_ERROR: &str = "皮肤文件不可用，原选择和文件已保留";
-const BUILTINS: [(&str, &str); 4] = [
+// Legacy IDs remain readable, but no named skin ships in the selectable catalog.
+const LEGACY_BUILTINS: [(&str, &str); 4] = [
     ("wood_type", "木框活字"),
     ("typewriter", "经典打字机"),
     ("terminal", "绿屏终端"),
@@ -75,7 +76,6 @@ impl Registry {
         let hashes: BTreeSet<_> = registry.packs.iter().map(|pack| &pack.hash).collect();
         if registry.version != 1
             || hidden.len() != registry.hidden_builtins.len()
-            || hidden.len() >= BUILTINS.len()
             || hidden.iter().any(|id| !is_builtin(id))
             || ids.len() != registry.packs.len()
             || hashes.len() != registry.packs.len()
@@ -86,15 +86,19 @@ impl Registry {
         {
             return Err(INVALID.into());
         }
-        registry.builtin_edits = BuiltinEdits::from_document(document)?;
+        // Retired editor data is preserved verbatim for migration/CAS, but it
+        // cannot make the current local-package library unreadable.
+        registry.builtin_edits = BuiltinEdits::default();
+        registry.builtin_edits.raw = document.lines().filter_map(|line| {
+            let line = line.trim().trim_start_matches('\u{feff}');
+            if line.starts_with(['#', ';']) { return None; }
+            line.split_once('=').filter(|(key, _)| key.trim() == crate::builtin_skin_edits::KEY)
+                .map(|(_, value)| value.trim().to_owned())
+        }).last();
         Ok(registry)
     }
     fn fallback(&self) -> &'static str {
-        BUILTINS
-            .iter()
-            .find(|(id, _)| !self.hidden_builtins.iter().any(|hidden| hidden == id))
-            .unwrap()
-            .0
+        "system_default"
     }
     fn encode(&self) -> Result<String, String> {
         serde_json::to_string(self).map_err(|_| INVALID.into())
@@ -108,7 +112,7 @@ fn valid_hash(hash: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 fn is_builtin(id: &str) -> bool {
-    BUILTINS.iter().any(|(candidate, _)| *candidate == id)
+    LEGACY_BUILTINS.iter().any(|(candidate, _)| *candidate == id)
 }
 pub(crate) fn visible_fallback(document: &str) -> Result<&'static str, String> {
     Ok(Registry::from_document(document)?.fallback())
@@ -184,7 +188,6 @@ struct InstalledPack {
 pub struct SkinLibrary {
     root: PathBuf,
     cache: Mutex<BTreeMap<String, Arc<InstalledPack>>>,
-    builtin_cache: Mutex<BTreeMap<String, BuiltinStyle>>,
 }
 
 impl SkinLibrary {
@@ -192,7 +195,6 @@ impl SkinLibrary {
         Self {
             root,
             cache: Mutex::new(BTreeMap::new()),
-            builtin_cache: Mutex::new(BTreeMap::new()),
         }
     }
     fn settings_path(&self) -> PathBuf {
@@ -214,7 +216,6 @@ impl SkinLibrary {
         registry: Registry,
         settings: AppSettings,
     ) -> Result<SkinSnapshot, String> {
-        *self.builtin_cache.lock().map_err(|_| FILE_ERROR)? = registry.builtin_edits.styles.clone();
         let mut packs = vec![];
         let mut active = None;
         let mut warning = None;
@@ -273,33 +274,21 @@ impl SkinLibrary {
                 }
             }
         }
-        let builtin =
-            if is_builtin(&settings.skin) && !registry.hidden_builtins.contains(&settings.skin) {
-                settings.skin.as_str()
-            } else {
-                registry.fallback()
-            };
         let active_id = active
             .as_ref()
             .map(|pack| format!("local:{}", pack.id))
-            .unwrap_or_else(|| format!("builtin:{builtin}"));
+            .unwrap_or_else(|| "system:default".into());
         Ok(SkinSnapshot {
             revision: revision(&registry, &settings)?,
             import_enabled: registry.import_enabled,
-            builtins: BUILTINS
-                .iter()
-                .map(|(id, label)| BuiltinView {
-                    id: (*id).into(),
-                    label: (*label).into(),
-                    hidden: registry.hidden_builtins.iter().any(|hidden| hidden == id),
-                })
-                .collect(),
-            hidden_builtins: registry.hidden_builtins,
+            builtins: vec![],
+            hidden_builtins: vec![],
             packs,
             active_id,
             active,
             warning,
-            builtin_styles: registry.builtin_edits.styles,
+            // Kept in the DTO for older clients, never rendered or offered.
+            builtin_styles: BTreeMap::new(),
         })
     }
 
@@ -359,27 +348,9 @@ impl SkinLibrary {
                 if revision(&registry, current)? != expected {
                     return Err(CONFLICT.into());
                 }
-                let old_styles = registry.builtin_edits.raw.clone();
                 let mut settings = current.clone();
                 change(&mut registry, &mut settings)?;
                 let mut values = BTreeMap::new();
-                if registry.builtin_edits.raw != old_styles {
-                    // Derivatives are immutable and installed before the INI
-                    // reference becomes visible to TSF. A failed durable write
-                    // leaves at most an unreferenced, harmless small directory.
-                    values.insert(
-                        builtin_skin_edits::KEY.into(),
-                        registry.builtin_edits.encode()?,
-                    );
-                    for id in builtin_skin_edits::IDS {
-                        let hash = if let Some(style) = registry.builtin_edits.styles.get(id) {
-                            install_builtin_style(&self.root, id, style)?
-                        } else {
-                            String::new()
-                        };
-                        values.insert(format!("builtin_style_{id}"), hash);
-                    }
-                }
                 values.insert(REGISTRY_KEY.into(), registry.encode()?);
                 values.insert("skin".into(), settings.skin.clone());
                 values.insert("custom_skin_id".into(), settings.custom_skin_id.clone());
@@ -393,50 +364,16 @@ impl SkinLibrary {
     }
 
     pub fn save_builtin_style(
-        &self,
-        id: &str,
-        style: BuiltinStyle,
-        expected: &str,
-        activate: bool,
-        committed: impl FnOnce(&AppSettings),
+        &self, _id: &str, _style: BuiltinStyle, _expected: &str,
+        _activate: bool, _committed: impl FnOnce(&AppSettings),
     ) -> Result<SkinSnapshot, String> {
-        if !is_builtin(id) {
-            return Err("内置皮肤不存在".into());
-        }
-        style.validate()?;
-        self.mutate(
-            expected,
-            |registry, settings| {
-                registry.builtin_edits.styles.insert(id.into(), style);
-                registry.builtin_edits.raw = Some(registry.builtin_edits.encode()?);
-                if activate {
-                    registry.hidden_builtins.retain(|hidden| hidden != id);
-                    select_builtin(settings, id);
-                }
-                Ok(())
-            },
-            committed,
-        )
+        Err("内置皮肤已移除，请导入 .fcskin 皮肤文件".into())
     }
 
     pub fn reset_builtin_style(
-        &self,
-        id: &str,
-        expected: &str,
-        committed: impl FnOnce(&AppSettings),
+        &self, _id: &str, _expected: &str, _committed: impl FnOnce(&AppSettings),
     ) -> Result<SkinSnapshot, String> {
-        if !is_builtin(id) {
-            return Err("内置皮肤不存在".into());
-        }
-        self.mutate(
-            expected,
-            |registry, _| {
-                registry.builtin_edits.styles.remove(id);
-                registry.builtin_edits.raw = Some(registry.builtin_edits.encode()?);
-                Ok(())
-            },
-            committed,
-        )
+        Err("内置皮肤已移除，请导入 .fcskin 皮肤文件".into())
     }
 
     pub fn set_import_enabled(
@@ -455,33 +392,10 @@ impl SkinLibrary {
         )
     }
     pub fn set_builtin_hidden(
-        &self,
-        id: &str,
-        hidden: bool,
-        expected: &str,
-        committed: impl FnOnce(&AppSettings),
+        &self, _id: &str, _hidden: bool, _expected: &str,
+        _committed: impl FnOnce(&AppSettings),
     ) -> Result<SkinSnapshot, String> {
-        if !is_builtin(id) {
-            return Err("内置皮肤不存在".into());
-        }
-        self.mutate(
-            expected,
-            |registry, settings| {
-                registry.hidden_builtins.retain(|item| item != id);
-                if hidden {
-                    if registry.hidden_builtins.len() == BUILTINS.len() - 1 {
-                        return Err("至少保留一款可见的内置皮肤".into());
-                    }
-                    registry.hidden_builtins.push(id.into());
-                    registry.hidden_builtins.sort();
-                    if settings.custom_skin_id.is_empty() && settings.skin == id {
-                        select_builtin(settings, registry.fallback());
-                    }
-                }
-                Ok(())
-            },
-            committed,
-        )
+        Err("内置皮肤已移除，请导入 .fcskin 皮肤文件".into())
     }
     pub fn select(
         &self,
@@ -518,16 +432,10 @@ impl SkinLibrary {
                     settings.custom_skin_id = entry.id;
                     settings.custom_skin_hash = entry.hash;
                 } else {
-                    let builtin = id.strip_prefix("builtin:").ok_or("皮肤选择无效")?;
-                    if !is_builtin(builtin)
-                        || registry
-                            .hidden_builtins
-                            .iter()
-                            .any(|hidden| hidden == builtin)
-                    {
-                        return Err("该内置皮肤已隐藏或不存在".into());
+                    if id != "system:default" {
+                        return Err("内置皮肤已移除，请导入 .fcskin 皮肤文件".into());
                     }
-                    select_builtin(settings, builtin);
+                    select_system_default(settings);
                 }
                 Ok(())
             },
@@ -542,7 +450,7 @@ impl SkinLibrary {
     ) -> Result<SkinSnapshot, String> {
         let id = id
             .strip_prefix("local:")
-            .ok_or("只能移除本地皮肤；内置皮肤请使用隐藏")?;
+            .ok_or("请选择要删除的本地皮肤")?;
         let mut removed = None;
         let snapshot = self.mutate(
             expected,
@@ -555,7 +463,7 @@ impl SkinLibrary {
                     .ok_or("本地皮肤不存在")?;
                 registry.packs.retain(|entry| entry.id != id);
                 if settings.custom_skin_id == id {
-                    select_builtin(settings, registry.fallback());
+                    select_system_default(settings);
                 }
                 removed = Some(entry.hash);
                 Ok(())
@@ -686,23 +594,7 @@ impl SkinLibrary {
     }
     pub fn chrome_colors(&self, settings: &AppSettings) -> Option<(u32, u32)> {
         if settings.custom_skin_id.is_empty() {
-            let cache = self.builtin_cache.lock().ok()?;
-            let style = cache.get(&settings.skin)?;
-            let tone = style
-                .themes
-                .get(if settings.dark_mode { "dark" } else { "light" })?;
-            let color = |name: &str| {
-                tone.colors
-                    .get(name)
-                    .and_then(|v| u32::from_str_radix(v.strip_prefix('#')?, 16).ok())
-            };
-            let defaults = builtin_skin_edits::caption_defaults(settings);
-            return Some((
-                color("toolbar")
-                    .or_else(|| color("background"))
-                    .unwrap_or(defaults.0),
-                color("text").unwrap_or(defaults.1),
-            ));
+            return None;
         }
         let cache = self.cache.lock().ok()?;
         let pack = cache.get(&settings.custom_skin_hash)?;
@@ -720,8 +612,8 @@ impl SkinLibrary {
     }
 }
 
-fn select_builtin(settings: &mut AppSettings, id: &str) {
-    settings.skin = id.into();
+fn select_system_default(settings: &mut AppSettings) {
+    settings.skin = "system_default".into();
     settings.custom_skin_id.clear();
     settings.custom_skin_hash.clear();
 }
@@ -858,50 +750,6 @@ fn read_installed_files(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, String
     walk(root, root, &mut files, &mut 0, &mut 0, 0)?;
     Ok(files)
 }
-fn install_builtin_style(root: &Path, id: &str, style: &BuiltinStyle) -> Result<String, String> {
-    let hash = style.hash(id)?;
-    let body = style.resolved_ini(id)?;
-    let directory = root.join("builtin-styles").join(id);
-    for path in [root.join("builtin-styles"), directory.clone()] {
-        fs::create_dir_all(&path).map_err(|_| FILE_ERROR)?;
-        let metadata = fs::symlink_metadata(&path).map_err(|_| FILE_ERROR)?;
-        if !metadata.is_dir() || is_link(&metadata) {
-            return Err(FILE_ERROR.into());
-        }
-    }
-    let target = directory.join(&hash);
-    if target.exists() {
-        let metadata = fs::symlink_metadata(&target).map_err(|_| FILE_ERROR)?;
-        if !metadata.is_dir() || is_link(&metadata) {
-            return Err(FILE_ERROR.into());
-        }
-        if read_limited(&regular_child(&target, "resolved.ini")?, 16384)? != body.as_bytes() {
-            return Err(FILE_ERROR.into());
-        }
-        return Ok(hash);
-    }
-    let staging = directory.join(format!(".stage-{:032x}", rand::random::<u128>()));
-    fs::create_dir(&staging).map_err(|_| FILE_ERROR)?;
-    struct RemoveStage(PathBuf);
-    impl Drop for RemoveStage {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
-    let _stage = RemoveStage(staging.clone());
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(staging.join("resolved.ini"))
-        .map_err(|_| FILE_ERROR)?;
-    file.write_all(body.as_bytes())
-        .and_then(|_| file.sync_all())
-        .map_err(|_| FILE_ERROR)?;
-    drop(file);
-    fs::rename(&staging, &target).map_err(|_| FILE_ERROR)?;
-    Ok(hash)
-}
-
 fn basic_png_header(bytes: &[u8]) -> bool {
     if bytes.len() < 33 || &bytes[..8] != b"\x89PNG\r\n\x1a\n" || &bytes[12..16] != b"IHDR" {
         return false;
@@ -1063,195 +911,58 @@ mod tests {
     }
 
     #[test]
-    fn builtin_edits_are_in_place_and_activation_reset_preserve_every_other_preference() {
-        let f = Fixture::new();
-        fs::write(
-            f.settings(),
-            "theme_mode=dark\nscheme=ninekey\ntyping_glow=0\nfuture=保留\n",
-        )
-        .unwrap();
-        let library = f.library();
-        let initial = library.snapshot().unwrap();
-        let imported = library
-            .import_bytes(
-                &archive("fangcun.sample", "#123456", 1),
-                &initial.revision,
-                |_| {},
-            )
-            .unwrap();
-        let selected = library
-            .select("local:fangcun.sample", &imported.revision, |_| {})
-            .unwrap();
-        let first:BuiltinStyle=serde_json::from_str(r##"{"fontFamily":"mono","themes":{"light":{"colors":{"candidateBackground":"#203040"}}}}"##).unwrap();
-        let edited = library
-            .save_builtin_style(
-                "wood_type",
-                first.clone(),
-                &selected.revision,
-                false,
-                |_| {},
-            )
-            .unwrap();
-        assert_eq!(edited.active_id, selected.active_id);
-        assert_eq!(edited.packs.len(), 1);
-        assert_eq!(edited.builtins.len(), 4);
-        assert_eq!(edited.builtin_styles["wood_type"], first);
-        let mut chrome_settings = AppSettings::default();
-        chrome_settings.skin = "wood_type".into();
-        chrome_settings.dark_mode = false;
-        // No toolbar/background edits must retain the ordinary native caption.
-        assert_eq!(
-            library.chrome_colors(&chrome_settings),
-            Some(builtin_skin_edits::caption_defaults(&chrome_settings))
-        );
-        let hash = first.hash("wood_type").unwrap();
-        let ini = fs::read_to_string(
-            f.0.join("builtin-styles/wood_type")
-                .join(&hash)
-                .join("resolved.ini"),
-        )
-        .unwrap();
-        assert!(ini.contains("light_candidate_background=#203040\n") && !ini.contains("dark_"));
-        let hidden = library
-            .set_builtin_hidden("terminal", true, &edited.revision, |_| {})
-            .unwrap();
-        let other: BuiltinStyle = serde_json::from_str(
-            r##"{"pressOffsetDp":1.25,"themes":{"dark":{"colors":{"accent":"#ABCDEF"}}}}"##,
-        )
-        .unwrap();
-        let active = library
-            .save_builtin_style("terminal", other.clone(), &hidden.revision, true, |_| {})
-            .unwrap();
-        assert_eq!(active.active_id, "builtin:terminal");
-        assert!(!active.hidden_builtins.iter().any(|id| id == "terminal"));
-        assert_eq!(active.packs.len(), 1);
-        let restored = library
-            .reset_builtin_style("wood_type", &active.revision, |_| {})
-            .unwrap();
-        assert_eq!(restored.active_id, "builtin:terminal");
-        assert!(!restored.builtin_styles.contains_key("wood_type"));
-        assert_eq!(restored.builtin_styles["terminal"], other);
-        let body = fs::read_to_string(f.settings()).unwrap();
-        for preserved in [
-            "theme_mode=dark\n",
-            "scheme=ninekey\n",
-            "typing_glow=0\n",
-            "future=保留\n",
-        ] {
-            assert!(body.contains(preserved));
+    fn empty_catalog_and_retired_hidden_edits_preserve_legacy_records_and_preferences() {
+        for raw in [r#"{"version":1,"styles":{"brutal":{"fontFamily":"mono"}}}"#, "{broken"] {
+            let f = Fixture::new();
+            let registry = r#"{"version":1,"importEnabled":false,"hiddenBuiltins":["wood_type","typewriter","terminal","brutal"],"packs":[]}"#;
+            let body = format!("skin=typewriter\nskin_library_v1={registry}\nbuiltin_skin_edits_v1={raw}\nbuiltin_style_typewriter={}\ntheme_mode=dark\nscheme=ninekey\ntyping_glow=0\nfuture=保留\n", "a".repeat(64));
+            fs::write(f.settings(), &body).unwrap();
+            let library = f.library();
+            let state = library.snapshot().unwrap();
+            assert_eq!(state.active_id, "system:default");
+            assert!(state.builtins.is_empty() && state.hidden_builtins.is_empty() && state.builtin_styles.is_empty());
+            assert!(!state.import_enabled && state.packs.is_empty());
+            assert_eq!(fs::read_to_string(f.settings()).unwrap(), body);
+            assert_eq!(library.chrome_colors(&settings::parse_content(&body)), None);
+            let saved = library.set_import_enabled(true, &state.revision, |_| {}).unwrap();
+            assert!(saved.import_enabled);
+            let after = fs::read_to_string(f.settings()).unwrap();
+            for line in [format!("builtin_skin_edits_v1={raw}\n"), format!("builtin_style_typewriter={}\n", "a".repeat(64)), "theme_mode=dark\n".into(), "scheme=ninekey\n".into(), "typing_glow=0\n".into(), "future=保留\n".into()] {
+                assert!(after.contains(&line), "Preserved {line}");
+            }
+            assert_eq!(f.library().snapshot().unwrap().active_id, "system:default");
         }
-        assert!(body.contains("builtin_style_wood_type=\n"));
-        assert!(body.contains(&format!(
-            "builtin_style_terminal={}\n",
-            other.hash("terminal").unwrap()
-        )));
-        assert_eq!(
-            f.library().snapshot().unwrap().builtin_styles,
-            restored.builtin_styles
-        );
     }
 
     #[test]
-    fn builtin_caption_uses_only_active_mode_edits_and_reset_clears_cached_overrides() {
+    fn retired_builtin_commands_cannot_publish_modify_files_or_create_derivatives() {
         let f = Fixture::new();
         let library = f.library();
-        let initial = library.snapshot().unwrap();
-        let style:BuiltinStyle=serde_json::from_str(r##"{"themes":{"light":{"colors":{"toolbar":"#112233","text":"#445566"}},"dark":{"colors":{"background":"#778899"}}}}"##).unwrap();
-        let saved = library
-            .save_builtin_style("brutal", style, &initial.revision, true, |_| {})
-            .unwrap();
-        let mut settings = AppSettings::default();
-        settings.skin = "brutal".into();
-        settings.dark_mode = false;
-        assert_eq!(library.chrome_colors(&settings), Some((0x112233, 0x445566)));
-        settings.dark_mode = true;
-        assert_eq!(
-            library.chrome_colors(&settings),
-            Some((0x778899, builtin_skin_edits::caption_defaults(&settings).1))
-        );
-        settings.custom_skin_id = "fangcun.local".into();
-        settings.custom_skin_hash = "a".repeat(64);
-        assert_eq!(
-            library.chrome_colors(&settings),
-            None,
-            "Local package never inherits builtin edits"
-        );
-        let _ = library
-            .reset_builtin_style("brutal", &saved.revision, |_| {})
-            .unwrap();
-        settings.custom_skin_id.clear();
-        settings.custom_skin_hash.clear();
-        assert_eq!(library.chrome_colors(&settings), None);
+        let state = library.snapshot().unwrap();
+        for id in ["wood_type", "typewriter", "terminal", "brutal"] {
+            assert!(library.select(&format!("builtin:{id}"), &state.revision, |_| panic!("No retired selection publish")).is_err());
+            assert!(library.save_builtin_style(id, BuiltinStyle::default(), &state.revision, true, |_| panic!("No retired edit publish")).is_err());
+            assert!(library.reset_builtin_style(id, &state.revision, |_| panic!("No retired restore publish")).is_err());
+            assert!(library.set_builtin_hidden(id, false, &state.revision, |_| panic!("No retired catalog publish")).is_err());
+        }
+        assert!(!f.settings().exists() && !f.0.join("builtin-styles").exists());
+        assert_eq!(library.snapshot().unwrap().revision, state.revision);
     }
 
     #[test]
-    fn builtin_style_cas_includes_raw_json_and_failed_saves_never_publish_or_overwrite() {
+    fn local_mutation_cas_includes_retired_raw_text_and_failed_writes_never_publish() {
         let f = Fixture::new();
+        fs::write(f.settings(), "builtin_skin_edits_v1={broken\nfuture=keep\n").unwrap();
         let library = f.library();
-        let initial = library.snapshot().unwrap();
-        let first: BuiltinStyle = serde_json::from_str(r#"{"fontFamily":"sans"}"#).unwrap();
-        let saved = library
-            .save_builtin_style("brutal", first, &initial.revision, false, |_| {})
-            .unwrap();
-        let body = fs::read_to_string(f.settings())
-            .unwrap()
-            .replace("\"styles\":{", "\"styles\": {");
-        fs::write(f.settings(), &body).unwrap();
-        assert_eq!(
-            library
-                .reset_builtin_style("brutal", &saved.revision, |_| panic!("No stale publish"))
-                .err()
-                .as_deref(),
-            Some(CONFLICT)
-        );
+        let state = library.snapshot().unwrap();
+        let changed = "builtin_skin_edits_v1={changed\nfuture=keep\n";
+        fs::write(f.settings(), changed).unwrap();
+        assert_eq!(library.set_import_enabled(false, &state.revision, |_| panic!("No stale publish")).err().as_deref(), Some(CONFLICT));
         let fresh = library.snapshot().unwrap();
         let lock = settings_io::lock(&f.settings()).unwrap();
-        assert!(library
-            .save_builtin_style(
-                "brutal",
-                BuiltinStyle::default(),
-                &fresh.revision,
-                true,
-                |_| panic!("No failed publish")
-            )
-            .is_err());
-        assert_eq!(fs::read_to_string(f.settings()).unwrap(), body);
+        assert!(library.select("system:default", &fresh.revision, |_| panic!("No failed publish")).is_err());
+        assert_eq!(fs::read_to_string(f.settings()).unwrap(), changed);
         drop(lock);
-        fs::write(f.settings(), "builtin_skin_edits_v1={broken\nfuture=keep\n").unwrap();
-        let original = fs::read(f.settings()).unwrap();
-        assert!(library.snapshot().is_err());
-        assert!(library
-            .reset_builtin_style("brutal", &fresh.revision, |_| panic!(
-                "No invalid-state publish"
-            ))
-            .is_err());
-        assert_eq!(fs::read(f.settings()).unwrap(), original);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn builtin_derivative_link_is_rejected_without_rewriting_settings_or_external_file() {
-        let f = Fixture::new();
-        let library = f.library();
-        let initial = library.snapshot().unwrap();
-        let style = BuiltinStyle::default();
-        let hash = style.hash("brutal").unwrap();
-        let external = f.0.join("external");
-        fs::create_dir(&external).unwrap();
-        fs::write(external.join("resolved.ini"), "untouched").unwrap();
-        fs::create_dir_all(f.0.join("builtin-styles/brutal")).unwrap();
-        std::os::unix::fs::symlink(&external, f.0.join("builtin-styles/brutal").join(hash))
-            .unwrap();
-        assert!(library
-            .save_builtin_style("brutal", style, &initial.revision, false, |_| panic!(
-                "No link publish"
-            ))
-            .is_err());
-        assert!(!f.settings().exists());
-        assert_eq!(
-            fs::read_to_string(external.join("resolved.ini")).unwrap(),
-            "untouched"
-        );
     }
 
     #[test]
@@ -1268,7 +979,7 @@ mod tests {
         let imported = library
             .import_bytes(&bytes, &initial.revision, |_| {})
             .unwrap();
-        assert_eq!(imported.active_id, "builtin:wood_type");
+        assert_eq!(imported.active_id, "system:default");
         assert_eq!(imported.packs.len(), 1);
         assert_eq!(
             library
@@ -1335,60 +1046,30 @@ mod tests {
     }
 
     #[test]
-    fn hiding_and_deleting_active_items_commit_a_visible_fallback_without_resetting_preferences() {
+    fn system_selection_and_last_local_deletion_preserve_files_and_other_preferences() {
         let f = Fixture::new();
         let library = f.library();
-        fs::write(
-            f.settings(),
-            "theme_mode=dark\nscheme=ninekey\nkey_opacity=0.73\n",
-        )
-        .unwrap();
-        let mut state = library.snapshot().unwrap();
-        state = library
-            .set_builtin_hidden("wood_type", true, &state.revision, |_| {})
-            .unwrap();
-        assert_eq!(state.active_id, "builtin:typewriter");
-        state = library
-            .set_builtin_hidden("terminal", true, &state.revision, |_| {})
-            .unwrap();
-        state = library
-            .set_builtin_hidden("brutal", true, &state.revision, |_| {})
-            .unwrap();
-        let before = fs::read(f.settings()).unwrap();
-        assert!(library
-            .set_builtin_hidden("typewriter", true, &state.revision, |_| {})
-            .is_err());
-        assert_eq!(fs::read(f.settings()).unwrap(), before);
-        state = library
-            .import_bytes(
-                &archive("fangcun.sample", "#112233", 1),
-                &state.revision,
-                |_| {},
-            )
-            .unwrap();
-        state = library
-            .select("local:fangcun.sample", &state.revision, |_| {})
-            .unwrap();
-        let old_hash = state.packs[0].hash.clone();
-        state = library
-            .delete("local:fangcun.sample", &state.revision, |_| {})
-            .unwrap();
-        assert_eq!(state.active_id, "builtin:typewriter");
-        assert!(state.packs.is_empty());
+        fs::write(f.settings(), "skin=terminal\ntheme_mode=dark\nscheme=ninekey\nkey_opacity=0.73\n").unwrap();
+        let state = library.snapshot().unwrap();
+        let imported = library.import_bytes(&archive("fangcun.sample", "#112233", 1), &state.revision, |_| {}).unwrap();
+        let selected = library.select("local:fangcun.sample", &imported.revision, |_| {}).unwrap();
+        let hash = selected.packs[0].hash.clone();
+        let restored = library.select("system:default", &selected.revision, |_| {}).unwrap();
+        assert_eq!(restored.active_id, "system:default");
+        assert_eq!(restored.packs.len(), 1);
+        assert!(f.0.join("skins").join(&hash).is_dir());
+        let selected = library.select("local:fangcun.sample", &restored.revision, |_| {}).unwrap();
+        let deleted = library.delete("local:fangcun.sample", &selected.revision, |_| {}).unwrap();
+        assert_eq!(deleted.active_id, "system:default");
+        assert!(deleted.packs.is_empty() && deleted.builtins.is_empty());
         let current = settings::parse_content(&fs::read_to_string(f.settings()).unwrap());
+        assert_eq!(current.skin, "system_default");
         assert_eq!(current.theme_mode, "dark");
         assert_eq!(current.scheme, "ninekey");
         assert_eq!(current.key_opacity, 0.73);
         assert!(current.custom_skin_id.is_empty() && current.custom_skin_hash.is_empty());
-        assert!(!f.0.join("skins").join(old_hash).exists());
-        assert_eq!(
-            library
-                .set_builtin_hidden("wood_type", false, &state.revision, |_| {})
-                .unwrap()
-                .hidden_builtins
-                .len(),
-            2
-        );
+        assert!(!f.0.join("skins").join(hash).exists());
+        assert_eq!(f.library().snapshot().unwrap().active_id, "system:default");
     }
 
     #[test]

@@ -67,7 +67,7 @@ impl Default for AppSettings {
             caps_lock_bypass: true,
             page_size: 7,
             wheel_paging: true,
-            skin: "wood_type".to_string(),
+            skin: "system_default".to_string(),
             custom_skin_id: String::new(),
             custom_skin_hash: String::new(),
             theme_mode: "system".to_string(),
@@ -108,15 +108,18 @@ fn settings_path() -> PathBuf {
     data_dir().join("settings.ini")
 }
 
-// Keep legacy files readable while offering only the four current skins.
+// Legacy base IDs remain readable for installed .fcskin packages.
+// Without a local package the UI always uses the neutral system appearance.
 // This changes one visual identifier; language, privacy, sharing and typography
 // preferences continue to be read from the same existing settings file.
 fn canonical_skin(id: &str) -> &'static str {
     match id {
+        "system_default" => "system_default",
         "terminal" | "metro" | "square_aluminum" | "native_light" => "terminal",
         "brutal" | "square_amber" | "deep_blue" => "brutal",
         "typewriter" | "eink" | "square_jade" | "mint" => "typewriter",
-        _ => "wood_type",
+        "wood_type" | "swiss" | "square_cream" | "warm_grid" => "wood_type",
+        _ => "system_default",
     }
 }
 
@@ -135,6 +138,9 @@ fn normalize(mut s: AppSettings) -> AppSettings {
     {
         s.custom_skin_id.clear();
         s.custom_skin_hash.clear();
+    }
+    if s.custom_skin_id.is_empty() {
+        s.skin = "system_default".into();
     }
     if !matches!(s.theme_mode.as_str(), "system" | "light" | "dark") {
         s.theme_mode = "system".to_string();
@@ -434,9 +440,11 @@ fn save_to_path_and(
             if canonical_skin(&input.skin) == latest.skin {
                 input.custom_skin_id = latest.custom_skin_id.clone();
                 input.custom_skin_hash = latest.custom_skin_hash.clone();
-            } else {
+            } else if input.skin == "system_default" {
                 input.custom_skin_id.clear();
                 input.custom_skin_hash.clear();
+            } else {
+                return Err("内置皮肤已移除，请导入 .fcskin 皮肤文件".into());
             }
             Ok((input, None))
         },
@@ -487,7 +495,7 @@ impl SettingsPatch {
             || patch
                 .skin
                 .as_deref()
-                .is_some_and(|v| !matches!(v, "wood_type" | "typewriter" | "terminal" | "brutal"))
+                .is_some_and(|v| v != "system_default")
             || patch
                 .theme_mode
                 .as_deref()
@@ -737,15 +745,10 @@ mod tests {
 
     #[test]
     fn upgrading_legacy_skin_ini_preserves_typography_language_and_clipboard_preferences() {
-        for (legacy, current) in [
-            ("native_light", "terminal"),
-            ("metro", "terminal"),
-            ("warm_grid", "wood_type"),
-            ("swiss", "wood_type"),
-            ("mint", "typewriter"),
-            ("eink", "typewriter"),
-            ("deep_blue", "brutal"),
+        for legacy in [
+            "native_light", "metro", "warm_grid", "swiss", "mint", "eink", "deep_blue",
         ] {
+            let current = "system_default";
             let file = IniFixture::new();
             fs::write(&file.0, format!(
                 "skin={legacy}\nscheme=ninekey\ntheme_mode=light\nmixed_input=0\nchinese_punctuation=0\n\
@@ -779,25 +782,21 @@ mod tests {
     }
 
     #[test]
-    fn all_four_new_skins_round_trip_through_real_ini_without_resetting_explicit_theme() {
+    fn all_four_local_package_bases_round_trip_without_resetting_explicit_theme() {
         for skin in ["wood_type", "typewriter", "terminal", "brutal"] {
             let file = IniFixture::new();
-            let mut selected = AppSettings::default();
-            selected.skin = skin.to_string();
-            selected.theme_mode = "dark".to_string();
-            selected.first_candidate_size = 23;
-            selected.clipboard_enabled = false;
+            fs::write(&file.0, format!("skin={skin}\ncustom_skin_id=fangcun.sample\ncustom_skin_hash={}\ntheme_mode=dark\nfirst_candidate_size=23\nclipboard_enabled=0\n", "a".repeat(64))).unwrap();
+            let selected = load_from_path(&file.0);
             let saved = save_to_path(&file.0, selected).unwrap();
             let loaded = load_from_path(&file.0);
             assert_eq!(loaded.skin, skin);
+            assert_eq!(loaded.custom_skin_id, "fangcun.sample");
+            assert_eq!(loaded.custom_skin_hash, "a".repeat(64));
             assert_eq!(loaded.theme_mode, "dark");
             assert!(loaded.dark_mode);
             assert_eq!(loaded.first_candidate_size, 23);
             assert!(!loaded.clipboard_enabled);
-            assert_eq!(
-                serde_json::to_value(loaded).unwrap(),
-                serde_json::to_value(saved).unwrap()
-            );
+            assert_eq!(serde_json::to_value(loaded).unwrap(), serde_json::to_value(saved).unwrap());
         }
     }
 
@@ -808,7 +807,7 @@ mod tests {
         let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
         let mut workers = Vec::new();
         for patch in [
-            serde_json::json!({"skin":"terminal","themeMode":"dark"}),
+            serde_json::json!({"skin":"system_default","themeMode":"dark"}),
             serde_json::json!({"clipboardEnabled":false,"pageSize":9}),
         ] {
             let path = file.0.clone();
@@ -823,7 +822,7 @@ mod tests {
             worker.join().unwrap();
         }
         let saved = try_load_from_path(&file.0).unwrap();
-        assert_eq!(saved.skin, "terminal");
+        assert_eq!(saved.skin, "system_default");
         assert_eq!(saved.theme_mode, "dark");
         assert_eq!(saved.page_size, 9);
         assert!(!saved.clipboard_enabled);
@@ -848,8 +847,8 @@ mod tests {
         stale.skin = "brutal".to_string();
         assert!(save_to_path(&file.0, stale).is_err());
         assert_eq!(fs::read(&file.0).unwrap(), committed);
-        let updated = patch_to_path(&file.0, serde_json::json!({"skin":"brutal"}), |_| {}).unwrap();
-        assert_eq!(updated.skin, "brutal");
+        let updated = patch_to_path(&file.0, serde_json::json!({"skin":"system_default"}), |_| {}).unwrap();
+        assert_eq!(updated.skin, "system_default");
         assert!(!updated.clipboard_enabled);
         assert_eq!(
             updated.revision,
@@ -981,7 +980,7 @@ mod tests {
         let file = IniFixture::new();
         fs::write(&file.0, "dark=1\nfuture=keep\nclipboard_enabled=0\n").unwrap();
         let saved =
-            patch_to_path(&file.0, serde_json::json!({"skin":"typewriter"}), |_| {}).unwrap();
+            patch_to_path(&file.0, serde_json::json!({"skin":"system_default"}), |_| {}).unwrap();
         assert_eq!(saved.theme_mode, "dark");
         assert!(saved.dark_mode);
         assert!(!saved.clipboard_enabled);
@@ -1006,7 +1005,7 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_edits_preserve_local_skin_but_explicit_builtin_patch_clears_it() {
+    fn ordinary_edits_preserve_local_skin_and_explicit_system_selection_clears_it() {
         let file = IniFixture::new();
         let hash = "a".repeat(64);
         fs::write(&file.0, format!("skin=brutal\ncustom_skin_id=fangcun.sample\ncustom_skin_hash={hash}\ntheme_mode=dark\nfuture=keep\n")).unwrap();
@@ -1018,7 +1017,7 @@ mod tests {
         .unwrap();
         assert_eq!(saved.custom_skin_id, "fangcun.sample");
         assert_eq!(saved.custom_skin_hash, hash);
-        let saved = patch_to_path(&file.0, serde_json::json!({"skin":"brutal"}), |_| {}).unwrap();
+        let saved = patch_to_path(&file.0, serde_json::json!({"skin":"system_default"}), |_| {}).unwrap();
         assert!(saved.custom_skin_id.is_empty() && saved.custom_skin_hash.is_empty());
         assert_eq!(saved.theme_mode, "dark");
         assert_eq!(saved.key_letter_size, 25);
@@ -1026,6 +1025,17 @@ mod tests {
         assert!(fs::read_to_string(&file.0)
             .unwrap()
             .contains("future=keep\n"));
+    }
+
+    #[test]
+    fn retired_named_skin_patches_never_clear_local_selection_or_publish() {
+        let file = IniFixture::new();
+        let body = format!("skin=brutal\ncustom_skin_id=fangcun.sample\ncustom_skin_hash={}\nfuture=keep\n", "a".repeat(64));
+        fs::write(&file.0, &body).unwrap();
+        for id in ["wood_type", "typewriter", "terminal", "brutal"] {
+            assert!(patch_to_path(&file.0, serde_json::json!({"skin":id}), |_| panic!("Retired patch cannot publish")).is_err());
+            assert_eq!(fs::read_to_string(&file.0).unwrap(), body);
+        }
     }
 
     #[test]

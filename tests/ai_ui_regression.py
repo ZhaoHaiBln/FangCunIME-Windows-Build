@@ -27,11 +27,11 @@ from playwright.sync_api import expect, sync_playwright
 
 BASE = "http://127.0.0.1:5174/"
 OUT = Path(tempfile.gettempdir()) / "fangcun-windows-ai-ui-regression"
-SKINS = ("wood_type", "typewriter", "terminal", "brutal")
+SKINS = ("system_default", "wood_type", "typewriter", "terminal", "brutal")
 SETTINGS = {
     "scheme": "flypy", "mixedInput": True, "chinesePunctuation": True,
     "shiftToggleEnglish": True, "capsLockBypass": True, "pageSize": 7,
-    "wheelPaging": True, "skin": "wood_type", "themeMode": "light",
+    "wheelPaging": True, "skin": "system_default", "themeMode": "light",
     "darkMode": False, "systemDark": False, "firstCandidateSize": 20,
     "keyOpacity": .82, "typingGlow": True, "keyLetterSize": 18,
     "keyLetterBold": False, "clipboardEnabled": True,
@@ -211,8 +211,7 @@ MOCK = r"""
       if (command === 'ai_cancel' || command === 'ai_copy_result') return null;
       if (command === 'load_settings') return clone(fixture.settings);
       if (command === 'skin_library_snapshot') return {
-        revision:'fixture-skins-1',importEnabled:true,hiddenBuiltins:[],packs:[],activeId:'builtin:'+fixture.settings.skin,active:null,
-        builtins:Object.entries({wood_type:'木框活字',typewriter:'经典打字机',terminal:'绿屏终端',brutal:'极客机械'}).map(([id,label])=>({id,label,hidden:false}))};
+        revision:'fixture-skins-1',importEnabled:true,hiddenBuiltins:[],packs:[],activeId:'system:default',active:null,builtins:[]};
       if (command === 'patch_settings') {
         fixture.settings={...fixture.settings,...clone(args.patch),revision:'fixture-settings-'+(++serial)};
         fixture.emit('settings://changed',fixture.settings); return clone(fixture.settings);
@@ -320,7 +319,7 @@ def assert_released(page, *, contexts=1, tracks=1):
 
 
 @contextmanager
-def app(browser, *, enabled=True, keys=True, failures=None, permission="allow", skin="wood_type", theme="light", width=940, height=760):
+def app(browser, *, enabled=True, keys=True, failures=None, permission="allow", skin="system_default", theme="light", width=940, height=760):
     settings = {**SETTINGS, "skin": skin, "themeMode": theme, "darkMode": theme == "dark"}
     config = {**CONFIG, "enabled": enabled, "textKeySaved": keys, "speechKeySaved": keys}
     context = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=1,
@@ -799,7 +798,7 @@ def keyboard_tabs_and_empty_source(browser):
 
 def appearance(browser, skin, theme):
     with app(browser, skin=skin, theme=theme, width=760, height=600) as page:
-        expect(page.locator("body")).to_have_attribute("data-skin", skin)
+        expect(page.locator("body")).to_have_attribute("data-skin", "system_default")
         open_config(page)
         advanced(page)
         advanced(page, "speech")

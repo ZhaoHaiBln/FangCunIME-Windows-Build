@@ -186,8 +186,9 @@ AppSettings fromValues(const fangcun::settings::Values& values) {
     if (!skin::validId(s.customSkinId) || !skin::validHash(s.customSkinHash)) {
         s.customSkinId.clear(); s.customSkinHash.clear();
     }
-    const auto style = values.find(std::string("builtin_style_") + skinMetrics(s.skin).id);
-    if (style != values.end() && skin::validHash(style->second)) s.builtinStyleHash = style->second;
+    if (s.customSkinId.empty()) s.skin = SkinPreset::SystemDefault;
+    // Retired builtin_style_* references remain untouched in the settings file.
+    s.builtinStyleHash.clear();
     s.darkMode = SettingsStore::effectiveDarkMode(s);
     s.savedValues = knownValues(s);
     return s;

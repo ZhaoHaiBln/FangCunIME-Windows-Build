@@ -1,0 +1,132 @@
+{
+  "grass": {
+    "name": "草绿机械",
+    "baseSkin": "mechanical",
+    "assetScale": 4,
+    "fontFamily": "sans",
+    "pressOffsetDp": 1.5,
+    "themes": {
+      "light": {
+        "colors": {
+          "background": "#EDEBEB",
+          "surface": "#F5F3F1",
+          "border": "#AAA8A2",
+          "function": "#76983A",
+          "text": "#161915",
+          "muted": "#555A50",
+          "accent": "#76983A",
+          "onAccent": "#FFFAE1",
+          "pressed": "#DCE6CB",
+          "toolbar": "#F3F1F1",
+          "candidateBackground": "#F1EFEF",
+          "candidateText": "#161915",
+          "selection": "#759835",
+          "onSelection": "#FFFAE1",
+          "keyText": "#171A15",
+          "keyHint": "#53594C",
+          "functionText": "#FFFAE1",
+          "codeText": "#161915"
+        },
+        "glow": [
+          "#B1D980",
+          "#92B8DF",
+          "#A5BDCF",
+          "#D6C1D8"
+        ]
+      },
+      "dark": {
+        "colors": {
+          "background": "#242823",
+          "surface": "#373C35",
+          "border": "#71766A",
+          "function": "#526F29",
+          "text": "#F2F1E9",
+          "muted": "#C1C8B9",
+          "accent": "#526F29",
+          "onAccent": "#FFFAE1",
+          "pressed": "#46533A",
+          "toolbar": "#30372D",
+          "candidateBackground": "#31362E",
+          "candidateText": "#F2F1E9",
+          "selection": "#526F29",
+          "onSelection": "#FFFAE1",
+          "keyText": "#F3F0E4",
+          "keyHint": "#CDD3C5",
+          "functionText": "#FFFAE1",
+          "codeText": "#F2F1E9"
+        },
+        "glow": [
+          "#B1D980",
+          "#92B8DF",
+          "#A5BDCF",
+          "#D6C1D8"
+        ]
+      }
+    }
+  },
+  "brutal": {
+    "name": "极客机械",
+    "baseSkin": "brutal",
+    "assetScale": 4,
+    "fontFamily": "sans",
+    "pressOffsetDp": 2,
+    "themes": {
+      "light": {
+        "colors": {
+          "background": "#E6E1D6",
+          "surface": "#FFFDF8",
+          "border": "#121212",
+          "function": "#D7D0C3",
+          "text": "#121212",
+          "muted": "#5E5950",
+          "accent": "#B8F500",
+          "onAccent": "#121212",
+          "pressed": "#F3EFE4",
+          "toolbar": "#F6F3EC",
+          "candidateBackground": "#F6F3EC",
+          "candidateText": "#121212",
+          "selection": "#B8F500",
+          "onSelection": "#121212",
+          "keyText": "#121212",
+          "keyHint": "#5E5950",
+          "functionText": "#121212",
+          "codeText": "#121212"
+        },
+        "glow": [
+          "#B8F500",
+          "#00F078",
+          "#A8D467",
+          "#70B899"
+        ]
+      },
+      "dark": {
+        "colors": {
+          "background": "#101412",
+          "surface": "#1A211E",
+          "border": "#46574F",
+          "function": "#121715",
+          "text": "#E6F4EC",
+          "muted": "#6F877B",
+          "accent": "#00F078",
+          "onAccent": "#08120C",
+          "pressed": "#222B27",
+          "toolbar": "#151B18",
+          "candidateBackground": "#151B18",
+          "candidateText": "#E6F4EC",
+          "selection": "#00F078",
+          "onSelection": "#08120C",
+          "keyText": "#E6F4EC",
+          "keyHint": "#6F877B",
+          "functionText": "#E6F4EC",
+          "codeText": "#E6F4EC"
+        },
+        "glow": [
+          "#B8F500",
+          "#00F078",
+          "#A8D467",
+          "#70B899"
+        ]
+      }
+    }
+  }
+}

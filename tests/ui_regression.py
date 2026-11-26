@@ -23,11 +23,11 @@ from playwright.sync_api import expect, sync_playwright
 
 OUT = Path(tempfile.gettempdir()) / "fangcun-windows-ui-regression"
 BASE = "http://127.0.0.1:5174/"
-SKINS = ("wood_type", "typewriter", "terminal", "brutal")
+SKINS = ("system_default", "wood_type", "typewriter", "terminal", "brutal")
 SETTINGS = {
     "scheme": "flypy", "mixedInput": True, "chinesePunctuation": True,
     "shiftToggleEnglish": True, "capsLockBypass": True, "pageSize": 7,
-    "wheelPaging": True, "skin": "wood_type", "themeMode": "system",
+    "wheelPaging": True, "skin": "system_default", "themeMode": "system",
     "darkMode": False, "systemDark": False, "firstCandidateSize": 20,
     "keyOpacity": .82, "typingGlow": True, "keyLetterSize": 18,
     "keyLetterBold": False, "clipboardEnabled": True,
@@ -100,11 +100,11 @@ MOCK = r"""
       if (command === 'load_settings') return clone(fixture.settings);
       if (command === 'skin_library_snapshot' || command === 'skin_select') {
         if (command === 'skin_select') {
-          fixture.settings.skin=args.id.slice('builtin:'.length);
+          if(args.id!=='system:default')throw Error('Retired builtin selection');
+          fixture.settings.skin='system_default';fixture.settings.customSkinId='';fixture.settings.customSkinHash='';
           fixture.emit('settings://changed',fixture.settings);
         }
-        return {revision:'fixture-skins-1',importEnabled:true,hiddenBuiltins:[],packs:[],activeId:'builtin:'+fixture.settings.skin,active:null,
-          builtins:Object.entries({wood_type:'木框活字',typewriter:'经典打字机',terminal:'绿屏终端',brutal:'极客机械'}).map(([id,label])=>({id,label,hidden:false}))};
+        return {revision:'fixture-skins-1',importEnabled:true,hiddenBuiltins:[],packs:[],activeId:'system:default',active:null,builtins:[]};
       }
       if (command === 'save_settings' || command === 'patch_settings') {
         if (fixture.deferSaves) {
@@ -159,7 +159,7 @@ def check(condition, message):
 
 
 @contextmanager
-def app(browser, *, skin="wood_type", mode="system", system_dark=False,
+def app(browser, *, skin="system_default", mode="system", system_dark=False,
         window="main", width=940, height=760, reduced=True, failures=None,
         native=True):
     settings = {**SETTINGS, "skin": skin, "themeMode": mode, "systemDark": system_dark}
@@ -221,13 +221,14 @@ def no_horizontal_overflow(page):
 
 def appearance(browser, skin, mode):
     with app(browser, skin=skin, mode=mode) as page:
-        check(page.locator("html").get_attribute("data-ime-theme") == skin, "Skin not applied")
+        check(page.locator("html").get_attribute("data-ime-theme") == "system_default", "Retired builtin IDs must use the neutral fallback")
         check(page.locator("html").get_attribute("data-ime-mode") == mode, "Light/dark not applied")
         no_horizontal_overflow(page)
         tab(page, "theme")
-        expect(page.locator(f'button[data-skin="{skin}"]')).to_have_attribute("aria-pressed", "true")
+        expect(page.locator("#skin-use-default")).to_have_attribute("aria-pressed", "true")
+        check(page.locator("[data-builtin-edit],#skin-group,#builtin-skin-editor").count()==0,"Retired builtin choices/editor must not exist")
         expect(page.locator(f'[data-mode="{mode}"]')).to_have_attribute("aria-pressed", "true")
-        check(page.locator(".cand-window:not(.builtin-editor-preview)").count() == 3, "All original candidate previews must remain")
+        check(page.locator(".cand-window").count() == 3, "All original candidate previews must remain")
         shot(page, f"theme-{skin}-{mode}")
         tab(page, "clipboard")
         expect(page.locator("#clip-list .clip-card-main")).to_have_count(3)
@@ -243,12 +244,14 @@ def skin_preserves_mode(browser):
         tab(page, "theme")
         for mode in ("system", "light", "dark"):
             page.locator(f'[data-mode="{mode}"]').click()
-            for skin in SKINS:
-                page.locator(f'button[data-skin="{skin}"]').click()
-                page.wait_for_function("([skin,mode]) => window.__fixture.settings.skin===skin && window.__fixture.settings.themeMode===mode", arg=[skin,mode])
-                expect(page.locator(f'[data-mode="{mode}"]')).to_have_attribute("aria-pressed", "true")
-                actual = page.locator("html").get_attribute("data-ime-mode")
-                check(actual == ("light" if mode == "light" else "dark"), "Skin changed effective mode")
+            page.wait_for_function("mode=>window.__fixture.settings.themeMode===mode",arg=mode)
+            before=count(page,"skin_select")
+            page.locator("#skin-use-default").click()
+            wait_count(page,"skin_select",before+1)
+            expect(page.locator(f'[data-mode="{mode}"]')).to_have_attribute("aria-pressed", "true")
+            actual=page.locator("html").get_attribute("data-ime-mode")
+            check(actual == ("light" if mode=="light" else "dark"),"Selecting default changed effective mode")
+            check(page.evaluate("window.__fixture.settings.skin")=="system_default","Default selection must use explicit system identity")
 
 
 def keyboard_and_action_separation(browser):
@@ -352,7 +355,7 @@ def serial_saves_and_stale_event(browser):
         check(count(page,"patch_settings")>=2,"Follow-up changed values were not persisted")
         settings=page.evaluate("window.__fixture.settings")
         check(not settings["mixedInput"] and not settings["chinesePunctuation"] and settings["pageSize"]==9,"Rapid saves lost changed fields")
-        check(settings["skin"]=="wood_type" and settings["themeMode"]=="system" and settings["shiftToggleEnglish"],"Rapid saves changed unrelated fields")
+        check(settings["skin"]=="system_default" and settings["themeMode"]=="system" and settings["shiftToggleEnglish"],"Rapid saves changed unrelated fields")
         expect(page.locator("#sw-punct")).not_to_be_checked()
         expect(page.locator("#sel-page-size")).to_have_value("9")
 
@@ -360,12 +363,12 @@ def serial_saves_and_stale_event(browser):
 def save_rejection(browser):
     with app(browser,mode="dark") as page:
         tab(page,"theme")
-        page.evaluate("window.__fixture.fail('skin_select')")
-        page.locator('button[data-skin="terminal"]').click()
-        expect(page.locator("#skin-library-error")).to_contain_text("原皮肤与列表已保留")
-        page.wait_for_function("document.documentElement.dataset.imeTheme==='wood_type'")
-        check(page.evaluate("window.__fixture.settings.skin")=="wood_type","Rejected theme must not be committed")
-        check(page.locator("html").get_attribute("data-ime-mode")=="dark","Rejected save reset mode")
+        page.evaluate("window.__fixture.fail('patch_settings')")
+        page.locator('[data-mode="light"]').click()
+        expect(page.locator("#sidebar-status-text")).to_contain_text("失败")
+        page.wait_for_function("document.documentElement.dataset.imeMode==='dark'")
+        check(page.evaluate("window.__fixture.settings.themeMode")=="dark","Rejected mode save must not be committed")
+        check(page.locator("html").get_attribute("data-ime-theme")=="system_default","Rejected save changed the neutral fallback")
         check("已切换" not in page.locator("#toast").inner_text(),"Failed save reported success")
         shot(page,"settings-save-rejected")
 
@@ -392,7 +395,7 @@ def patches_preserve_other_window_fields(browser):
               "One changed control must send only its owned field")
         page.evaluate("""() => {
           const f=window.__fixture;
-          f.settings.skin='terminal'; f.settings.themeMode='dark';
+          f.settings.skin='terminal'; f.settings.customSkinId='fixture.other';f.settings.customSkinHash='b'.repeat(64);f.settings.themeMode='dark';
           f.settings.clipboardEnabled=false; f.enabled=false;
           f.emit('settings://changed',f.settings);
           f.emit('clipboard://enabled-changed',true); // delayed older boolean payload
@@ -402,6 +405,7 @@ def patches_preserve_other_window_fields(browser):
         settings=page.evaluate("window.__fixture.settings")
         check(not settings["mixedInput"] and settings["skin"]=="terminal" and settings["themeMode"]=="dark",
               "A patch must retain another window's skin/mode changes")
+        check(settings.get("customSkinId")=="fixture.other" and settings.get("customSkinHash")=="b"*64,"Ordinary saves must preserve another window’s local skin pair")
         check(not settings["clipboardEnabled"],"A patch must preserve the committed clipboard preference")
         check(count(page,"save_settings")==0,"The UI must not fall back to a stale whole-settings write")
         tab(page,"clipboard")
@@ -491,8 +495,10 @@ def reduced_motion_and_preview_mode(browser):
     with app(browser,native=False) as page:
         expect(page.locator("#sidebar-status-text")).to_contain_text("界面预览")
         check("实时同步" not in page.locator("#sidebar-status-text").inner_text(),"Standalone preview must not claim native sync")
-        tab(page,"theme");page.locator('button[data-skin="brutal"]').click()
-        check(page.locator("html").get_attribute("data-ime-theme")=="brutal","Standalone local theme preview stopped working")
+        tab(page,"theme");expect(page.locator('#skin-use-default')).to_be_disabled()
+        page.locator('[data-mode="dark"]').click()
+        check(page.locator("html").get_attribute("data-ime-mode")=="dark","Standalone light/dark preview stopped working")
+        check(page.locator("html").get_attribute("data-ime-theme")=="system_default","Standalone preview cannot revive bundled skins")
         expect(page.locator("#sidebar-status-text")).to_contain_text("界面预览")
 
 
@@ -529,12 +535,12 @@ def main():
             for mode in ("light","dark"):
                 run_case("appearance_"+skin+"_"+mode,lambda skin=skin,mode=mode:appearance(browser,skin,mode))
         for name,operation in [
-            ("skin_preserves_all_three_modes",skin_preserves_mode),
+            ("default_selection_preserves_all_three_modes",skin_preserves_mode),
             ("clipboard_keyboard_and_action_separation",keyboard_and_action_separation),
             ("clipboard_rejections_preserve_state",clipboard_rejections),
             ("altv_copy_failure_does_not_dismiss",altv_copy_rejection_and_success),
             ("serial_saves_and_stale_settings_event",serial_saves_and_stale_event),
-            ("save_rejection_restores_confirmed_theme",save_rejection),
+            ("save_rejection_restores_confirmed_mode",save_rejection),
             ("minimal_patches_preserve_other_window_edits",patches_preserve_other_window_fields),
             ("clipboard_events_read_committed_state",clipboard_events_reload_committed_state),
             ("initial_load_failure_cannot_write_defaults",initial_load_rejection),

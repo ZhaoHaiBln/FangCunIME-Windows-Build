@@ -32,7 +32,6 @@ spec.loader.exec_module(shared)
 BASE = "http://127.0.0.1:5174/"
 OUT = Path(tempfile.gettempdir()) / "fangcun-windows-skin-ui-regression"
 HASH = "a" * 64
-BUILTINS = {"wood_type": "木框活字", "typewriter": "经典打字机", "terminal": "绿屏终端", "brutal": "极客机械"}
 BASES = {"mechanical": "wood_type", "typewriter": "typewriter", "mahjong": "terminal", "brutal": "brutal"}
 COLOR_NAMES = ["background", "surface", "border", "function", "text", "muted", "accent", "onAccent", "pressed", "toolbar", "candidateBackground", "candidateText", "selection", "onSelection", "keyText", "keyHint", "functionText", "codeText"]
 LIGHT = dict(zip(COLOR_NAMES, ["#EDF4ED", "#E2ECE4", "#557766", "#C9DCCF", "#172A1D", "#4D6557", "#316B46", "#FFFFFF", "#B4CFBC", "#D5E5D8", "#EAF6E9", "#16351E", "#3B764C", "#FAFFFA", "#203F29", "#45634F", "#1B4127", "#285D36"]))
@@ -57,22 +56,21 @@ SKIN_MOCK = r"""
 (() => {
   const initial=__SKIN_CONFIG__, f=window.__aiFixture, clone=v=>JSON.parse(JSON.stringify(v));
   const base={mechanical:'wood_type',typewriter:'typewriter',mahjong:'terminal',brutal:'brutal'};
-  const labels={wood_type:'木框活字',typewriter:'经典打字机',terminal:'绿屏终端',brutal:'极客机械'};
   let revision=1;
   const s=f.skin={revision:'skin-1',importEnabled:true,hidden:[],installed:initial.installed,
     manifest:clone(initial.manifest),hash:initial.hash,importOutcome:'success',failure:null,defer:false,pending:[],deferReads:false,reads:[],
     rotate(){this.revision='skin-'+(++revision);},
-    activeId(){return this.installed && f.settings.customSkinId===this.manifest.id ? 'local:'+this.manifest.id : 'builtin:'+f.settings.skin;},
+    activeId(){return this.installed && f.settings.customSkinId===this.manifest.id ? 'local:'+this.manifest.id : 'system:default';},
     snapshot(){
       const urls={light:{},dark:{}};
       for(const tone of ['light','dark'])for(const [role,image]of Object.entries(this.manifest.themes[tone].images))urls[tone][role]='http://fcskin.localhost/'+this.hash+'/'+image.file;
       return clone({revision:this.revision,importEnabled:this.importEnabled,hiddenBuiltins:this.hidden,
-        builtins:Object.entries(labels).map(([id,label])=>({id,label,hidden:this.hidden.includes(id)})),
+        builtins:[],
         packs:this.installed?[{id:this.manifest.id,hash:this.hash,name:this.manifest.name,version:this.manifest.version,author:this.manifest.author,baseSkin:this.manifest.baseSkin,previewUrl:'http://fcskin.localhost/'+this.hash+'/preview.png'}]:[],
         activeId:this.activeId(),active:this.activeId().startsWith('local:')?{id:this.manifest.id,hash:this.hash,manifest:this.manifest,imageUrls:urls}:null});
     },
     publish(){f.settings.revision='settings-skin-'+revision;f.emit('settings://changed',f.settings);f.emit('skin-library://changed',{revision:this.revision});},
-    fallback(){f.settings.customSkinId='';f.settings.customSkinHash='';f.settings.skin=Object.keys(labels).find(id=>!this.hidden.includes(id));},
+    fallback(){f.settings.customSkinId='';f.settings.customSkinHash='';f.settings.skin='system_default';},
     change(command,args){
       if(args.revision!==this.revision)throw '皮肤列表已更新，请重新读取后重试';
       if(this.failure){const error=this.failure;this.failure=null;throw error;}
@@ -82,17 +80,11 @@ SKIN_MOCK = r"""
         if(this.importOutcome==='fail')throw '示例 ZIP 校验失败';
         this.installed=true;
       }else if(command==='skin_set_import_enabled')this.importEnabled=args.enabled;
-      else if(command==='skin_set_builtin_hidden'){
-        if(args.hidden && !this.hidden.includes(args.id)){
-          if(this.hidden.length>=3)throw '至少保留一款可见内置皮肤';
-          this.hidden.push(args.id);
-          if(this.activeId()==='builtin:'+args.id)this.fallback();
-        }else if(!args.hidden)this.hidden=this.hidden.filter(id=>id!==args.id);
-      }else if(command==='skin_select'){
+      else if(command==='skin_select'){
         if(args.id.startsWith('local:')){
           if(!this.installed)throw '皮肤包不存在，请重新读取';
           f.settings.customSkinId=this.manifest.id;f.settings.customSkinHash=this.hash;f.settings.skin=base[this.manifest.baseSkin];
-        }else{f.settings.skin=args.id.slice(8);f.settings.customSkinId='';f.settings.customSkinHash='';}
+        }else if(args.id==='system:default'){this.fallback();}else throw '皮肤选择无效';
       }else if(command==='skin_delete'){
         if(this.activeId().startsWith('local:'))this.fallback();
         this.installed=false;
@@ -111,7 +103,7 @@ SKIN_MOCK = r"""
       if(s.deferReads)return await new Promise(resolve=>s.reads.push({resolve,value:s.snapshot()}));
       return s.snapshot();
     }
-    if(['skin_set_import_enabled','skin_set_builtin_hidden','skin_select','skin_delete','skin_import_pick'].includes(command)){
+    if(['skin_set_import_enabled','skin_select','skin_delete','skin_import_pick'].includes(command)){
       f.calls.push({command,args:clone(args)});
       if(s.defer)return await new Promise((resolve,reject)=>s.pending.push({command,args:clone(args),resolve,reject}));
       return s.change(command,args);
@@ -148,9 +140,6 @@ def tab(page, name):
 
 def management(page):
     tab(page, "theme")
-    details = page.locator("#skin-builtin-management")
-    if not details.evaluate("el=>el.open"):
-        details.locator("summary").click()
 
 
 def installed_button(page):
@@ -164,8 +153,9 @@ def select_local(page):
     wait_idle(page)
 
 
-def selected_builtin(page, identifier):
-    expect(page.locator(f'#skin-group [data-skin="{identifier}"]')).to_have_attribute("aria-pressed", "true")
+def selected_default(page):
+    expect(page.locator("#skin-use-default")).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("html")).to_have_attribute("data-ime-theme", "system_default")
 
 
 @contextmanager
@@ -199,36 +189,35 @@ def app(browser, *, installed=False, active=False, base="mechanical", images=Tru
         context.close()
 
 
-def builtin_defaults(browser):
+def system_defaults_only(browser):
     with app(browser) as page:
-        check(page.locator("#skin-group [data-skin]:visible").count() == 4, "All four builtin cards must initially remain available")
+        check(page.locator("#skin-group,button[data-skin],#builtin-skin-editor,#skin-builtin-management").count()==0,"No bundled choices, editor or restore controls may remain")
+        selected_default(page)
         expect(page.locator("html")).not_to_have_attribute("data-local-skin", "fixture.green")
-        check(page.evaluate("document.querySelectorAll('.fc-skin-image').length") == 0, "Builtin themes must not receive local material layers")
+        check(page.locator(".fc-skin-image").count()==0,"Default must have no bundled material layers")
         expect(page.locator("#skin-import-enabled")).to_be_checked()
         expect(page.locator("#skin-import")).to_be_enabled()
         expect(page.locator("#skin-local-empty")).to_be_visible()
 
 
-def hide_restore_last_builtin(browser):
+def reload_does_not_restore_bundled_skins(browser):
     with app(browser) as page:
-        management(page)
-        for identifier in ("terminal", "typewriter", "brutal"):
-            page.locator(f'[data-builtin="{identifier}"]').uncheck(); wait_idle(page)
-            expect(page.locator(f'#skin-group [data-skin="{identifier}"]')).to_be_hidden()
-        expect(page.locator('[data-builtin="wood_type"]')).to_be_disabled()
-        page.locator("#skin-library-reload").click(); wait_idle(page)
-        expect(page.locator('#skin-group [data-skin="terminal"]')).to_be_hidden()
-        page.locator('[data-builtin="terminal"]').check(); wait_idle(page)
-        expect(page.locator('#skin-group [data-skin="terminal"]')).to_be_visible()
+        for _ in range(2):
+            page.locator("#skin-library-reload").click();wait_idle(page)
+            check(page.locator("#skin-group,[data-builtin],#builtin-skin-editor").count()==0,"Reload cannot resurrect retired skin controls")
+            selected_default(page)
+        check(page.evaluate("window.__aiFixture.calls.every(call=>!call.command.includes('builtin'))"),"Retired builtin IPC must never be invoked")
 
 
-def hide_active_preserves_preferences(browser):
-    with app(browser) as page:
-        preserved = page.evaluate("(() => {const s=window.__aiFixture.settings;return [s.themeMode,s.firstCandidateSize,s.keyOpacity,s.typingGlow,s.scheme,s.keyLetterSize,s.keyLetterBold];})()")
-        management(page); page.locator('[data-builtin="wood_type"]').uncheck(); wait_idle(page)
-        selected_builtin(page, "typewriter")
+def default_preserves_preferences(browser):
+    with app(browser,installed=True,active=True) as page:
+        preserved=page.evaluate("(() => {const s=window.__aiFixture.settings;return [s.themeMode,s.firstCandidateSize,s.keyOpacity,s.typingGlow,s.scheme,s.keyLetterSize,s.keyLetterBold];})()")
+        page.locator("#skin-use-default").click();wait_idle(page)
+        selected_default(page)
         check(page.evaluate("(() => {const s=window.__aiFixture.settings;return [s.themeMode,s.firstCandidateSize,s.keyOpacity,s.typingGlow,s.scheme,s.keyLetterSize,s.keyLetterBold];})()") == preserved,
-              "Hiding the active builtin must change only skin selection/library preferences")
+              "Changing only the selected file must preserve mode/input/typography/effects preferences")
+        expect(installed_button(page)).to_be_visible()
+        check(page.evaluate("!window.__aiFixture.settings.customSkinId && !window.__aiFixture.settings.customSkinHash"),"Explicit default must clear both local identity fields")
 
 
 def import_cancel_and_no_autoapply(browser):
@@ -241,7 +230,7 @@ def import_cancel_and_no_autoapply(browser):
         page.locator("#skin-import").click(); wait_idle(page)
         expect(installed_button(page)).to_be_visible()
         expect(installed_button(page)).to_contain_text("版本 3")
-        selected_builtin(page, "wood_type")
+        selected_default(page)
         check(page.evaluate("document.documentElement.dataset.localSkin === undefined"), "Import must never auto-apply the pack")
         select_local(page)
 
@@ -266,22 +255,21 @@ def delete_active_clears_all_materials(browser):
     with app(browser, installed=True, active=True) as page:
         page.once("dialog", lambda dialog: dialog.accept())
         page.locator(".skin-local-delete").click(); wait_idle(page)
-        expect(page.locator("#skin-local-empty")).to_be_visible(); selected_builtin(page, "wood_type")
+        expect(page.locator("#skin-local-empty")).to_be_visible(); selected_default(page)
         check(page.evaluate("document.querySelectorAll('[data-local-skin],.fc-skin-image').length===0"),
               "Deleting the active pack must remove all custom variables, targets and material layers")
         check(page.evaluate("!document.documentElement.style.getPropertyValue('--fc-background') && !document.documentElement.style.getPropertyValue('--ime-deck')"),
-              "Returning to builtin must restore CSS inheritance rather than retain local token overrides")
+              "Returning to default must restore CSS inheritance rather than retain local token overrides")
 
 
 def failure_preserves_confirmed_state(browser):
-    with app(browser, installed=True, active=True) as page:
-        management(page)
+    with app(browser,installed=True,active=True) as page:
         page.evaluate("window.__aiFixture.skin.failure='raw provider text fixture-secret'")
-        page.locator('[data-builtin="terminal"]').click(); wait_idle(page)
-        expect(page.locator('[data-builtin="terminal"]')).to_be_checked()
+        page.locator("#skin-use-default").click();wait_idle(page)
+        expect(page.locator("#skin-use-default")).to_have_attribute("aria-pressed","false")
         expect(page.locator("#skin-library-error")).to_contain_text("原皮肤与列表已保留")
         expect(page.locator("#skin-library-error")).not_to_contain_text("fixture-secret")
-        expect(page.locator("html")).to_have_attribute("data-local-skin", "fixture.green")
+        expect(page.locator("html")).to_have_attribute("data-local-skin","fixture.green")
 
 
 def cas_requires_explicit_reload(browser):
@@ -290,7 +278,7 @@ def cas_requires_explicit_reload(browser):
         installed_button(page).click(); wait_idle(page)
         expect(page.locator("#skin-library-error")).to_have_text("皮肤列表已更新，请重新读取后重试")
         expect(installed_button(page)).to_be_disabled()
-        selected_builtin(page, "wood_type")
+        selected_default(page)
         page.locator("#skin-library-reload").click(); wait_idle(page)
         expect(page.locator("#skin-library-error")).to_be_hidden()
         expect(installed_button(page)).to_be_enabled()
@@ -301,7 +289,7 @@ def pending_mutation_freezes_library(browser):
         management(page); page.evaluate("window.__aiFixture.skin.defer=true")
         installed_button(page).click()
         page.wait_for_function("window.__aiFixture.skin.pending.length===1")
-        for selector in ("#skin-import", "#skin-import-enabled", "#skin-library-reload", "#skin-group button", "#skin-local-grid button", "#skin-builtin-controls input"):
+        for selector in ("#skin-import", "#skin-import-enabled", "#skin-library-reload", "#skin-use-default", "#skin-local-grid button"):
             for control in page.locator(selector).all():
                 expect(control).to_be_disabled()
         page.evaluate("window.__aiFixture.skin.finish()"); wait_idle(page)
@@ -313,27 +301,27 @@ def delayed_snapshot_does_not_restore_stale_pack(browser):
         page.evaluate("window.__aiFixture.skin.deferReads=true;window.__aiFixture.emit('skin-library://changed',{})")
         page.wait_for_function("window.__aiFixture.skin.reads.length===1")
         page.evaluate("""() => {
-          const f=window.__aiFixture;f.settings.skin='terminal';f.settings.customSkinId='';f.settings.customSkinHash='';
+          const f=window.__aiFixture;f.settings.skin='system_default';f.settings.customSkinId='';f.settings.customSkinHash='';
           f.skin.rotate();f.emit('settings://changed',f.settings);f.emit('skin-library://changed',{});
         }""")
         page.wait_for_function("document.documentElement.dataset.localSkin===undefined")
         page.evaluate("window.__aiFixture.skin.deferReads=false;window.__aiFixture.skin.finishRead()")
         wait_idle(page)
-        selected_builtin(page, "terminal")
+        selected_default(page)
         check(page.evaluate("window.__aiFixture.count('skin_library_snapshot')>=3 && document.querySelectorAll('.fc-skin-image').length===0"),
               "A change received during a delayed read must trigger a fresh snapshot, never revive stale material")
 
 
-def user_mode_changes_and_builtin_revert(browser):
+def user_mode_changes_and_default_revert(browser):
     with app(browser, installed=True, active=True) as page:
         for tone, palette in (("dark", DARK), ("light", LIGHT)):
             page.locator(f'#mode-group [data-mode="{tone}"]').click()
             page.wait_for_function("color=>document.documentElement.style.getPropertyValue('--fc-background')===color", arg=palette["background"])
             expect(installed_button(page)).to_have_attribute("aria-pressed", "true")
-        page.locator('#skin-group [data-skin="typewriter"]').click(); wait_idle(page)
-        selected_builtin(page, "typewriter")
+        page.locator('#skin-use-default').click();wait_idle(page)
+        selected_default(page)
         check(page.evaluate("document.querySelectorAll('[data-local-skin],.fc-skin-image').length===0"),
-              "Selecting a builtin must clear custom material without deleting the installed pack")
+              "Selecting default must clear custom material without deleting the installed pack")
         expect(installed_button(page)).to_be_visible()
         expect(page.locator('#mode-group [data-mode="light"]')).to_have_attribute("aria-pressed", "true")
 
@@ -395,7 +383,7 @@ def other_windows(browser, window_mode, tone):
 def minimum_window(browser, tone):
     with app(browser, installed=True, active=True, name="非常长的本地皮肤名字用于验证小窗口不会挤出边界", tone=tone, width=760, height=600) as page:
         installed_button(page).scroll_into_view_if_needed()
-        check(page.evaluate("document.documentElement.scrollWidth<=innerWidth && [...document.querySelectorAll('#skin-local-grid button,#skin-builtin-controls input,#skin-import')].filter(el=>el.getClientRects().length).every(el=>el.getBoundingClientRect().right<=innerWidth+1)"), "Skin management controls must fit the minimum companion window")
+        check(page.evaluate("document.documentElement.scrollWidth<=innerWidth && [...document.querySelectorAll('#skin-local-grid button,#skin-use-default,#skin-import')].filter(el=>el.getClientRects().length).every(el=>el.getBoundingClientRect().right<=innerWidth+1)"), "Skin management controls must fit the minimum companion window")
         page.screenshot(path=str(OUT / f"skin-minimum-{tone}.png"), animations="disabled")
 
 
@@ -422,12 +410,12 @@ def main():
     BASE = args.base_url.rstrip("/") + "/"; OUT = args.output.resolve(); OUT.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=args.browser_executable, headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"] if sys.platform.startswith("linux") else [])
-        cases = [("builtin_defaults_unchanged", builtin_defaults), ("hide_restore_and_last_builtin_guard", hide_restore_last_builtin),
-                 ("hiding_active_preserves_other_preferences", hide_active_preserves_preferences), ("picker_cancel_and_import_no_autoapply", import_cancel_and_no_autoapply),
+        cases = [("system_default_without_bundled_catalog", system_defaults_only), ("reload_cannot_restore_bundled_skins", reload_does_not_restore_bundled_skins),
+                 ("explicit_default_preserves_other_preferences", default_preserves_preferences), ("picker_cancel_and_import_no_autoapply", import_cancel_and_no_autoapply),
                  ("pack_names_are_text_nodes", escaped_pack_labels), ("import_disabled_existing_pack_usable", disabled_import_keeps_installed_usable),
                  ("delete_active_reverts_and_clears_custom_materials", delete_active_clears_all_materials), ("failure_keeps_confirmed_state", failure_preserves_confirmed_state),
                  ("cas_requires_explicit_reload", cas_requires_explicit_reload), ("pending_mutation_locks_library_controls", pending_mutation_freezes_library),
-                 ("delayed_read_cannot_restore_stale_pack", delayed_snapshot_does_not_restore_stale_pack), ("user_mode_changes_and_builtin_revert", user_mode_changes_and_builtin_revert),
+                 ("delayed_read_cannot_restore_stale_pack", delayed_snapshot_does_not_restore_stale_pack), ("user_mode_changes_and_default_revert", user_mode_changes_and_default_revert),
                  ("four_image_scales_and_small_nineslice", scale_roles_and_tiny_nineslice), ("color_only_pack_has_no_builtin_material", colors_only_no_old_textures),
                  ("ai_button_updates_keep_textures_without_stream_churn", ai_mutations_keep_textures_without_stream_churn)]
         for name, operation in cases:
