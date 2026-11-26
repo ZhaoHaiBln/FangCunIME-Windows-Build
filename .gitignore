@@ -8,3 +8,5 @@ app/dist/
 app/package-lock.json
 app/src-tauri/target/
 app/src-tauri/gen/
+__pycache__/
+*.py[cod]
