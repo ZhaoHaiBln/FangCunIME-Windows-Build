@@ -1,0 +1,125 @@
+name: FangCun IME Windows Direct Build
+
+"on":
+  push:
+    branches: [ codex/file-only-direct-delivery ]
+    paths: [ .github/workflows/build-direct.yml ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC x64 Developer Environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure CMake (x64 Ninja)
+        run: |
+          cmake -S . -B build-x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DFANGCUN_BUILD_TSF=ON -DFANGCUN_BUILD_TESTS=ON
+
+      - name: Build Release (x64)
+        run: |
+          cmake --build build-x64
+
+      - name: Run C++20 Core & KeyHandler Tests
+        run: |
+          ctest --test-dir build-x64 --output-on-failure
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build Tauri v2 Settings & Clipboard App (FangCunSettings.exe)
+        shell: pwsh
+        run: |
+          Set-Location app
+          bun install
+          bun run tauri build --no-bundle
+
+      - name: Stage Windows Bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/assets, dist/installer, out | Out-Null
+          Copy-Item build-x64/FangCunTSF.dll dist/
+          $settingsExe = "app/src-tauri/target/release/FangCunSettings.exe"
+          if (Test-Path $settingsExe) {
+            Copy-Item $settingsExe dist/FangCunSettings.exe
+          } else {
+            throw "FangCunSettings.exe not found at $settingsExe"
+          }
+          Copy-Item assets/dict.db dist/assets/
+          Copy-Item assets/pinyin-v1.dbz dist/assets/
+          Copy-Item assets/pinyin-v1.json dist/assets/
+          Copy-Item installer/*.ps1 dist/installer/
+          Copy-Item installer/*.bat dist/installer/
+          Copy-Item THIRD_PARTY_NOTICES.md dist/
+          Copy-Item licenses/rime-ice-LICENSE.txt dist/
+
+      - name: Build Inno Setup Installer (.exe)
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc /DMySourceDir="$PWD\dist" /O"$PWD\out" "installer\FangCunIME.iss"
+
+      - name: Deliver only validated setup EXE to approved temporary service
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packageName = "FangCunIME-0.6.8-win64-setup.exe"
+          $packageFile = Join-Path $PWD "out/$packageName"
+          if (-not (Test-Path -LiteralPath $packageFile -PathType Leaf)) {
+            throw "Expected setup EXE does not exist"
+          }
+          $packageInfo = Get-Item -LiteralPath $packageFile
+          if ($packageInfo.Length -lt 1048576 -or $packageInfo.Length -ge 104857600) {
+            throw "Setup EXE has an unexpected length"
+          }
+          $packageStream = [System.IO.File]::OpenRead($packageFile)
+          try {
+            if ($packageStream.ReadByte() -ne 0x4D -or $packageStream.ReadByte() -ne 0x5A) {
+              throw "Setup file does not have an MZ executable signature"
+            }
+          } finally {
+            $packageStream.Dispose()
+          }
+          $packageSha = (Get-FileHash -LiteralPath $packageFile -Algorithm SHA256).Hash.ToLowerInvariant()
+          $packageBytes = $packageInfo.Length.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+          $responseFile = Join-Path $env:RUNNER_TEMP "fangcun-direct-upload-response.json"
+          & curl.exe --fail --silent --show-error --connect-timeout 20 --max-time 600 --retry 0 --form "file=@$packageFile;type=application/octet-stream" --output $responseFile "https://tmpfiles.org/api/v1/upload"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Setup EXE upload failed"
+          }
+          $response = Get-Content -LiteralPath $responseFile -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
+          if ($response.status -cne "success" -or -not $response.data.url) {
+            throw "Temporary service did not confirm a successful setup upload"
+          }
+          $landing = [System.Uri]$response.data.url
+          if (-not $landing.IsAbsoluteUri -or $landing.Scheme -cne "https" -or $landing.Host -cne "tmpfiles.org" -or $landing.Port -ne 443 -or $landing.UserInfo -or $landing.Query -or $landing.Fragment) {
+            throw "Temporary service returned an unexpected destination"
+          }
+          $landingParts = $landing.AbsolutePath.Trim('/').Split('/')
+          if ($landingParts.Length -ne 2 -or $landingParts[0] -cnotmatch '^[A-Za-z0-9_-]+$' -or -not [System.String]::Equals($landingParts[1], $packageName, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Temporary service returned an unexpected setup filename"
+          }
+          if ((Get-Item -LiteralPath $packageFile).Length -ne $packageInfo.Length -or (Get-FileHash -LiteralPath $packageFile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $packageSha) {
+            throw "Setup file changed during upload"
+          }
+          Write-Output "FANGCUN_DIRECT_FILE=$packageName"
+          Write-Output "FANGCUN_DIRECT_BYTES=$packageBytes"
+          Write-Output "FANGCUN_DIRECT_SHA256=$packageSha"
+          Write-Output "FANGCUN_DIRECT_LANDING=$($landing.AbsoluteUri)"
