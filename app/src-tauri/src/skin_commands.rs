@@ -44,6 +44,7 @@ async fn change(
     tauri::async_runtime::spawn_blocking(move || {
         let publish = |saved: &AppSettings| crate::publish_settings(&app, &clipboard, saved);
         let snapshot = operation(&library, &publish)?;
+        crate::refresh_skin_chrome(&app);
         crate::settings::notify_tsf_settings_changed();
         let _ = app.emit("skin-library://changed", &snapshot.revision);
         Ok(snapshot)
@@ -66,6 +67,44 @@ pub async fn skin_library_snapshot(
     .await
     .map_err(|_| "无法读取皮肤库，请重试".to_string())?
 }
+#[tauri::command]
+pub async fn skin_save_builtin_style(
+    window: WebviewWindow,
+    library: State<'_, Arc<SkinLibrary>>,
+    state: State<'_, AppState>,
+    id: String,
+    style: crate::builtin_skin_edits::BuiltinStyle,
+    revision: String,
+    activate: Option<bool>,
+) -> Result<SkinSnapshot, String> {
+    change(
+        window,
+        Arc::clone(library.inner()),
+        Arc::clone(&state.clipboard),
+        move |library, publish| {
+            library.save_builtin_style(&id, style, &revision, activate.unwrap_or(false), publish)
+        },
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn skin_reset_builtin_style(
+    window: WebviewWindow,
+    library: State<'_, Arc<SkinLibrary>>,
+    state: State<'_, AppState>,
+    id: String,
+    revision: String,
+) -> Result<SkinSnapshot, String> {
+    change(
+        window,
+        Arc::clone(library.inner()),
+        Arc::clone(&state.clipboard),
+        move |library, publish| library.reset_builtin_style(&id, &revision, publish),
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn skin_set_import_enabled(
     window: WebviewWindow,

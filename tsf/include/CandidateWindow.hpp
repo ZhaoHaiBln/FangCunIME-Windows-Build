@@ -57,6 +57,7 @@ public:
         bool typingGlow = true);
 
     void setCustomSkin(const std::filesystem::path& dataRoot, const std::string& id, const std::string& hash, bool dark);
+    void setBuiltinStyle(const std::filesystem::path& dataRoot, const std::string& builtin, const std::string& hash, bool dark);
     void moveNearCaret(const RECT& caretRect);
     void show();
     void hide();
@@ -67,6 +68,7 @@ public:
     void showModeToast(bool englishMode, SkinPreset skin, bool darkMode);
 
 private:
+    friend struct CandidateWindowTestAccess;
     static constexpr UINT_PTR kGlowTimerId = 1;
     static constexpr UINT kGlowTimerIntervalMs = 16;
     static constexpr UINT_PTR kToastTimerId = 2;
@@ -90,6 +92,7 @@ private:
     void releaseDeviceResources();
     void drawTianzigeLogoD2D(float x, float y, float size);
     void consumeCustomSkin();
+    const LoadedBuiltinStyle* activeBuiltinStyle() const;
     void rebuildCustomBitmaps();
     void releaseCustomBitmaps();
     void drawCustomImage(skin::ImageRole role, D2D1_RECT_F bounds);
@@ -97,10 +100,14 @@ private:
     HWND hwnd_ = nullptr;
     std::unique_ptr<CustomSkinCache> customCache_;
     std::shared_ptr<const LoadedCustomSkin> customSkin_;
+    std::shared_ptr<const LoadedBuiltinStyle> builtinSkin_;
     std::array<ID2D1Bitmap*,8> customBitmaps_{};
     std::filesystem::path customDataRoot_;
     std::string customId_, customHash_;
     bool customDark_ = false;
+    std::filesystem::path builtinDataRoot_;
+    std::string builtinId_, builtinHash_;
+    bool builtinDark_ = false;
     SelectCallback onSelect_;
     SettingsCallback onOpenSettings_;
     PageCallback onPageChange_;
@@ -140,6 +147,9 @@ private:
     float candidateHeightDp_ = 40.0f;
     int lastBudgetFirstSize_ = -1;
     UINT lastBudgetDpi_ = 0;
+    // Static font-family views are part of the measured budget identity. A
+    // profile can become effective on the first dark-mode key after loading.
+    std::array<std::wstring_view, 3> lastBudgetFonts_{};
 
     RECT lastCaretRect_{0, 0, 0, 0};
     HWND lastCaretFgWnd_ = nullptr;

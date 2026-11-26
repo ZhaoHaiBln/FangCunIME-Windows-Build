@@ -201,7 +201,7 @@ def app(browser, *, installed=False, active=False, base="mechanical", images=Tru
 
 def builtin_defaults(browser):
     with app(browser) as page:
-        check(page.locator("#skin-group button:visible").count() == 4, "All four builtin cards must initially remain available")
+        check(page.locator("#skin-group [data-skin]:visible").count() == 4, "All four builtin cards must initially remain available")
         expect(page.locator("html")).not_to_have_attribute("data-local-skin", "fixture.green")
         check(page.evaluate("document.querySelectorAll('.fc-skin-image').length") == 0, "Builtin themes must not receive local material layers")
         expect(page.locator("#skin-import-enabled")).to_be_checked()

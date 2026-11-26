@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./skins.css";
+import { applyBuiltinStyles, installBuiltinEditor, type BuiltinStyle } from "./builtin-skins";
 
 type Builtin = "wood_type" | "typewriter" | "terminal" | "brutal";
 type Tone = "light" | "dark";
@@ -11,7 +12,7 @@ interface SkinTheme { colors: Record<ColorName, string>; glow: [string, string, 
 interface Manifest { format: "fangcun.skin"; schemaVersion: 1; id: string; name: string; version: number; author?: string; license?: string; baseSkin: "mechanical" | "typewriter" | "mahjong" | "brutal"; assetScale: number; fontFamily: "sans" | "serif" | "mono"; pressOffsetDp: number; preview: string; themes: Record<Tone, SkinTheme>; }
 interface PackInfo { id: string; hash: string; name: string; version: number; author: string; baseSkin: Manifest["baseSkin"]; previewUrl: string; unavailable?: boolean; }
 interface ActivePack { id?: string; hash: string; manifest: Manifest; imageUrls: Record<Tone, Partial<Record<Role, string>>>; }
-interface Library { revision: string; importEnabled: boolean; hiddenBuiltins: string[]; builtins: Array<{ id: Builtin; label: string; hidden: boolean }>; packs: PackInfo[]; activeId: string; active: ActivePack | null; warning?: string | null; }
+interface Library { revision: string; importEnabled: boolean; hiddenBuiltins: string[]; builtins: Array<{ id: Builtin; label: string; hidden: boolean }>; packs: PackInfo[]; activeId: string; active: ActivePack | null; builtinStyles?: Partial<Record<Builtin, BuiltinStyle>>; warning?: string | null; }
 interface AppliedTheme { skin: string; dark: boolean; themeMode: string; customSkinId?: string; customSkinHash?: string; }
 
 const native = isTauri();
@@ -31,7 +32,7 @@ const variables: Record<ColorName, string[]> = {
 const ownedVariables = [...Object.values(variables).flat(), "--ime-deck", "--ime-paper", "--ime-screen", "--ime-crt-code", "--glow-a", "--glow-b", "--fc-font", "--fc-press-offset"];
 const CAS_ERROR = "皮肤列表已更新，请重新读取后重试";
 const knownErrors = new Set([
-  CAS_ERROR, "至少保留一款可见内置皮肤", "至少保留一款可见的内置皮肤", "本地皮肤导入已关闭",
+  CAS_ERROR, "内置皮肤编辑配置无效，已保留原设置", "至少保留一款可见内置皮肤", "至少保留一款可见的内置皮肤", "本地皮肤导入已关闭",
   "皮肤导入已关闭，已安装的皮肤仍可使用", "皮肤导入已关闭，未安装", "本地皮肤不存在",
   "皮肤包不存在，请重新读取", "该内置皮肤已隐藏或不存在", "同名皮肤已存在，请先删除旧包再导入",
   "皮肤文件不可用，原选择和文件已保留", "皮肤库数据无效，已保留原文件", "请选择 .fcskin 皮肤包",
@@ -67,6 +68,12 @@ const observer = new ResizeObserver(entries => {
     if (layer?.dataset.insets) fitSlices(layer, target, layer.dataset.insets, Number(layer.dataset.assetScale));
   }
 });
+
+const builtinEditor = main ? installBuiltinEditor({
+  native, library: () => library, busy: () => busy, blocked: () => mustReload,
+  mutate: (command, args, success, revision) => mutate(command, args, success, revision),
+  reload: () => reload(true),
+}) : null;
 
 function allowedUrl(raw: string | undefined, hash: string, path?: string): string | null {
   if (!raw || !/^[a-f0-9]{64}$/.test(hash)) return null;
@@ -144,15 +151,19 @@ function imageRole(target: HTMLElement, active: ActivePack, tone: Tone, role: Ro
   target.classList.add("fc-skin-surface"); target.prepend(layer); decorated.add(target);
 }
 function decorate(selector: string, active: ActivePack, tone: Tone, role: Role): void {
-  document.querySelectorAll<HTMLElement>(selector).forEach(target => imageRole(target, active, tone, role));
+  document.querySelectorAll<HTMLElement>(selector).forEach(target => {
+    if (!target.closest("#builtin-editor-material")) imageRole(target, active, tone, role);
+  });
 }
 function applyActive(): void {
   contentObserver.disconnect();
   clearCustom();
   const active = library?.active;
+  applyBuiltinStyles(library, { ...theme, customSkinId: active && validActive(active) ? active.manifest.id : theme.customSkinId });
   if (!active || !validActive(active)) {
     const name = labels[theme.skin as Builtin];
     if (name) { const light = el("showcase-light-label"), dark = el("showcase-dark-label"); if (light) light.textContent = name + " · 浅色候选窗"; if (dark) dark.textContent = name + " · 深色候选窗"; }
+    builtinEditor?.preview();
     return;
   }
   // A settings refresh can precede the corresponding library snapshot; never paint a stale pack over a known builtin selection.
@@ -165,7 +176,7 @@ function applyActive(): void {
   decorate(".mini-pill,.mode-pill,.btn-restore,.clip-icon-btn,.fb-tool-btn,.fb-lang-badge,.sb-btn,.ai-secondary,.ai-modes button", active, tone, "keyFunction");
   decorate(".btn-finish,.ai-primary,.skin-action-primary", active, tone, "keyAction");
   decorate(".nav-item.is-active,.clip-view-tabs button[aria-selected=true]", active, tone, "selection");
-  document.querySelectorAll<HTMLElement>(".cand-window").forEach(preview => {
+  document.querySelectorAll<HTMLElement>(".cand-window:not(.builtin-editor-preview)").forEach(preview => {
     const previewTone: Tone = preview.dataset.imeMode === "dark" ? "dark" : "light";
     applyColors(preview, active, previewTone); decorated.add(preview);
     imageRole(preview, active, previewTone, "candidates");
@@ -177,6 +188,7 @@ function applyActive(): void {
   if (dark) dark.textContent = active.manifest.name + " · 深色候选窗";
   // Other workspaces render new buttons/items independently. Reapply only after those DOM updates,
   // and disconnect while decorating so our own image layers cannot trigger a mutation loop.
+  builtinEditor?.preview();
   contentObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-selected"] });
 }
 function scheduleApply(): void {
@@ -201,6 +213,7 @@ function message(): void {
     input.checked = !hidden;
     input.disabled = !native || !library || busy || mustReload || (!hidden && library.builtins.filter(item => !item.hidden).length <= 1);
   });
+  builtinEditor?.render();
 }
 function selection(): void {
   if (!library) return;
@@ -263,13 +276,13 @@ async function reload(explicit = false): Promise<void> {
     if (refresh && !mustReload && !disposed) void reload();
   } }
 }
-async function mutate(command: string, args: object, success: string): Promise<void> {
-  if (!main || !native || !library || busy || mustReload || disposed) return;
+async function mutate(command: string, args: object, success: string, expectedRevision?: string): Promise<boolean> {
+  if (!main || !native || !library || busy || mustReload || disposed) return false;
   const sequence = ++requestSequence; busy = true; failure = ""; message();
   let committed = false;
   try {
-    const result = await invoke<Library | null>(command, { ...args, revision: library.revision });
-    if (disposed || sequence !== requestSequence) return;
+    const result = await invoke<Library | null>(command, { ...args, revision: expectedRevision ?? library.revision });
+    if (disposed || sequence !== requestSequence) return false;
     if (result) { library = result; notice = success; committed = true; renderLibrary(); }
     else notice = "已取消导入，当前皮肤未更改";
   } catch (error) {
@@ -285,6 +298,7 @@ async function mutate(command: string, args: object, success: string): Promise<v
       if (refresh && committed && !mustReload) void reload();
     }
   }
+  return committed;
 }
 
 window.addEventListener("fangcun:theme-applied", event => { theme = (event as CustomEvent<AppliedTheme>).detail; selection(); scheduleApply(); });

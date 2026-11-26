@@ -1,6 +1,7 @@
 #include "SettingsWindow.hpp"
 #include "DllMain.hpp"
 #include "SquareWindow.hpp"
+#include "BuiltinStyleDrawing.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -359,7 +360,7 @@ void SettingsWindow::destroyTianzigeIcons() {
 }
 
 void SettingsWindow::destroy() {
-    customCache_.reset(); customSkin_.reset(); customId_.clear(); customHash_.clear();
+    customCache_.reset(); customSkin_.reset(); builtinSkin_.reset(); customId_.clear(); customHash_.clear(); builtinId_.clear(); builtinHash_.clear();
     if (hwnd_) {
         if (glowTimerActive_) {
             KillTimer(hwnd_, kGlowTimerId);
@@ -408,11 +409,23 @@ LRESULT CALLBACK SettingsWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
     }
 
     if (self) {
+        if (msg == settingsChangedMessage()) {
+            const auto loaded = SettingsStore::load();
+            if (loaded.readSucceeded) {
+                self->settings_ = loaded;
+                self->glowEngine_.setEnabled(loaded.typingGlow);
+                self->refreshCustomSkin();
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        }
         switch (msg) {
             case CustomSkinCache::ReadyMessage:
                 if (self->customCache_) {
                     self->customSkin_ = self->customCache_->takeReady();
                     if (self->customSkin_ && (self->customSkin_->spec.id != self->customId_ || self->customSkin_->spec.hash != self->customHash_ || self->customSkin_->dark != self->customDark_)) self->customSkin_.reset();
+                    self->builtinSkin_ = self->customId_.empty() ? self->customCache_->takeBuiltinReady() : nullptr;
+                    if (self->builtinSkin_ && (self->builtinSkin_->spec.builtin != self->builtinId_ || self->builtinSkin_->spec.hash != self->builtinHash_ || self->builtinSkin_->dark != self->customDark_)) self->builtinSkin_.reset();
                     InvalidateRect(hwnd, nullptr, FALSE);
                 }
                 return 0;
@@ -428,6 +441,16 @@ LRESULT CALLBACK SettingsWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
             case WM_LBUTTONDOWN:
                 self->onLButtonDown(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
                 return 0;
+            case WM_LBUTTONUP:
+                self->pressedAction_ = ActionId::None;
+                if (GetCapture() == hwnd) ReleaseCapture();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            case WM_CAPTURECHANGED:
+            case WM_CANCELMODE:
+                self->pressedAction_ = ActionId::None;
+                InvalidateRect(hwnd, nullptr, FALSE);
+                break;
             case WM_MOUSEMOVE:
                 self->onMouseMove(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
                 return 0;
@@ -456,8 +479,9 @@ LRESULT CALLBACK SettingsWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
                 InvalidateRect(hwnd, nullptr, FALSE);
                 break;
             case WM_DESTROY:
-                self->customCache_.reset(); self->customSkin_.reset();
-                self->customId_.clear(); self->customHash_.clear();
+                self->customCache_.reset(); self->customSkin_.reset(); self->builtinSkin_.reset();
+                self->customId_.clear(); self->customHash_.clear(); self->builtinId_.clear(); self->builtinHash_.clear();
+                self->pressedAction_ = ActionId::None;
                 if (self->glowTimerActive_) {
                     KillTimer(hwnd, kGlowTimerId);
                     self->glowTimerActive_ = false;
@@ -502,6 +526,10 @@ void SettingsWindow::onLButtonDown(int x, int y) {
                 syncGlowTimer();
                 InvalidateRect(hwnd_, nullptr, FALSE);
                 return;
+            }
+            if (const auto* builtin = activeBuiltinStyle(); builtin && builtin->spec.pressOffsetDp) {
+                pressedAction_ = hc.action;
+                SetCapture(hwnd_);
             }
             applyAction(hc.action);
             return;
@@ -629,7 +657,7 @@ void SettingsWindow::drawTianzigeLogo(float x, float y, float size) {
 }
 
 void SettingsWindow::drawGlassButton(
-    const D2D1_RECT_F& rect,
+    const D2D1_RECT_F& targetRect,
     const std::wstring& label,
     SkinPreset skin,
     const FangCunColors& colors,
@@ -638,7 +666,15 @@ void SettingsWindow::drawGlassButton(
     bool emphasized,
     bool hovered,
     float fontSizeDip,
-    bool bold) {
+    bool bold,
+    bool pressed) {
+    const auto* builtin = activeBuiltinStyle();
+    const float sink = pressed && builtin && builtin->spec.pressOffsetDp ? *builtin->spec.pressOffsetDp : 0.0f;
+    auto rect = targetRect;
+    if (sink > 0) {
+        renderTarget_->PushAxisAlignedClip(targetRect, D2D1_ANTIALIAS_MODE_ALIASED);
+        rect.left += sink; rect.right += sink; rect.top += sink; rect.bottom += sink;
+    }
     GlassKeyColors gc = computeGlassKeyColors(
         skin, colors, settings_.keyOpacity, false, functional, emphasized, selected);
     if (customSkin_) {
@@ -670,7 +706,7 @@ void SettingsWindow::drawGlassButton(
     if (dwriteFactory_ && !label.empty()) {
         IDWriteTextFormat* fmt = nullptr;
         if (SUCCEEDED(dwriteFactory_->CreateTextFormat(
-                kUiFontFamily, nullptr,
+                builtinFont(builtin ? builtin->spec.fontFamily : std::nullopt, kUiFontFamily), nullptr,
                 bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_NORMAL,
                 DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                 fontSizeDip, L"", &fmt)) && fmt) {
@@ -681,6 +717,9 @@ void SettingsWindow::drawGlassButton(
             ColorArgb txtCol = emphasized
                 ? accentForeground(colors)
                 : (selected ? colors.onCandidate : colors.text);
+            if (builtin && !emphasized && !selected) {
+                if (auto color = builtinColor(builtin->tone(), functional ? skin::ColorRole::FunctionText : skin::ColorRole::KeyText)) txtCol = *color;
+            }
 
             ID2D1SolidColorBrush* txtBrush = nullptr;
             if (SUCCEEDED(renderTarget_->CreateSolidColorBrush(toD2DColor(txtCol), &txtBrush)) && txtBrush) {
@@ -690,16 +729,30 @@ void SettingsWindow::drawGlassButton(
             fmt->Release();
         }
     }
+    if (sink > 0) renderTarget_->PopAxisAlignedClip();
+}
+
+const LoadedBuiltinStyle* SettingsWindow::activeBuiltinStyle() const {
+    return customId_.empty() && builtinSkin_ && builtinSkin_->spec.builtin == skinMetrics(settings_.skin).id &&
+        builtinSkin_->spec.builtin == builtinId_ && builtinSkin_->spec.hash == builtinHash_ &&
+        builtinSkin_->dark == customDark_ ? builtinSkin_.get() : nullptr;
 }
 
 void SettingsWindow::refreshCustomSkin() {
     if (!hwnd_) return;
     const bool dark = SettingsStore::effectiveDarkMode(settings_);
-    if (customId_ == settings_.customSkinId && customHash_ == settings_.customSkinHash && customDark_ == dark) return;
+    const std::string nextBuiltin = settings_.customSkinId.empty() && skin::validHash(settings_.builtinStyleHash) ? skinMetrics(settings_.skin).id : "";
+    const std::string nextHash = nextBuiltin.empty() ? "" : settings_.builtinStyleHash;
+    if (customId_ == settings_.customSkinId && customHash_ == settings_.customSkinHash && customDark_ == dark && builtinId_ == nextBuiltin && builtinHash_ == nextHash) return;
     customId_ = settings_.customSkinId; customHash_ = settings_.customSkinHash; customDark_ = dark;
-    customSkin_.reset();
-    if (!customId_.empty() && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
-    if (customCache_) customCache_->request(hwnd_, SettingsStore::getDataDirectory(), customId_, customHash_, dark, false);
+    builtinId_ = nextBuiltin; builtinHash_ = nextHash;
+    customSkin_.reset(); builtinSkin_.reset();
+    if ((!customId_.empty() || !builtinId_.empty()) && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
+    if (customCache_) {
+        const auto root = SettingsStore::getDataDirectory();
+        if (!customId_.empty()) customCache_->request(hwnd_, root, customId_, customHash_, dark, false);
+        else customCache_->requestBuiltinStyle(hwnd_, root, builtinId_, builtinHash_, dark);
+    }
 }
 
 void SettingsWindow::onPaint() {
@@ -713,7 +766,9 @@ void SettingsWindow::onPaint() {
     // Settings/show/system events refresh identity and mode before invalidating.
     // Painting never looks up or creates the skin installation directory.
     const bool dark = customDark_;
-    const FangCunColors colors = customSkin_ ? skin::colors(customSkin_->theme()) : skinColors(settings_.skin, dark);
+    const auto* builtin = activeBuiltinStyle();
+    const FangCunColors originalColors = skinColors(settings_.skin, dark);
+    const FangCunColors colors = customSkin_ ? skin::colors(customSkin_->theme()) : builtin ? builtinColors(builtin->tone(), originalColors) : originalColors;
     const auto labelAccent = readableSettingsAccent(colors);
     const SkinMetrics metrics = skinMetrics(settings_.skin);
     auto backdrop = computeBackdropGradient(settings_.skin, colors);
@@ -767,7 +822,7 @@ void SettingsWindow::onPaint() {
                        bool sel, bool func = false, bool emph = false, float fSize = 12.5f) {
         D2D1_RECT_F r = D2D1::RectF(x, py, x + w, py + h);
         hitControls_.push_back({r, act});
-        drawGlassButton(r, label, settings_.skin, colors, sel, func, emph, hoveredAction_ == act, fSize, false);
+        drawGlassButton(r, label, settings_.skin, colors, sel, func, emph, hoveredAction_ == act, fSize, false, pressedAction_ == act);
     };
 
     // 1. Showcase Top Bar: Tianzige Logo + Brand + ~/SETTINGS + Action Pills
@@ -859,7 +914,7 @@ void SettingsWindow::onPaint() {
         renderTarget_->PushLayer(D2D1::LayerParameters(previewRc, prevGeo), nullptr);
         auto circles = glowEngine_.buildRenderCircles(
             previewRc.right - previewRc.left, previewRc.bottom - previewRc.top,
-            1.0f, colors.isDarkKeyboard(), customSkin_ ? customSkin_->theme().glow : metrics.glowColors);
+            1.0f, colors.isDarkKeyboard(), customSkin_ ? customSkin_->theme().glow : builtin && builtin->tone().glow ? *builtin->tone().glow : metrics.glowColors);
         for (const auto& c : circles) {
             D2D1_GRADIENT_STOP gStops[3] = {};
             UINT32 cnt = c.isTrailing ? 2 : 3;
@@ -912,13 +967,13 @@ void SettingsWindow::onPaint() {
 
     // First candidate highlight
     D2D1_RECT_F firstCandRc = D2D1::RectF(previewRc.left + 12.0f, previewRc.top + 22.0f, previewRc.left + 98.0f, previewRc.top + 56.0f);
-    brush->SetColor(toD2DColor(colors.pressed));
+    brush->SetColor(toD2DColor(builtin && builtinColor(builtin->tone(), skin::ColorRole::Selection) ? *builtinColor(builtin->tone(), skin::ColorRole::Selection) : colors.pressed));
     renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(firstCandRc, HeaderMetricsSpec::kFirstCornerDp, HeaderMetricsSpec::kFirstCornerDp), brush);
 
     if (dwriteFactory_) {
         IDWriteTextFormat* pFmt = nullptr;
         if (SUCCEEDED(dwriteFactory_->CreateTextFormat(
-                kUiFontFamily, nullptr, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_STYLE_NORMAL,
+                builtinFont(builtin ? builtin->spec.fontFamily : std::nullopt, kUiFontFamily), nullptr, DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL, static_cast<float>(settings_.firstCandidateSize), L"", &pFmt)) && pFmt) {
             pFmt->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             brush->SetColor(toD2DColor(colors.onCandidate));
@@ -929,7 +984,7 @@ void SettingsWindow::onPaint() {
         }
         IDWriteTextFormat* oFmt = nullptr;
         if (SUCCEEDED(dwriteFactory_->CreateTextFormat(
-                kUiFontFamily, nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                builtinFont(builtin ? builtin->spec.fontFamily : std::nullopt, kUiFontFamily), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
                 DWRITE_FONT_STRETCH_NORMAL, 17.0f, L"", &oFmt)) && oFmt) {
             oFmt->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             brush->SetColor(toD2DColor(colors.text));

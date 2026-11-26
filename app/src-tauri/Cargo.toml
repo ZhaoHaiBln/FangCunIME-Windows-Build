@@ -1,6 +1,6 @@
 [package]
 name = "fangcun-settings"
-version = "0.6.6"
+version = "0.6.7"
 description = "FangCun IME Settings & Clipboard Companion"
 authors = ["FangCunIME"]
 edition = "2021"
@@ -24,7 +24,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-
 tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
 futures-util = "0.3"
 httpdate = "1"
-zip = { version = "0.6.6", default-features = false, features = ["deflate"] }
+zip = { version = "0.6.7", default-features = false, features = ["deflate"] }
 png = { version = "0.17.16", default-features = false }
 crc32fast = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }

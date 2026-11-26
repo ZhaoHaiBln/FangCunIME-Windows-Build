@@ -227,7 +227,7 @@ def appearance(browser, skin, mode):
         tab(page, "theme")
         expect(page.locator(f'button[data-skin="{skin}"]')).to_have_attribute("aria-pressed", "true")
         expect(page.locator(f'[data-mode="{mode}"]')).to_have_attribute("aria-pressed", "true")
-        check(page.locator(".cand-window").count() == 3, "All candidate previews must remain")
+        check(page.locator(".cand-window:not(.builtin-editor-preview)").count() == 3, "All original candidate previews must remain")
         shot(page, f"theme-{skin}-{mode}")
         tab(page, "clipboard")
         expect(page.locator("#clip-list .clip-card-main")).to_have_count(3)

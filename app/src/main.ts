@@ -776,7 +776,7 @@ document.getElementById("btn-toggle-statusbar")?.addEventListener("click", () =>
 
 // Theme & Skin Controls
 document.getElementById("skin-group")!.addEventListener("click", (e) => {
-  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-skin]");
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-skin]");
   if (btn?.dataset.skin) {
     const selection = new CustomEvent("fangcun:skin-select", { cancelable: true, detail: { id: "builtin:" + btn.dataset.skin } });
     if (!window.dispatchEvent(selection)) return;

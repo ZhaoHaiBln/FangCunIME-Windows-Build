@@ -16,6 +16,8 @@ struct AppSettings {
     SkinPreset skin = SkinPreset::WoodType;
     std::string customSkinId;
     std::string customSkinHash;
+    // Read-only reference owned by the builtin editor, not fallback saves.
+    std::string builtinStyleHash;
     ThemeMode themeMode = ThemeMode::System;
     bool darkMode = false; // legacy / explicit override when themeMode != System
     int firstCandidateSize = 20;

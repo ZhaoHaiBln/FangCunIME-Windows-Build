@@ -1,5 +1,6 @@
 mod ai;
 mod ai_commands;
+mod builtin_skin_edits;
 mod clipboard;
 mod clipboard_history;
 mod settings;
@@ -434,16 +435,7 @@ fn apply_native_chrome(
     // They affect only FangCun's own HWNDs; editor windows are never touched.
     const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
     const DWMWCP_DONOTROUND: i32 = 1;
-    let fallback: (u32, u32) = match (settings.skin.as_str(), settings.dark_mode) {
-        ("typewriter", false) => (0xEBDDCA, 0x272019),
-        ("typewriter", true) => (0x302923, 0xF6E8D1),
-        ("terminal", false) => (0xD7CDBA, 0x252722),
-        ("terminal", true) => (0x34382F, 0xF0ECDB),
-        ("brutal", false) => (0xEFEAE0, 0x121212),
-        ("brutal", true) => (0x0F1412, 0xE6F4EC),
-        (_, true) => (0x3C2D24, 0xF5E3CC),
-        _ => (0xE8D6BA, 0x251B14),
-    };
+    let fallback = builtin_skin_edits::caption_defaults(settings);
     let (background, text) = custom.unwrap_or(fallback);
     let color_ref = |rgb: u32| ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
     let caption = color_ref(background);
@@ -754,6 +746,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             skin_commands::skin_library_snapshot,
+            skin_commands::skin_save_builtin_style,
+            skin_commands::skin_reset_builtin_style,
             skin_commands::skin_set_import_enabled,
             skin_commands::skin_set_builtin_hidden,
             skin_commands::skin_select,

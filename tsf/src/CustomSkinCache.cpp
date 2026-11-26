@@ -96,22 +96,43 @@ std::shared_ptr<const LoadedCustomSkin> load(const std::filesystem::path& root,c
     }
     return result;
 }
+std::shared_ptr<const LoadedBuiltinStyle> loadBuiltinStyle(const std::filesystem::path& root,const std::string& id,const std::string& hash,bool dark) {
+    if(!skin::validBuiltinStyleId(id)||!skin::validHash(hash))return {};
+    Handle trustedRoot;
+    trustedRoot.h=CreateFileW(root.c_str(),FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
+    const auto canonicalRoot=directoryPath(trustedRoot.h);if(!canonicalRoot)return {};
+    const auto stylesRoot=root/"builtin-styles",builtinRoot=stylesRoot/id,profileRoot=builtinRoot/hash;
+    if(!directory(stylesRoot)||!directory(builtinRoot)||!directory(profileRoot))return {};
+    std::wstring expectedPrefix=*canonicalRoot;
+    if(expectedPrefix.back()!=L'\\')expectedPrefix+=L'\\';
+    expectedPrefix+=L"builtin-styles\\";expectedPrefix.append(id.begin(),id.end());expectedPrefix+=L'\\';
+    expectedPrefix.append(hash.begin(),hash.end());expectedPrefix+=L'\\';
+    auto ini=readFile(profileRoot/"resolved.ini",16384,expectedPrefix);if(!ini)return {};
+    auto spec=skin::parseBuiltinSkinStyleIni(std::string_view(reinterpret_cast<const char*>(ini->data()),ini->size()),id,hash);
+    if(!spec)return {};
+    auto result=std::make_shared<LoadedBuiltinStyle>();result->spec=std::move(*spec);result->dark=dark;return result;
+}
 }
 CustomSkinCache::CustomSkinCache():worker_([this]{run();}){}
 CustomSkinCache::~CustomSkinCache(){stop();}
-void CustomSkinCache::stop(){ {std::lock_guard lock(mutex_);stopped_=true;++generation_;pending_.reset();ready_.reset();}cv_.notify_all();if(worker_.joinable())worker_.join(); }
+void CustomSkinCache::stop(){ {std::lock_guard lock(mutex_);stopped_=true;++generation_;pending_.reset();ready_.reset();builtinReady_.reset();}cv_.notify_all();if(worker_.joinable())worker_.join(); }
 void CustomSkinCache::request(HWND hwnd,const std::filesystem::path& root,std::string id,std::string hash,bool dark,bool images) {
-    {std::lock_guard lock(mutex_);if(stopped_)return;ready_.reset();pending_=Request{hwnd,root,std::move(id),std::move(hash),dark,images,++generation_};}cv_.notify_one();
+    {std::lock_guard lock(mutex_);if(stopped_)return;ready_.reset();builtinReady_.reset();pending_=Request{hwnd,root,std::move(id),std::move(hash),dark,images,++generation_,false};}cv_.notify_one();
+}
+void CustomSkinCache::requestBuiltinStyle(HWND hwnd,const std::filesystem::path& root,std::string id,std::string hash,bool dark) {
+    {std::lock_guard lock(mutex_);if(stopped_)return;ready_.reset();builtinReady_.reset();pending_=Request{hwnd,root,std::move(id),std::move(hash),dark,false,++generation_,true};}cv_.notify_one();
 }
 std::shared_ptr<const LoadedCustomSkin> CustomSkinCache::takeReady(){std::lock_guard lock(mutex_);return ready_;}
+std::shared_ptr<const LoadedBuiltinStyle> CustomSkinCache::takeBuiltinReady(){std::lock_guard lock(mutex_);return builtinReady_;}
 void CustomSkinCache::run(){
     const HRESULT initialized=CoInitializeEx(nullptr,COINIT_MULTITHREADED);ComPtr<IWICImagingFactory> factory;
     if(SUCCEEDED(initialized))CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(factory.GetAddressOf()));
     while(true){Request request;
         {std::unique_lock lock(mutex_);cv_.wait(lock,[&]{return stopped_||pending_.has_value();});if(stopped_)break;request=std::move(*pending_);pending_.reset();}
         std::shared_ptr<const LoadedCustomSkin> loaded;
-        try {loaded=load(request.root,request.id,request.hash,request.dark,request.images,factory.Get());}catch(...){loaded.reset();}
-        {std::lock_guard lock(mutex_);if(stopped_)break;if(request.generation!=generation_)continue;ready_=std::move(loaded);if(request.hwnd)PostMessageW(request.hwnd,ReadyMessage,0,0);}
+        std::shared_ptr<const LoadedBuiltinStyle> builtin;
+        try {if(request.builtin)builtin=loadBuiltinStyle(request.root,request.id,request.hash,request.dark);else loaded=load(request.root,request.id,request.hash,request.dark,request.images,factory.Get());}catch(...){loaded.reset();builtin.reset();}
+        {std::lock_guard lock(mutex_);if(stopped_)break;if(request.generation!=generation_)continue;ready_=std::move(loaded);builtinReady_=std::move(builtin);if(request.hwnd)PostMessageW(request.hwnd,ReadyMessage,0,0);}
     }
     factory.Reset();if(SUCCEEDED(initialized))CoUninitialize();
 }

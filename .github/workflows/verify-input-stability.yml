@@ -2,7 +2,7 @@ name: FangCun Windows Verify (no installer)
 
 on:
   push:
-    branches: [codex/input-stability, codex/skin-pack-management]
+    branches: [codex/input-stability, codex/skin-pack-management, codex/editable-builtin-skins]
 
 permissions:
   contents: read

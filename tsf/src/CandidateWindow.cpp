@@ -1,6 +1,7 @@
 #include "CandidateWindow.hpp"
 #include "DllMain.hpp"
 #include "SquareWindow.hpp"
+#include "BuiltinStyleDrawing.hpp"
 #include "fangcun/CandidateCellLayout.hpp"
 
 #include <algorithm>
@@ -220,7 +221,7 @@ bool CandidateWindow::create(HWND parentOwner) {
 }
 
 void CandidateWindow::destroy() {
-    customCache_.reset(); customSkin_.reset(); customId_.clear(); customHash_.clear(); releaseCustomBitmaps();
+    customCache_.reset(); customSkin_.reset(); builtinSkin_.reset(); customId_.clear(); customHash_.clear(); builtinId_.clear(); builtinHash_.clear(); releaseCustomBitmaps();
     if (hwnd_) {
         if (glowTimerActive_) {
             KillTimer(hwnd_, kGlowTimerId);
@@ -248,14 +249,44 @@ float CandidateWindow::dpToPx(float dp) const {
 void CandidateWindow::setCustomSkin(const std::filesystem::path& root, const std::string& id, const std::string& hash, bool dark) {
     if (customDataRoot_ == root && customId_ == id && customHash_ == hash && customDark_ == dark) return;
     customDataRoot_ = root; customId_ = id; customHash_ = hash; customDark_ = dark;
-    customSkin_.reset(); releaseCustomBitmaps(); lastBudgetFirstSize_ = -1;
+    customSkin_.reset(); builtinSkin_.reset(); builtinId_.clear(); builtinHash_.clear(); releaseCustomBitmaps();
     if (!id.empty() && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
     if (customCache_) customCache_->request(hwnd_, root, id, hash, dark);
     if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+const LoadedBuiltinStyle* CandidateWindow::activeBuiltinStyle() const {
+    return customId_.empty() && builtinSkin_ && builtinSkin_->spec.builtin == skinMetrics(skin_).id &&
+        builtinSkin_->spec.builtin == builtinId_ && builtinSkin_->spec.hash == builtinHash_ &&
+        builtinSkin_->dark == darkMode_ ? builtinSkin_.get() : nullptr;
+}
+
+void CandidateWindow::setBuiltinStyle(const std::filesystem::path& root, const std::string& id, const std::string& hash, bool dark) {
+    // The pack renderer always wins. Do not supersede its pending worker job.
+    const bool enabled = customId_.empty() && skin::validBuiltinStyleId(id) && skin::validHash(hash);
+    const std::string nextId = enabled ? id : "", nextHash = enabled ? hash : "";
+    if (builtinDataRoot_ == root && builtinId_ == nextId && builtinHash_ == nextHash && builtinDark_ == dark) return;
+    builtinDataRoot_ = root; builtinId_ = nextId; builtinHash_ = nextHash; builtinDark_ = dark;
+    builtinSkin_.reset();
+    if (!customId_.empty()) return;
+    if (enabled && !customCache_) customCache_ = std::make_unique<CustomSkinCache>();
+    if (customCache_) customCache_->requestBuiltinStyle(hwnd_, root, nextId, nextHash, dark);
+    if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 void CandidateWindow::consumeCustomSkin() {
     if (!customCache_) return;
+    if (customId_.empty()) {
+        auto ready = customCache_->takeBuiltinReady();
+        if (ready && (ready->spec.builtin != builtinId_ || ready->spec.hash != builtinHash_ || ready->dark != builtinDark_)) ready.reset();
+        if (ready && ready == builtinSkin_) return;
+        builtinSkin_ = std::move(ready);
+        recomputeHeaderBudget(); recalculateSize();
+        if (hasCaretRect_) moveNearCaret(lastCaretRect_);
+        if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+    builtinSkin_.reset();
     auto ready = customCache_->takeReady();
     if (ready && ready == customSkin_ && renderTarget_) {
         bool uploaded = true;
@@ -270,7 +301,6 @@ void CandidateWindow::consumeCustomSkin() {
     releaseCustomBitmaps();
     if (customSkin_ && (customSkin_->spec.id != customId_ || customSkin_->spec.hash != customHash_ || customSkin_->dark != customDark_)) customSkin_.reset();
     rebuildCustomBitmaps();
-    lastBudgetFirstSize_ = -1;
     recomputeHeaderBudget(); recalculateSize();
     if (hasCaretRect_) moveNearCaret(lastCaretRect_);
     if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
@@ -343,6 +373,7 @@ void CandidateWindow::update(
     skin_ = skin;
     darkMode_ = darkMode;
     if (!customId_.empty() && customDark_ != darkMode) setCustomSkin(customDataRoot_, customId_, customHash_, darkMode);
+    if (customId_.empty() && !builtinId_.empty() && builtinDark_ != darkMode) setBuiltinStyle(builtinDataRoot_, builtinId_, builtinHash_, darkMode);
     firstCandidateSize_ = std::clamp(firstCandidateSize, HeaderMetricsSpec::kFirstCandidateMinSp, HeaderMetricsSpec::kFirstCandidateMaxSp);
     typingGlow_ = typingGlow;
 
@@ -377,6 +408,7 @@ void CandidateWindow::showModeToast(bool englishMode, SkinPreset skin, bool dark
     skin_ = skin;
     darkMode_ = darkMode;
     if (!customId_.empty() && customDark_ != darkMode) setCustomSkin(customDataRoot_, customId_, customHash_, darkMode);
+    if (customId_.empty() && !builtinId_.empty() && builtinDark_ != darkMode) setBuiltinStyle(builtinDataRoot_, builtinId_, builtinHash_, darkMode);
 
     dpi_ = queryDpiForWindow(hwnd_);
     recomputeHeaderBudget();
@@ -399,8 +431,19 @@ void CandidateWindow::showModeToast(bool englishMode, SkinPreset skin, bool dark
 
 void CandidateWindow::recomputeHeaderBudget() {
     if (!ensureFactories()) return;
-    const bool mono = customSkin_ ? customSkin_->spec.fontFamily == "mono" : sharpTheme(skin_).metrics.useMonospaceCode;
-    if (lastBudgetSkin_ == skin_ && lastBudgetFirstSize_ == firstCandidateSize_ && lastBudgetDpi_ == dpi_ && primaryFormat_) {
+    const auto* builtin = activeBuiltinStyle();
+    const std::optional<std::string> font = customSkin_ ? std::optional<std::string>(customSkin_->spec.fontFamily)
+        : builtin ? builtin->spec.fontFamily : std::nullopt;
+    const bool mono = font ? *font == "mono" : sharpTheme(skin_).metrics.useMonospaceCode;
+    const bool serif = font ? *font == "serif" : skin_ == SkinPreset::WoodType || skin_ == SkinPreset::Typewriter;
+    const wchar_t* candidateFont = font && mono ? L"Consolas" : serif ? L"SimSun" : kUiFontFamily;
+    const wchar_t* codeFont = mono ? L"Consolas" : serif ? L"Georgia" : kUiFontFamily;
+    const wchar_t* indexFont = mono ? L"Consolas" : kUiFontFamily;
+    const std::array<std::wstring_view, 3> fonts{candidateFont, codeFont, indexFont};
+    // Mode/profile activation can change the effective family without changing
+    // skin, size or DPI. Color-only revisions deliberately reuse this budget.
+    if (lastBudgetSkin_ == skin_ && lastBudgetFirstSize_ == firstCandidateSize_ &&
+        lastBudgetDpi_ == dpi_ && lastBudgetFonts_ == fonts && primaryFormat_) {
         return;
     }
 
@@ -421,13 +464,10 @@ void CandidateWindow::recomputeHeaderBudget() {
         }
     };
 
-    const bool serif = customSkin_ ? customSkin_->spec.fontFamily == "serif" : skin_ == SkinPreset::WoodType || skin_ == SkinPreset::Typewriter;
-    const wchar_t* candidateFont = customSkin_ && mono ? L"Consolas" : serif ? L"SimSun" : kUiFontFamily;
-    const wchar_t* codeFont = mono ? L"Consolas" : serif ? L"Georgia" : kUiFontFamily;
     makeFormat(static_cast<float>(HeaderMetricsSpec::kCodeSp + 1), DWRITE_FONT_WEIGHT_MEDIUM, &codeFormat_, codeFont);
     makeFormat(static_cast<float>(firstCandidateSize_), DWRITE_FONT_WEIGHT_MEDIUM, &primaryFormat_, candidateFont);
     makeFormat(static_cast<float>(HeaderMetricsSpec::kOtherCandidateSp), DWRITE_FONT_WEIGHT_NORMAL, &secondaryFormat_, candidateFont);
-    makeFormat(static_cast<float>(HeaderMetricsSpec::kCandidateIndexSp), DWRITE_FONT_WEIGHT_NORMAL, &indexFormat_, mono ? L"Consolas" : kUiFontFamily);
+    makeFormat(static_cast<float>(HeaderMetricsSpec::kCandidateIndexSp), DWRITE_FONT_WEIGHT_NORMAL, &indexFormat_, indexFont);
 
     const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
     for (auto* format : {primaryFormat_, secondaryFormat_}) {
@@ -455,6 +495,7 @@ void CandidateWindow::recomputeHeaderBudget() {
     lastBudgetSkin_ = skin_;
     lastBudgetFirstSize_ = firstCandidateSize_;
     lastBudgetDpi_ = dpi_;
+    lastBudgetFonts_ = fonts;
 }
 
 void CandidateWindow::computePageBounds(
@@ -837,8 +878,11 @@ void CandidateWindow::onPaint() {
 
     const auto& metrics = sharpTheme(skin_).metrics;
     const auto* custom = customSkin_ ? &customSkin_->theme() : nullptr;
+    const auto* builtin = activeBuiltinStyle();
+    const auto* edit = builtin ? &builtin->tone() : nullptr;
     const bool customDrawing = custom || !customId_.empty();
-    const auto palette = custom ? skin::palette(*custom) : sharpPalette(skin_, darkMode_);
+    auto palette = custom ? skin::palette(*custom) : sharpPalette(skin_, darkMode_);
+    if (edit) palette = builtinPalette(*edit, palette);
     const bool vertical = layout_ == CandidateLayout::Vertical;
     const bool single = layout_ == CandidateLayout::SingleRow;
     const float shadow = toastActive_ ? 0.0f : static_cast<float>(metrics.hardShadowOffsetPx);
@@ -858,7 +902,8 @@ void CandidateWindow::onPaint() {
         : (skin_ == SkinPreset::Typewriter ? 4.0f : (skin_ == SkinPreset::Terminal ? 3.5f : 2.5f));
     const auto rect = [](float l, float t, float r, float b) { return D2D1::RectF(l, t, r, b); };
     const auto color = ColorArgb::fromHex;
-    const auto chrome = custom ? skin::colors(*custom) : skinColors(skin_, darkMode_);
+    const auto originalChrome = skinColors(skin_, darkMode_);
+    const auto chrome = custom ? skin::colors(*custom) : edit ? builtinColors(*edit, originalChrome) : originalChrome;
 
     candidateRects_.clear();
     candidateIndices_.clear();
@@ -869,16 +914,25 @@ void CandidateWindow::onPaint() {
     ID2D1SolidColorBrush* brush = nullptr;
     renderTarget_->CreateSolidColorBrush(toD2DColor(color(palette.windowBg)), &brush);
     if (brush) {
+        bool tintFrame = false;
+        auto materialColor = [&](uint32_t argb) {
+            return tintFrame ? builtinMaterialTint(argb, edit, skin::ColorRole::Background, originalChrome.keyboard) : argb;
+        };
         auto fill = [&](D2D1_RECT_F bounds, uint32_t argb) {
-            brush->SetColor(toD2DColor(color(argb)));
+            brush->SetColor(toD2DColor(color(materialColor(argb))));
             renderTarget_->FillRectangle(bounds, brush);
         };
         auto fillRound = [&](D2D1_RECT_F bounds, float r, uint32_t argb) {
-            brush->SetColor(toD2DColor(color(argb)));
+            brush->SetColor(toD2DColor(color(materialColor(argb))));
             renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(bounds, r, r), brush);
         };
         auto strokeRound = [&](D2D1_RECT_F bounds, float r, uint32_t argb, float strokeW) {
-            brush->SetColor(toD2DColor(color(argb)));
+            auto ink = color(materialColor(argb));
+            if (edit) if (const auto& border = builtinColor(*edit, skin::ColorRole::Border);
+                border && !sameBuiltinColor(*border, originalChrome.border)) {
+                const auto alpha = ink.a; ink = *border; ink.a = alpha;
+            }
+            brush->SetColor(toD2DColor(ink));
             renderTarget_->DrawRoundedRectangle(D2D1::RoundedRect(bounds, r, r), brush, strokeW);
         };
         auto argb = [](ColorArgb c) -> uint32_t {
@@ -888,8 +942,8 @@ void CandidateWindow::onPaint() {
         auto gradientRound = [&](D2D1_RECT_F bounds, float r, uint32_t top, uint32_t middle, uint32_t bottomColor) {
             if (bounds.bottom <= bounds.top || bounds.right <= bounds.left) return;
             const D2D1_GRADIENT_STOP stops[] = {
-                {0.0f, toD2DColor(color(top))}, {0.5f, toD2DColor(color(middle))},
-                {1.0f, toD2DColor(color(bottomColor))},
+                {0.0f, toD2DColor(color(materialColor(top)))}, {0.5f, toD2DColor(color(materialColor(middle)))},
+                {1.0f, toD2DColor(color(materialColor(bottomColor)))},
             };
             ID2D1GradientStopCollection* collection = nullptr;
             if (FAILED(renderTarget_->CreateGradientStopCollection(stops, 3, &collection))) return;
@@ -926,6 +980,7 @@ void CandidateWindow::onPaint() {
             fill(rect(0, 0, w, h), argb(c));
             drawCustomImage(skin::ImageRole::Deck, rect(0, 0, w, h));
         } else {
+        tintFrame = true;
         if (skin_ == SkinPreset::Brutal) {
             fill(rect(0, 0, w, h), palette.windowOuterBorder);
         } else if (skin_ == SkinPreset::WoodType) {
@@ -953,6 +1008,7 @@ void CandidateWindow::onPaint() {
             strokeRound(rect(edge - 1.0f, edge - 1.0f, right + 1.0f, bottom + 1.0f), innerR + 0.8f, 0xFF5D574A, 1.4f);
         }
 
+        tintFrame = false;
         if (skin_ == SkinPreset::Brutal) fill(rect(edge, edge, right, bottom), palette.windowBg);
         else fillRound(rect(edge, edge, right, bottom), innerR, palette.windowBg);
         }
@@ -1010,8 +1066,10 @@ void CandidateWindow::onPaint() {
                 }
             }
             if (!customDrawing && skin_ == SkinPreset::Brutal) fill(rect(left, edge, codeRight, headerBottom), palette.windowHeaderBg);
+            if (edit && builtinColor(*edit, skin::ColorRole::Toolbar))
+                fill(rect(left, codeTop, codeRight, headerBottom), palette.windowHeaderBg);
 
-            const auto pulses = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, custom ? custom->glow : skinMetrics(skin_).glowColors);
+            const auto pulses = glowEngine_.buildRenderCircles(w, h, 1.0f, darkMode_, custom ? custom->glow : edit && edit->glow ? *edit->glow : skinMetrics(skin_).glowColors);
             if (!pulses.empty()) {
                 const auto surface = rect(left, edge, right, bottom);
                 renderTarget_->PushAxisAlignedClip(surface, D2D1_ANTIALIAS_MODE_ALIASED);
@@ -1050,7 +1108,9 @@ void CandidateWindow::onPaint() {
             const float labelRight = codeRight - (single ? 9.0f : (showPageCount ? 43.0f : 8.0f) + ledWidth);
             const float codeX = left + 9;
             const std::wstring preedit = utf8ToWide(composing_);
-            const auto codeInk = custom ? argb(custom->color(skin::ColorRole::CodeText)) : skin_ == SkinPreset::Terminal ? palette.accent : argb(chrome.text);
+            const auto codeInk = custom ? argb(custom->color(skin::ColorRole::CodeText))
+                : edit && builtinColor(*edit, skin::ColorRole::CodeText) ? argb(*builtinColor(*edit, skin::ColorRole::CodeText))
+                : skin_ == SkinPreset::Terminal ? palette.accent : argb(chrome.text);
             const auto secondaryInk = skin_ == SkinPreset::Terminal ? palette.textSecondary : argb(chrome.secondary);
             text(visibleCode_, codeFormat_, rect(codeX, codeTop, labelRight, headerBottom), codeInk);
             if (skin_ != SkinPreset::Terminal) {
@@ -1098,9 +1158,11 @@ void CandidateWindow::onPaint() {
                     const float radius = metrics.candidateRadiusDp;
                     const auto cap = D2D1::RoundedRect(inset, radius, radius);
                     if (skin_ == SkinPreset::WoodType) {
-                        brush->SetColor(toD2DColor(color(0xFFB54632).withAlpha(0.05f)));
+                        const auto ink = edit && builtinColor(*edit, skin::ColorRole::Selection)
+                            ? *builtinColor(*edit, skin::ColorRole::Selection) : color(0xFFB54632);
+                        brush->SetColor(toD2DColor(ink.withAlpha(0.05f)));
                         renderTarget_->FillRoundedRectangle(cap, brush);
-                        brush->SetColor(toD2DColor(color(0xFFB54632)));
+                        brush->SetColor(toD2DColor(ink));
                         renderTarget_->DrawRoundedRectangle(cap, brush, 1.3f);
                     } else {
                         brush->SetColor(toD2DColor(color(palette.candidateActiveBg)));

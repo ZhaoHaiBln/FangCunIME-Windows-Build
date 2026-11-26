@@ -566,7 +566,15 @@ pub(crate) fn skin_transaction(
     if values.keys().any(|key| {
         !matches!(
             key.as_str(),
-            "skin_library_v1" | "skin" | "custom_skin_id" | "custom_skin_hash"
+            "skin_library_v1"
+                | "skin"
+                | "custom_skin_id"
+                | "custom_skin_hash"
+                | "builtin_skin_edits_v1"
+                | "builtin_style_wood_type"
+                | "builtin_style_typewriter"
+                | "builtin_style_terminal"
+                | "builtin_style_brutal"
         )
     }) {
         return Err("皮肤设置字段无效，未保存".into());

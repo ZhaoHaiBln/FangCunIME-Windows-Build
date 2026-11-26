@@ -93,6 +93,7 @@ private:
     void applyAction(ActionId action);
     void saveAndNotify();
     void refreshCustomSkin();
+    const LoadedBuiltinStyle* activeBuiltinStyle() const;
 
     float dpToPx(float dp) const;
     bool ensureFactories();
@@ -113,12 +114,15 @@ private:
         bool emphasized,
         bool hovered,
         float fontSizeDip = 13.0f,
-        bool bold = false);
+        bool bold = false,
+        bool pressed = false);
 
     HWND hwnd_ = nullptr;
     std::unique_ptr<CustomSkinCache> customCache_;
     std::shared_ptr<const LoadedCustomSkin> customSkin_;
+    std::shared_ptr<const LoadedBuiltinStyle> builtinSkin_;
     std::string customId_, customHash_;
+    std::string builtinId_, builtinHash_;
     bool customDark_ = false;
     ChangeCallback onChanged_;
     AppSettings settings_;
@@ -132,6 +136,7 @@ private:
 
     std::vector<HitControl> hitControls_;
     ActionId hoveredAction_ = ActionId::None;
+    ActionId pressedAction_ = ActionId::None;
 
     TypingGlowEngine glowEngine_;
     bool glowTimerActive_ = false;
