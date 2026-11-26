@@ -1,5 +1,5 @@
 #define MyAppName "方寸输入法"
-#define MyAppVersion "0.6.5"
+#define MyAppVersion "0.6.6"
 #define MyAppPublisher "FangCunIME"
 #define MyAppURL "https://github.com/ZhaoHaiBln/FangCunIME-Windows-Build"
 #ifndef MySourceDir
@@ -37,6 +37,7 @@ Source: "{#MySourceDir}\assets\pinyin-v1.dbz"; DestDir: "{app}\assets"; Flags: i
 Source: "{#MySourceDir}\assets\pinyin-v1.json"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "{#MySourceDir}\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MySourceDir}\rime-ice-LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourcePath}\..\licenses\skin-pack\*"; DestDir: "{app}\licenses\skin-pack"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\方寸输入法设置"; Filename: "{app}\FangCunSettings.exe"; WorkingDir: "{app}"
